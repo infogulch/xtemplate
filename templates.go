@@ -299,8 +299,6 @@ import (
 	sprig "github.com/go-task/slim-sprig"
 	"github.com/julienschmidt/httprouter"
 	"go.uber.org/zap"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
 type Templates struct {
@@ -618,12 +616,12 @@ func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddy
 	logger := t.ctx.Logger().Named(r.URL.Path)
 	handle, params, _ := t.router.Lookup(r.Method, r.URL.Path)
 	if handle == nil {
-		// logger.Info("no handler for request", zap.String("method", r.Method), zap.String("path", r.URL.Path))
+		logger.Debug("no handler for request", zap.String("method", r.Method), zap.String("path", r.URL.Path))
 		return caddyhttp.Error(http.StatusNotFound, nil)
 	}
 	var template *template.Template
 	handle(nil, new(http.Request).WithContext(context.WithValue(context.Background(), "🙈", &template)), nil)
-	// logger.Info("handling request", zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Any("params", params), zap.String("name", template.Name()))
+	logger.Debug("handling request", zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Any("params", params), zap.String("name", template.Name()))
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
@@ -637,7 +635,7 @@ func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddy
 	if t.db != nil {
 		tx, err = t.db.Begin()
 		if err != nil {
-			// logger.Warn("failed begin database transaction", zap.Error(err))
+			logger.Info("failed to begin database transaction", zap.Error(err))
 			return caddyhttp.Error(http.StatusInternalServerError, err)
 		}
 	}
@@ -660,13 +658,20 @@ func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddy
 	if err != nil {
 		var handlerErr caddyhttp.HandlerError
 		if errors.As(err, &handlerErr) {
-			tx.Commit()
+			if dberr := tx.Commit(); dberr != nil {
+				logger.Info("error committing transaction", zap.Error(err))
+			}
 			return handlerErr
 		}
-		tx.Rollback()
+		logger.Info("error executing template", zap.Error(err))
+		if dberr := tx.Rollback(); dberr != nil {
+			logger.Info("error rolling back transaction", zap.Error(err))
+		}
 		return caddyhttp.Error(http.StatusInternalServerError, err)
 	} else {
-		tx.Commit()
+		if dberr := tx.Commit(); dberr != nil {
+			logger.Info("error committing transaction", zap.Error(err))
+		}
 	}
 
 	rec.WriteHeader(statusCode)
@@ -684,7 +689,9 @@ func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddy
 
 // Interface guards
 var (
-	_ caddy.Provisioner           = (*Templates)(nil)
-	_ caddy.Validator             = (*Templates)(nil)
+	_ caddy.Provisioner  = (*Templates)(nil)
+	_ caddy.Validator    = (*Templates)(nil)
+	_ caddy.CleanerUpper = (*Templates)(nil)
+
 	_ caddyhttp.MiddlewareHandler = (*Templates)(nil)
 )
