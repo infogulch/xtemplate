@@ -17,9 +17,8 @@ as interactive as a SPA.
 ```
 
 > Note: The html/template library automatically sanitizes inputs, so you can
-> rest easy knowing that your site is not vulnerable to XSS attacks by
-> default. Note: if you generate some html that you do trust, it's easy to
-> inject if you intend to.
+> rest easy from basic XSS attacks. Note: if you generate some html that you do
+> trust, it's easy to inject if you intend to.
 
 #### Define your own templates and reuse html fragments across files
 
@@ -28,10 +27,10 @@ as interactive as a SPA.
 <html>
 
 <title>Home</title>
-{{template "/head.html" .}} <!-- import the contents of the file at /head.html -->
+{{template "/shared/_head.html" .}} <!-- import the contents of a file -->
 
 <body>
-    {{template "navbar" .}} <!-- invoke a custom template defined anywehere -->
+    {{template "navbar" .}} <!-- invoke a custom template defined anywhere -->
     ...
 </body>
 </html>
