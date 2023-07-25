@@ -4,7 +4,7 @@ enough to host an entire server-side application in it. Designed with the
 [htmx.org](https://htmx.org/) js library in mind, to make server side apps feel
 as interactive as a SPA.
 
-### Highlighted Features
+## Highlighted Features
 
 #### Query your database directly within template definitions:
 
@@ -65,12 +65,12 @@ OK
 {{end}}
 ```
 
-### Quickstart
+## Example
 
-> ***See todos for a complete example repository:***
+> ***See the todos example repository that exercises most features:***
 > https://github.com/infogulch/todos
 
-## Setup
+## Quickstart
 
 Download caddy with all standard modules, plus the `xtemplates` module (!important)
 from Caddy's build and download server:
@@ -83,13 +83,23 @@ Write your caddy config and use the xtemplates http handler:
 :8080
 
 route {
-	xtemplates {
+    xtemplates {
         root templates
     }
 }
 ```
 
 Write `.html` files in the root directory specified in your Caddy config.
+
+Remember Caddy is a super http server, check it out for for features you may
+want to layer on top. Examples: serving static files (css/js libs), set up an
+auth proxy, manage caching, set up free automatic https, and many others!
+
+Profit!
+
+## User Docs
+
+TODO
 
 ## Development
 
