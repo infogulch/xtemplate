@@ -4,9 +4,9 @@ enough to host an entire server-side application in it. Designed with the
 [htmx.org](https://htmx.org/) js library in mind, to make server side apps feel
 as interactive as a SPA.
 
-## Highlighted Features
+## Features
 
-#### Query your database directly within template definitions:
+#### Query the database directly within template definitions
 
 ```html
 <ul>
@@ -20,7 +20,7 @@ as interactive as a SPA.
 > rest easy from basic XSS attacks. Note: if you generate some html that you do
 > trust, it's easy to inject if you intend to.
 
-#### Define your own templates and reuse html fragments across files
+#### Define templates and import content from other files
 
 ```html
 <!DOCTYPE html>
@@ -39,16 +39,32 @@ as interactive as a SPA.
 #### Automatic reload
 
 Templates are reloaded and validated automatically as soon as they are modified,
-no need to restart the server.
+no need to restart the server. If there's a syntax error it keeps the old
+version and prints the error out in Caddy's logs.
 
 > Ctrl+S > Alt+Tab > F5
 
-#### File-based routing, plus custom routes
+#### File-based routing & custom routes
 
-GET requests for any file will invoke the template at that file path, plus you
-can define custom routes by defining a template with a specific name pattern.
-Uses [httprouter](https://github.com/julienschmidt/httprouter) underneath to
-match requests to handlers.
+`GET` requests for any file will invoke the template file at that path. Except
+files that start with `_` which are not routed, this lets you define templates
+that only other templates can invoke.
+
+```
+.
+├── index.html          GET /
+├── todos.html          GET /todos
+├── admin
+│   └── settings.html   GET /admin/settings
+└── shared
+    └── _head.html      (not routed)
+```
+
+ Create custom route handlers by defining a template with a name matching the
+pattern `<method> <path>`. Use
+[httprouter](https://github.com/julienschmidt/httprouter) syntax for path
+parameters and wildcards, which are made available in the template as values in
+the `.Param` key.
 
 ```html
 {{define "GET /contact/:id"}} <!-- match on path parameters -->
@@ -91,15 +107,28 @@ route {
 
 Write `.html` files in the root directory specified in your Caddy config.
 
-Remember Caddy is a super http server, check it out for for features you may
-want to layer on top. Examples: serving static files (css/js libs), set up an
-auth proxy, manage caching, set up free automatic https, and many others!
+Run caddy with your config: `caddy run --config Caddyfile`
 
-Profit!
+> Remember Caddy is a super http server, check out the caddy docs for features
+> you may want to layer on top. Examples: serving static files (css/js libs), set
+> up an auth proxy, caching, rate limiting, automatic https, and more!
 
-## User Docs
+## Config
 
-TODO
+The `xtemplates` caddy config has three options:
+
+```
+xtemplates {
+    root <root directory where template files are loaded>
+    delimiters <left> <right>              # defaults: {{ and }}
+    database <driver> <connection string>  # passed unmodified to sql.Open,
+}
+```
+
+The currently imported drivers are:
+
+* [mattn/sqlite3](https://pkg.go.dev/github.com/mattn/go-sqlite3#section-readme) (requires building with `CGO_ENABLED=1`, not available from the caddy build server)
+* [cznic/sqlite](https://pkg.go.dev/modernc.org/sqlite?utm_source=godoc) (available from the caddy build server)
 
 ## Development
 
