@@ -1,6 +1,6 @@
 package xtemplates
 
-// Import desired sql db drivers here.
+// Import sql db drivers here.
 
 import (
 	_ "github.com/mattn/go-sqlite3"

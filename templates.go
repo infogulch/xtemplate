@@ -1,17 +1,3 @@
-// Copyright 2015 Matthew Holt and The Caddy Authors
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 // Templates is a middleware which executes response bodies as Go templates.
 // The syntax is documented in the Go standard library's
 // [text/template package](https://golang.org/pkg/text/template/).
@@ -77,41 +63,6 @@
 //
 // ```
 // {{httpInclude "/foo/bar?q=val"}}
-// ```
-//
-// ##### `import`
-//
-// Reads and returns the contents of another file, and parses it
-// as a template, adding any template definitions to the template
-// stack. If there are no definitions, the filepath will be the
-// definition name. Any {{ define }} blocks will be accessible by
-// {{ template }} or {{ block }}. Imports must happen before the
-// template or block action is called. Note that the contents are
-// NOT escaped, so you should only import trusted template files.
-//
-// **filename.html**
-// ```
-// {{ define "main" }}
-// content
-// {{ end }}
-// ```
-//
-// **index.html**
-// ```
-// {{ import "/path/to/filename.html" }}
-// {{ template "main" }}
-// ```
-//
-// ##### `include`
-//
-// Includes the contents of another file, rendering it in-place.
-// Optionally can pass key-value pairs as arguments to be accessed
-// by the included file. Note that the contents are NOT escaped,
-// so you should only include trusted template files.
-//
-// ```
-// {{include "path/to/file.html"}}  // no arguments
-// {{include "path/to/file.html" "arg1" 2 "value 3"}}  // with arguments
 // ```
 //
 // ##### `readFile`

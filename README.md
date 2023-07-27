@@ -1,8 +1,10 @@
 `caddy-xtemplates` is a [Caddy](https://caddyserver.com) module that extends
 Go's [`html/template` library](https://pkg.go.dev/html/template) to be capable
 enough to host an entire server-side application in it. Designed with the
-[htmx.org](https://htmx.org/) js library in mind, to make server side apps feel
-as interactive as a SPA.
+[htmx.org](https://htmx.org/) js library in mind, which makes server side
+rendered sites feel as interactive as a Single Page Apps.
+
+> ⚠️ This project is in active development, expect regular breaking changes. ⚠️
 
 ## Features
 
@@ -145,3 +147,11 @@ xcaddy build --with github.com/infogulch/caddy-xtemplates=.
 # build with CGO in order to use the sqlite3 db driver
 CGO_ENABLED=1 xcaddy build --with github.com/infogulch/caddy-xtemplates
 ```
+
+## Project lineage and license
+
+This project is based on and shares some code with the [templates module from
+the Caddy server][1], and is also licensed under the Apache 2.0 license. See
+[LICENSE](./LICENSE)
+
+[1]: https://github.com/caddyserver/caddy/tree/master/modules/caddyhttp/templates
