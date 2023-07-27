@@ -38,6 +38,46 @@ func (c *TemplateContext) OriginalReq() http.Request {
 	return or
 }
 
+func (c *TemplateContext) Placeholder(name string) string {
+	repl := c.Req.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
+	value, _ := repl.GetString(name)
+	return value
+}
+
+// Cookie gets the value of a cookie with name name.
+func (c *TemplateContext) Cookie(name string) string {
+	cookies := c.Req.Cookies()
+	for _, cookie := range cookies {
+		if cookie.Name == name {
+			return cookie.Value
+		}
+	}
+	return ""
+}
+
+// RemoteIP gets the IP address of the client making the request.
+func (c *TemplateContext) RemoteIP() string {
+	ip, _, err := net.SplitHostPort(c.Req.RemoteAddr)
+	if err != nil {
+		return c.Req.RemoteAddr
+	}
+	return ip
+}
+
+// Host returns the hostname portion of the Host header
+// from the HTTP request.
+func (c *TemplateContext) Host() (string, error) {
+	host, _, err := net.SplitHostPort(c.Req.Host)
+	if err != nil {
+		if !strings.Contains(c.Req.Host, ":") {
+			// common with sites served on the default port 80
+			return c.Req.Host, nil
+		}
+		return "", err
+	}
+	return host, nil
+}
+
 // ReadFile returns the contents of a filename relative to the site root.
 // Note that included files are NOT escaped, so you should only include
 // trusted files. If it is not trusted, be sure to use escaping functions
@@ -101,46 +141,6 @@ func (c *TemplateContext) FileExists(filename string) (bool, error) {
 		return true, nil
 	}
 	return false, nil
-}
-
-func (c *TemplateContext) Placeholder(name string) string {
-	repl := c.Req.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
-	value, _ := repl.GetString(name)
-	return value
-}
-
-// Cookie gets the value of a cookie with name name.
-func (c *TemplateContext) Cookie(name string) string {
-	cookies := c.Req.Cookies()
-	for _, cookie := range cookies {
-		if cookie.Name == name {
-			return cookie.Value
-		}
-	}
-	return ""
-}
-
-// RemoteIP gets the IP address of the client making the request.
-func (c *TemplateContext) RemoteIP() string {
-	ip, _, err := net.SplitHostPort(c.Req.RemoteAddr)
-	if err != nil {
-		return c.Req.RemoteAddr
-	}
-	return ip
-}
-
-// Host returns the hostname portion of the Host header
-// from the HTTP request.
-func (c *TemplateContext) Host() (string, error) {
-	host, _, err := net.SplitHostPort(c.Req.Host)
-	if err != nil {
-		if !strings.Contains(c.Req.Host, ":") {
-			// common with sites served on the default port 80
-			return c.Req.Host, nil
-		}
-		return "", err
-	}
-	return host, nil
 }
 
 func (c *TemplateContext) Exec(query string, params ...any) (sql.Result, error) {
@@ -241,5 +241,3 @@ var bufPool = sync.Pool{
 		return new(bytes.Buffer)
 	},
 }
-
-const recursionPreventionHeader = "Caddy-Templates-Include"

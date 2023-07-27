@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -15,16 +14,13 @@ import (
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
+	"github.com/segmentio/ksuid"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	gmhtml "github.com/yuin/goldmark/renderer/html"
 )
-
-func funcEnv(varName string) string {
-	return os.Getenv(varName)
-}
 
 // funcStripHTML returns s without HTML tags. It is fairly naive
 // but works with most valid HTML inputs.
@@ -147,6 +143,10 @@ func funcUuid() uuid.UUID {
 
 func funcIdx(idx int, arr any) any {
 	return reflect.ValueOf(arr).Index(idx).Interface()
+}
+
+func funcKsuid() ksuid.KSUID {
+	return ksuid.New()
 }
 
 // funcHumanize transforms size and time inputs to a human readable format.
