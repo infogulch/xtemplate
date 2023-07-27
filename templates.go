@@ -234,6 +234,8 @@ import (
 	sprig "github.com/go-task/slim-sprig"
 	"github.com/julienschmidt/httprouter"
 	"go.uber.org/zap"
+	"golang.org/x/exp/constraints"
+	"golang.org/x/exp/slices"
 )
 
 type Templates struct {
@@ -256,7 +258,10 @@ type Templates struct {
 
 	// The database driver and connection string. If set, must be precicely two
 	// elements: the driver name and the connection string.
-	Database []string `json:"database,omitempty"`
+	Database struct {
+		Driver  string `json:"driver,omitempty"`
+		Connstr string `json:"connstr,omitempty"`
+	} `json:"database,omitempty"`
 
 	ctx         caddy.Context
 	fs          fs.FS
@@ -271,20 +276,8 @@ func (t *Templates) Validate() error {
 	if len(t.Delimiters) != 0 && len(t.Delimiters) != 2 {
 		return fmt.Errorf("delimiters must consist of exactly two elements: opening and closing")
 	}
-	if len(t.Database) != 0 && len(t.Database) != 2 {
-		return fmt.Errorf("database connection must consist of exactly two elements: driver and connection string, got %d: %v", len(t.Database), t.Database)
-	}
-	if len(t.Database) == 2 {
-		exists := false
-		for _, driver := range sql.Drivers() {
-			if driver == t.Database[0] {
-				exists = true
-				break
-			}
-		}
-		if !exists {
-			return fmt.Errorf("database driver '%s' does not exist", t.Database[0])
-		}
+	if t.Database.Driver != "" && slices.Index(sql.Drivers(), t.Database.Driver) == -1 {
+		return fmt.Errorf("database driver '%s' does not exist", t.Database.Driver)
 	}
 	return nil
 }
@@ -341,7 +334,7 @@ func (t *Templates) initFS() error {
 		t.fs = fsp.CustomTemplateFS()
 	}
 
-	if st, err := fs.Stat(t.fs, root); err != nil || !st.IsDir() {
+	if st, err := fs.Stat(t.fs, "."); err != nil || !st.IsDir() {
 		return fmt.Errorf("root file path does not exist in filesystem")
 	}
 
@@ -393,27 +386,41 @@ func (t *Templates) initFuncs() error {
 }
 
 func (t *Templates) initRouter() error {
+	logger := t.ctx.Logger().Named("provision.router")
+
 	dl, dr := "{{", "}}"
 	if len(t.Delimiters) != 0 {
 		dl, dr = t.Delimiters[0], t.Delimiters[1]
 	}
 
+	// Define the template instance that will accumulate all template definitions.
 	templates := template.New(".").Delims(dl, dr).Funcs(t.customFuncs)
 
-	files, err := fs.Glob(t.fs, "*.html")
-	if err != nil {
-		return err
-	}
-
-	logger := t.ctx.Logger().Named("provision")
-	logger.Debug("found templates", zap.Int("count", len(files)))
+	// Find all files and send the ones that match *.html into a channel. Will check walkErr later.
+	files := make(chan string)
+	var walkErr error
+	go func() {
+		walkErr = fs.WalkDir(t.fs, ".", func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if ext := filepath.Ext(path); ext == ".html" {
+				files <- path
+			} else {
+				logger.Debug("file ignored", zap.String("path", path), zap.String("ext", ext))
+			}
+			return err
+		})
+		close(files)
+	}()
 
 	// Ingest all templates; add GET handlers for template files that don't start with '_'
-	for _, path := range files {
+	for path := range files {
 		content, err := fs.ReadFile(t.fs, path)
 		if err != nil {
 			return err
 		}
+		logger.Debug("found template", zap.Any("path", path), zap.String("startswith", string(content[:min(len(content), 20)])))
 		// parse each template file manually to have more control over its final
 		// names in the template namespace.
 		newtemplates, err := parse.Parse(path, string(content), dl, dr, t.customFuncs, buliltinsSkeleton)
@@ -435,6 +442,10 @@ func (t *Templates) initRouter() error {
 				return err
 			}
 		}
+	}
+
+	if walkErr != nil {
+		return walkErr
 	}
 
 	// Invoke all initilization templates, aka any template whose name starts with "INIT "
@@ -483,7 +494,7 @@ func (t *Templates) initRouter() error {
 		count += 1
 	}
 
-	err = t.initWatcher()
+	err := t.initWatcher()
 	if err != nil {
 		return err
 	}
@@ -495,11 +506,11 @@ func (t *Templates) initRouter() error {
 }
 
 func (t *Templates) initDB() (err error) {
-	if len(t.Database) == 0 {
+	if t.Database.Driver == "" {
 		return nil
 	}
 
-	t.db, err = sql.Open(t.Database[0], t.Database[1])
+	t.db, err = sql.Open(t.Database.Driver, t.Database.Connstr)
 	return
 }
 
@@ -668,6 +679,13 @@ func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddy
 	rec.Header().Del("Etag")
 
 	return rec.WriteResponse()
+}
+
+func min[T constraints.Ordered](a, b T) T {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // Interface guards

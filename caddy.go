@@ -38,9 +38,17 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 		for h.NextBlock(0) {
 			switch h.Val() {
 			case "database":
-				t.Database = h.RemainingArgs()
-				if len(t.Database) != 2 {
-					return nil, h.ArgErr()
+				for nesting := h.Nesting(); h.NextBlock(nesting); {
+					switch h.Val() {
+					case "driver":
+						if !h.Args(&t.Database.Driver) {
+							return nil, h.ArgErr()
+						}
+					case "connstr":
+						if !h.Args(&t.Database.Connstr) {
+							return nil, h.ArgErr()
+						}
+					}
 				}
 			case "delimiters":
 				t.Delimiters = h.RemainingArgs()
