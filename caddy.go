@@ -1,6 +1,9 @@
 package xtemplates
 
 import (
+	"html/template"
+	"io/fs"
+
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
@@ -45,11 +48,30 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 					return nil, h.ArgErr()
 				}
 			case "root":
-				if !h.Args(&t.FileRoot) {
+				if !h.Args(&t.Root) {
 					return nil, h.ArgErr()
+				}
+			case "fs_module":
+				if !h.Args((*string)(&t.FSModule)) {
+					return nil, h.ArgErr()
+				}
+			case "func_modules":
+				for _, arg := range h.RemainingArgs() {
+					t.FuncModules = append(t.FuncModules, (caddy.ModuleID)(arg))
 				}
 			}
 		}
 	}
 	return t, nil
+}
+
+// CustomFSProvider is the interface for registering custom file system for loading templates.
+type CustomFSProvider interface {
+	CustomTemplateFS() fs.FS
+}
+
+// CustomFunctionsProvider is the interface for registering custom template functions.
+type CustomFunctionsProvider interface {
+	// CustomTemplateFunctions should return the mapping from custom function names to implementations.
+	CustomTemplateFunctions() template.FuncMap
 }

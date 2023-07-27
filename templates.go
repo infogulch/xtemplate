@@ -1,23 +1,23 @@
-// Templates is a middleware which executes response bodies as Go templates.
-// The syntax is documented in the Go standard library's
-// [text/template package](https://golang.org/pkg/text/template/).
-//
-// ⚠️ Template functions/actions are still experimental, so they are subject to change.
-//
-// Custom template functions can be registered by creating a plugin module under the `http.handlers.templates.functions.*` namespace that implements the `CustomFunctions` interface.
+// caddy-xtemplates is a Caddy module that extends Go's html/template to be
+// capable enough to host an entire server-side application in it.
 //
 // [All Sprig functions](https://masterminds.github.io/sprig/) are supported.
 //
-// In addition to the standard functions and the Sprig library, Caddy adds
+// In addition to the standard functions and the Sprig library, xtemplates adds
 // extra functions and data that are available to a template:
 //
-// ##### `.Args`
+// ### Context fields
 //
-// A slice of arguments passed to this page/context, for example as the result of a `include`.
+// These are provided as fields to the root template in the default context 'dot
+// / `.`.
 //
-// ```
-// {{index .Args 0}} // first argument
-// ```
+// ##### `.Params`
+//
+// Path parameters extracted from the url of the current request by httprouter.
+//
+// ##### `.RespStatus`
+//
+// Set the status code of the current response. See also `httpError`.
 //
 // ##### `.Cookie`
 //
@@ -27,72 +27,13 @@
 // {{.Cookie "cookiename"}}
 // ```
 //
-// ##### `env`
-//
-// Gets an environment variable.
-//
-// ```
-// {{env "VAR_NAME"}}
-// ```
-//
-// ##### `placeholder`
-//
-// Gets an [placeholder variable](/docs/conventions#placeholders).
-// The braces (`{}`) have to be omitted.
-//
-// ```
-// {{placeholder "http.request.uri.path"}}
-// {{placeholder "http.error.status_code"}}
-// ```
-//
 // ##### `.Host`
 //
-// Returns the hostname portion (no port) of the Host header of the HTTP request.
+// Returns the hostname portion (no port) of the Host header of the HTTP
+// request.
 //
 // ```
 // {{.Host}}
-// ```
-//
-// ##### `httpInclude`
-//
-// Includes the contents of another file, and renders it in-place,
-// by making a virtual HTTP request (also known as a sub-request).
-// The URI path must exist on the same virtual server because the
-// request does not use sockets; instead, the request is crafted in
-// memory and the handler is invoked directly for increased efficiency.
-//
-// ```
-// {{httpInclude "/foo/bar?q=val"}}
-// ```
-//
-// ##### `readFile`
-//
-// Reads and returns the contents of another file, as-is.
-// Note that the contents are NOT escaped, so you should
-// only read trusted files.
-//
-// ```
-// {{readFile "path/to/file.html"}}
-// ```
-//
-// ##### `listFiles`
-//
-// Returns a list of the files in the given directory, which is relative to the template context's file root.
-//
-// ```
-// {{listFiles "/mydir"}}
-// ```
-//
-// ##### `markdown`
-//
-// Renders the given Markdown text as HTML and returns it. This uses the
-// [Goldmark](https://github.com/yuin/goldmark) library,
-// which is CommonMark compliant. It also has these extensions
-// enabled: Github Flavored Markdown, Footnote, and syntax
-// highlighting provided by [Chroma](https://github.com/alecthomas/chroma).
-//
-// ```
-// {{markdown "My _markdown_ text"}}
 // ```
 //
 // ##### `.RemoteIP`
@@ -118,7 +59,8 @@
 //
 // ##### `.OriginalReq`
 //
-// Like .Req, except it accesses the original HTTP request before rewrites or other internal modifications.
+// Like .Req, except it accesses the original HTTP request before rewrites or
+// other internal modifications.
 //
 // ##### `.RespHeader.Add`
 //
@@ -140,9 +82,51 @@
 //
 // Sets a header field on the HTTP response, replacing any existing value.
 //
+// ``` {{.RespHeader.Set "Field-Name" "val"}} ```
+//
+// ##### `.Placeholder`
+//
+// Gets an [placeholder variable](/docs/conventions#placeholders). The braces
+// (`{}`) have to be omitted.
+//
 // ```
-// {{.RespHeader.Set "Field-Name" "val"}}
+// {{.Placeholder "http.request.uri.path"}} {{.Placeholder "http.error.status_code"}}
 // ```
+//
+// ### Global funcs
+//
+// Where the context is dynamic and may be overridden within template segments,
+// these global funcs are available everywhere:
+//
+// ##### `env`
+//
+// Gets an environment variable.
+//
+// ``` {{env "VAR_NAME"}} ```
+//
+// ##### `readFile`
+//
+// Reads and returns the contents of another file, as-is. Note that the contents
+// are NOT escaped, so you should only read trusted files.
+//
+// ``` {{readFile "path/to/file.html"}} ```
+//
+// ##### `listFiles`
+//
+// Returns a list of the files in the given directory, which is relative to the
+// template context's file root.
+//
+// ``` {{listFiles "/mydir"}} ```
+//
+// ##### `markdown`
+//
+// Renders the given Markdown text as HTML and returns it. This uses the
+// [Goldmark](https://github.com/yuin/goldmark) library, which is CommonMark
+// compliant. It also has these extensions enabled: Github Flavored Markdown,
+// Footnote, and syntax highlighting provided by
+// [Chroma](https://github.com/alecthomas/chroma).
+//
+// ``` {{markdown "My _markdown_ text"}} ```
 //
 // ##### `httpError`
 //
@@ -253,14 +237,22 @@ import (
 )
 
 type Templates struct {
-	// The root path from which to load files. Required if template functions
-	// accessing the file system are used (such as include). Default is
-	// `{http.vars.root}` if set, or current working directory otherwise.
-	FileRoot string `json:"file_root,omitempty"`
+	// The filesystem from which to load template files. May be "native"
+	// (default), or the caddy module ID of a module that implements the
+	// CustomFSProvider interface
+	FSModule caddy.ModuleID `json:"fs_module,omitempty"`
+
+	// The root path from which to load template files within the selected
+	// filesystem (the native filesystem by default). Default is the current
+	// working directory.
+	Root string `json:"root,omitempty"`
 
 	// The template action delimiters. If set, must be precisely two elements:
 	// the opening and closing delimiters. Default: `["{{", "}}"]`
 	Delimiters []string `json:"delimiters,omitempty"`
+
+	// A list of caddy module IDs from which to load template FuncMaps, by
+	FuncModules []caddy.ModuleID `json:"func_modules,omitempty"`
 
 	// The database driver and connection string. If set, must be precicely two
 	// elements: the driver name and the connection string.
@@ -272,12 +264,6 @@ type Templates struct {
 	router      *httprouter.Router
 	db          *sql.DB
 	stopWatcher chan<- struct{}
-}
-
-// Customfunctions is the interface for registering custom template functions.
-type CustomFunctions interface {
-	// CustomTemplateFunctions should return the mapping from custom function names to implementations.
-	CustomTemplateFunctions() template.FuncMap
 }
 
 // Validate ensures t has a valid configuration. Implements caddy.Validator.
@@ -334,16 +320,30 @@ func (t *Templates) Provision(ctx caddy.Context) error {
 
 func (t *Templates) initFS() error {
 	var root string
-	if len(t.FileRoot) > 0 {
-		root = t.FileRoot
+	if len(t.Root) > 0 {
+		root = t.Root
 	} else {
 		root = "."
 	}
 
-	if st, err := os.Stat(root); err != nil || !st.IsDir() {
-		return fmt.Errorf("root file path does not exist")
+	if t.FSModule == "" || t.FSModule == "native" {
+		t.fs = os.DirFS(root)
+	} else {
+		modInfo, err := caddy.GetModule(string(t.FSModule))
+		if err != nil {
+			return fmt.Errorf("module '%s' not found", t.FSModule)
+		}
+		mod := modInfo.New()
+		fsp, ok := mod.(CustomFSProvider)
+		if !ok {
+			return fmt.Errorf("module %s does not implement TemplatesFSProvider", t.FSModule)
+		}
+		t.fs = fsp.CustomTemplateFS()
 	}
-	t.fs = os.DirFS(root)
+
+	if st, err := fs.Stat(t.fs, root); err != nil || !st.IsDir() {
+		return fmt.Errorf("root file path does not exist in filesystem")
+	}
 
 	return nil
 }
@@ -356,12 +356,15 @@ func (t *Templates) initFuncs() error {
 		}
 	}
 
-	fnModInfos := caddy.GetModules("http.handlers.templates.functions")
-	for _, modInfo := range fnModInfos {
+	for _, modid := range t.FuncModules {
+		modInfo, err := caddy.GetModule(string(modid))
+		if err != nil {
+			return fmt.Errorf("module '%s' does not exist", modid)
+		}
 		mod := modInfo.New()
-		fnMod, ok := mod.(CustomFunctions)
+		fnMod, ok := mod.(CustomFunctionsProvider)
 		if !ok {
-			return fmt.Errorf("module %q does not satisfy the CustomFunctions interface", modInfo.ID)
+			return fmt.Errorf("module %q does not satisfy the CustomFunctions interface", modid)
 		}
 		merge(fnMod.CustomTemplateFunctions())
 	}
@@ -480,9 +483,15 @@ func (t *Templates) initRouter() error {
 		count += 1
 	}
 
+	err = t.initWatcher()
+	if err != nil {
+		return err
+	}
+
+	// Important! Set t.router as the very last step to not confuse the watcher
+	// state machine.
 	t.router = router
-	logger.Info("loaded router", zap.Int("routes", count))
-	return t.initWatcher()
+	return nil
 }
 
 func (t *Templates) initDB() (err error) {
@@ -495,11 +504,18 @@ func (t *Templates) initDB() (err error) {
 }
 
 func (t *Templates) initWatcher() error {
+	// Don't watch for changes when using a custom filesystem.
+	if t.FSModule != "" && t.FSModule != "native" {
+		return nil
+	}
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return err
 	}
-	err = filepath.WalkDir(t.FileRoot, func(path string, d fs.DirEntry, err error) error {
+
+	// Watch every directory under t.Root, recursively, as recommended by `watcher.Add` docs.
+	err = filepath.WalkDir(t.Root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -509,14 +525,29 @@ func (t *Templates) initWatcher() error {
 		return err
 	})
 	if err != nil {
+		watcher.Close()
 		return err
 	}
+
+	// The watcher state machine waits for change events from the filesystem and
+	// tries to reload.
+	//
+	// After the first change event arrives, wait for further events until 200ms
+	// passes with no events. This 'debounce' check tries to avoid a burst of
+	// reloads if multiple files are changed in quick succession (e.g. editor
+	// save all, or vcs checkout).
+	//
+	// After waiting, try to reinitialize the router and load all templates. If
+	// it fails then go back to waiting again. If it succeeds then the new
+	// router is already in effect and a new watcher has been created, so close
+	// this one. It's easier to create a new watcher from scratch than trying to
+	// interpret events to sync the watcher with the live directory structure.
 	halt := make(chan struct{})
 	t.stopWatcher = halt
 	go func() {
 		delay := 200 * time.Millisecond
 		var timer *time.Timer
-		t.ctx.Logger().Info("started watching files", zap.String("directory", t.FileRoot))
+		t.ctx.Logger().Info("started watching files", zap.String("directory", t.Root))
 	begin:
 		select {
 		case <-watcher.Events:
@@ -532,9 +563,10 @@ func (t *Templates) initWatcher() error {
 			}
 			timer.Reset(delay)
 			goto debounce
-		case <-timer.C:
 		case <-halt:
 			goto halt
+		case <-timer.C:
+			// only fall through if the timer expires first
 		}
 		if err := t.initRouter(); err != nil {
 			t.ctx.Logger().Info("failed to reload templates", zap.Error(err))
