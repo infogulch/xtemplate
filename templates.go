@@ -420,7 +420,8 @@ func (t *Templates) initRouter() error {
 		if err != nil {
 			return err
 		}
-		logger.Debug("found template", zap.Any("path", path), zap.String("startswith", string(content[:min(len(content), 20)])))
+		path = filepath.Clean("/" + path)
+		logger.Debug("found template file", zap.Any("path", path), zap.String("startswith", string(content[:min(len(content), 20)])))
 		// parse each template file manually to have more control over its final
 		// names in the template namespace.
 		newtemplates, err := parse.Parse(path, string(content), dl, dr, t.customFuncs, buliltinsSkeleton)
@@ -429,6 +430,7 @@ func (t *Templates) initRouter() error {
 		}
 		// add all templates
 		for name, tree := range newtemplates {
+			logger.Debug("adding defined template", zap.String("name", name), zap.String("path", path))
 			_, err = templates.AddParseTree(name, tree)
 			if err != nil {
 				return err
@@ -436,7 +438,8 @@ func (t *Templates) initRouter() error {
 		}
 		// add the route handler template
 		if !strings.HasPrefix(filepath.Base(path), "_") {
-			route := "GET /" + strings.TrimSuffix(path, filepath.Ext(path))
+			route := "GET " + strings.TrimSuffix(path, filepath.Ext(path))
+			logger.Debug("adding filename route template", zap.String("route", route), zap.String("path", path))
 			_, err = templates.AddParseTree(route, newtemplates[path])
 			if err != nil {
 				return err
@@ -486,7 +489,7 @@ func (t *Templates) initRouter() error {
 		if path.Base(path_) == "index" {
 			path_ = path.Dir(path_)
 		}
-		logger.Debug("adding route handler", zap.String("method", method), zap.String("path", path_), zap.Any("template", tmpl.Name()))
+		logger.Debug("adding route handler", zap.String("method", method), zap.String("path", path_), zap.Any("template_name", tmpl.Name()))
 		tmpl := tmpl // create unique variable for closure
 		router.Handle(method, path_, func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 			*r.Context().Value("🙈").(**template.Template) = tmpl
