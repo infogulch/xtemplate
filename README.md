@@ -6,9 +6,22 @@ rendered sites feel as interactive as a Single Page Apps.
 
 > ⚠️ This project is in active development, expect regular breaking changes. ⚠️
 
+#### Table of contents
+
+* [Features](#features)
+  * [Query the database directly within template definitions](#query-the-database-directly-within-template-definitions)
+  * [Define templates and import content from other files](#define-templates-and-import-content-from-other-files)
+  * [Automatic reload](#automatic-reload)
+  * [File-based routing & custom routes](#file-based-routing--custom-routes)
+* [Example](#example)
+* [Quickstart](#quickstart)
+* [Config](#config)
+* [Development](#development)
+* [License](#project-lineage-and-license)
+
 ## Features
 
-#### Query the database directly within template definitions
+### Query the database directly within template definitions
 
 ```html
 <ul>
@@ -22,12 +35,10 @@ rendered sites feel as interactive as a Single Page Apps.
 > rest easy from basic XSS attacks. Note: if you generate some html that you do
 > trust, it's easy to inject if you intend to.
 
-#### Define templates and import content from other files
+### Define templates and import content from other files
 
 ```html
-<!DOCTYPE html>
 <html>
-
 <title>Home</title>
 {{template "/shared/_head.html" .}} <!-- import the contents of a file -->
 
@@ -38,15 +49,15 @@ rendered sites feel as interactive as a Single Page Apps.
 </html>
 ```
 
-#### Automatic reload
+### Automatic reload
 
 Templates are reloaded and validated automatically as soon as they are modified,
-no need to restart the server. If there's a syntax error it keeps the old
-version and prints the error out in Caddy's logs.
+no need to restart the server. If there's a syntax error it continues to serve
+the old version and prints the loading error out in Caddy's logs.
 
 > Ctrl+S > Alt+Tab > F5
 
-#### File-based routing & custom routes
+### File-based routing & custom routes
 
 `GET` requests for any file will invoke the template file at that path. Except
 files that start with `_` which are not routed, this lets you define templates
@@ -83,12 +94,12 @@ OK
 {{end}}
 ```
 
-## Example
+# Example
 
 > ***See the todos example repository that exercises most features:***
 > https://github.com/infogulch/todos
 
-## Quickstart
+# Quickstart
 
 Download caddy with all standard modules, plus the `xtemplates` module (!important)
 from Caddy's build and download server:
@@ -115,26 +126,29 @@ Run caddy with your config: `caddy run --config Caddyfile`
 > you may want to layer on top. Examples: serving static files (css/js libs), set
 > up an auth proxy, caching, rate limiting, automatic https, and more!
 
-## Config
+# Config
 
 The `xtemplates` caddy config has three options:
 
 ```
 xtemplates {
     root <root directory where template files are loaded>
-    delimiters <left> <right>              # defaults: {{ and }}
-    database <driver> <connection string>  # passed unmodified to sql.Open,
+    delimiters <left> <right>        # defaults: {{ and }}
+    database {                       # default empty, no db available
+        driver <driver>              # driver and connstr are passed directly to sql.Open
+        connstr <connection string>  # check your sql driver for connstr details
+    }
 }
 ```
 
-The currently imported drivers are:
+These sql drivers are currently imported (see [db.go](db.go)):
 
 * [mattn/sqlite3](https://pkg.go.dev/github.com/mattn/go-sqlite3#section-readme) (requires building with `CGO_ENABLED=1`, not available from the caddy build server)
 * [cznic/sqlite](https://pkg.go.dev/modernc.org/sqlite?utm_source=godoc) (available from the caddy build server)
 
-## Development
+# Development
 
-Install [`xcaddy`](https://github.com/caddyserver/xcaddy), then build:
+To work on this project, install [`xcaddy`](https://github.com/caddyserver/xcaddy), then build from the repo root:
 
 ```sh
 # build a caddy executable with the latest version of caddy-xtemplates on github:
