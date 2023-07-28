@@ -12,9 +12,11 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/mattn/go-sqlite3 v1.14.17
+	github.com/segmentio/ksuid v1.0.4
 	github.com/yuin/goldmark v1.5.5
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20220924101305-151362477c87
 	go.uber.org/zap v1.24.0
+	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.24.0
 )
@@ -88,7 +90,6 @@ require (
 	github.com/quic-go/quic-go v0.32.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
-	github.com/segmentio/ksuid v1.0.4 // indirect
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/slackhq/nebula v1.6.1 // indirect
@@ -109,7 +110,6 @@ require (
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	golang.org/x/crypto v0.5.0 // indirect
-	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db // indirect
 	golang.org/x/mod v0.6.0 // indirect
 	golang.org/x/net v0.7.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect

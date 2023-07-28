@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
+	"html/template"
 	"io"
 	"io/fs"
 	"net"
@@ -26,9 +27,10 @@ type TemplateContext struct {
 	RespStatus func(int) string
 	Next       caddyhttp.Handler
 
-	fs  fs.FS
-	tx  *sql.Tx
-	log *zap.Logger
+	fs   fs.FS
+	tx   *sql.Tx
+	log  *zap.Logger
+	tmpl *template.Template
 }
 
 // OriginalReq returns the original, unmodified, un-rewritten request as
@@ -207,6 +209,21 @@ func (c *TemplateContext) QueryVal(query string, params ...any) (any, error) {
 		return v, nil
 	}
 	panic("impossible condition")
+}
+
+func (c *TemplateContext) Template(name string, context any) (string, error) {
+	buf := bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufPool.Put(buf)
+
+	t := c.tmpl.Lookup(name)
+	if t == nil {
+		return "", fmt.Errorf("template name does not exist: '%s'", name)
+	}
+	if err := t.Execute(buf, context); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }
 
 // WrappedHeader wraps niladic functions so that they

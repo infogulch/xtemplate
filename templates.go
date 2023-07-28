@@ -58,7 +58,17 @@ type Templates struct {
 	router      *httprouter.Router
 	db          *sql.DB
 	stopWatcher chan<- struct{}
+	tmpl        *template.Template
 }
+
+// Interface guards
+var (
+	_ caddy.Provisioner  = (*Templates)(nil)
+	_ caddy.Validator    = (*Templates)(nil)
+	_ caddy.CleanerUpper = (*Templates)(nil)
+
+	_ caddyhttp.MiddlewareHandler = (*Templates)(nil)
+)
 
 // Validate ensures t has a valid configuration. Implements caddy.Validator.
 func (t *Templates) Validate() error {
@@ -253,9 +263,10 @@ func (t *Templates) initRouter() error {
 				}
 			}
 			err = tmpl.Execute(io.Discard, &TemplateContext{
-				fs:  t.fs,
-				tx:  tx,
-				log: logger,
+				fs:   t.fs,
+				tx:   tx,
+				log:  logger,
+				tmpl: templates,
 			})
 			if err != nil {
 				tx.Rollback()
@@ -294,6 +305,7 @@ func (t *Templates) initRouter() error {
 	// Important! Set t.router as the very last step to not confuse the watcher
 	// state machine.
 	t.router = router
+	t.tmpl = templates
 	return nil
 }
 
@@ -404,12 +416,3 @@ func min[T constraints.Ordered](a, b T) T {
 	}
 	return b
 }
-
-// Interface guards
-var (
-	_ caddy.Provisioner  = (*Templates)(nil)
-	_ caddy.Validator    = (*Templates)(nil)
-	_ caddy.CleanerUpper = (*Templates)(nil)
-
-	_ caddyhttp.MiddlewareHandler = (*Templates)(nil)
-)

@@ -191,6 +191,8 @@ for details.
     * `.QueryRows` executes a query and returns all rows in a big `[]map[string]any`.
     * `.QueryRow` executes a query, which must return one row, and returns the `map[string]any`.
     * `.QueryVal` executes a query, which must return one row and one column, and returns the value of the column.
+* Other
+    * `.Template` evaluate the template name with the given context and return the result as a string.
 
 ### Functions
 
