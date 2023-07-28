@@ -1,4 +1,4 @@
-package xtemplates
+package xtemplate
 
 // Import sql db drivers here.
 

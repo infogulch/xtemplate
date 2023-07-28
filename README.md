@@ -1,4 +1,4 @@
-`caddy-xtemplates` is a [Caddy](https://caddyserver.com) module that extends
+`caddy-xtemplate` is a [Caddy](https://caddyserver.com) module that extends
 Go's [`html/template` library](https://pkg.go.dev/html/template) to be capable
 enough to host an entire server-side application in it. Designed with the
 [htmx.org](https://htmx.org/) js library in mind, which makes server side
@@ -105,18 +105,18 @@ the old version and prints the loading error out in Caddy's logs.
 
 # Quickstart
 
-Download caddy with all standard modules, plus the `xtemplates` module (!important)
+Download caddy with all standard modules, plus the `xtemplate` module (!important)
 from Caddy's build and download server:
 
-https://caddyserver.com/download?package=github.com%2Finfogulch%2Fcaddy-xtemplates
+https://caddyserver.com/download?package=github.com%2Finfogulch%2Fcaddy-xtemplate
 
-Write your caddy config and use the xtemplates http handler:
+Write your caddy config and use the xtemplate http handler:
 
 ```
 :8080
 
 route {
-    xtemplates {
+    xtemplate {
         root templates
     }
 }
@@ -132,10 +132,10 @@ Run caddy with your config: `caddy run --config Caddyfile`
 
 # Config
 
-The `xtemplates` caddy config has three options:
+The `xtemplate` caddy config has three options:
 
 ```
-xtemplates {
+xtemplate {
     root <root directory where template files are loaded>
     delimiters <left> <right>        # defaults: {{ and }}
     database {                       # default empty, no db available
@@ -216,15 +216,15 @@ specific request. See [funcs.go](funcs.go) for details.
 To work on this project, install [`xcaddy`](https://github.com/caddyserver/xcaddy), then build from the repo root:
 
 ```sh
-# build a caddy executable with the latest version of caddy-xtemplates from github:
-xcaddy build --with github.com/infogulch/caddy-xtemplates
+# build a caddy executable with the latest version of caddy-xtemplate from github:
+xcaddy build --with github.com/infogulch/caddy-xtemplate
 
-# build a caddy executable and override the xtemplates module with your
+# build a caddy executable and override the xtemplate module with your
 # modifications in the current directory:
 xcaddy build --with modulepath=.
 
 # build with CGO in order to use the sqlite3 db driver
-CGO_ENABLED=1 xcaddy build --with github.com/infogulch/caddy-xtemplates
+CGO_ENABLED=1 xcaddy build --with github.com/infogulch/caddy-xtemplate
 ```
 
 ## Project lineage and license

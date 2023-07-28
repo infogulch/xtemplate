@@ -1,4 +1,4 @@
-module github.com/infogulch/caddy-xtemplates
+module github.com/infogulch/caddy-xtemplate
 
 go 1.19
 

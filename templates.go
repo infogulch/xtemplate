@@ -1,6 +1,6 @@
 // caddy-xtemplates is a Caddy module that extends Go's html/template to be
 // capable enough to host an entire server-side application in it.
-package xtemplates
+package xtemplate
 
 import (
 	"database/sql"
