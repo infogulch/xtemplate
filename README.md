@@ -193,6 +193,7 @@ for details.
     * `.QueryVal` executes a query, which must return one row and one column, and returns the value of the column.
 * Other
     * `.Template` evaluate the template name with the given context and return the result as a string.
+    * `.Funcs` returns a list of all the custom FuncMap funcs that are available to call. Useful in combination with the `try` func.
 
 ### Functions
 
@@ -212,6 +213,7 @@ specific request. See [funcs.go](funcs.go) for details.
 * `uuid` returns a RFC 4122 UUID using [google/uuid](https://github.com/google/uuid)
 * `ksuid` returns a 'K-Sortable Globally Unique ID' using [segmentio/ksuid](https://github.com/segmentio/ksuid)
 * `idx` gets an item from a list, similar to the built-in `index`, but with reversed args: index first, then array. This is useful to use index in a pipeline, for example: `{{generate-list | idx 5}}`
+* `try` takes a function that returns an error in the first argument and calls it with the values from the remaining arguments, and returns the result including any error as struct fields. This enables template authors to handle funcs that return errors within the template definition. Example: `{{ $result := try .QueryVal "SELECT 'oops' WHERE 1=0" }}{{if $result.OK}}{{$result.Value}}{{else}}QueryVal requires exactly one row. Error: {{$result.Error}}{{end}}`
 
 # Development
 

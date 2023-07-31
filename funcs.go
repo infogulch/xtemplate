@@ -22,6 +22,23 @@ import (
 	gmhtml "github.com/yuin/goldmark/renderer/html"
 )
 
+var funcLibrary template.FuncMap = template.FuncMap{
+	"stripHTML":        funcStripHTML,
+	"markdown":         funcMarkdown,
+	"splitFrontMatter": funcSplitFrontMatter,
+	"httpError":        funcHTTPError,
+	"humanize":         funcHumanize,
+	"trustHtml":        funcTrustHtml,
+	"trustAttr":        funcTrustAttr,
+	"trustJS":          funcTrustJS,
+	"trustJSStr":       funcTrustJSStr,
+	"trustSrcSet":      funcTrustSrcSet,
+	"uuid":             funcUuid,
+	"idx":              funcIdx,
+	"ksuid":            funcKsuid,
+	"try":              funcTry,
+}
+
 // funcStripHTML returns s without HTML tags. It is fairly naive
 // but works with most valid HTML inputs.
 func funcStripHTML(s string) string {
@@ -184,6 +201,47 @@ func funcHumanize(formatType, data string) (string, error) {
 	}
 
 	return "", fmt.Errorf("no know function was given")
+}
+
+func funcTry(fn any, args ...any) (*result, error) {
+	r := reflect.ValueOf(fn)
+	if r.Kind() != reflect.Func {
+		return nil, fmt.Errorf("not a function")
+	}
+	n := r.Type().NumOut()
+	if n != 1 && n != 2 {
+		return nil, fmt.Errorf("cannot call func that has %d outputs", n)
+	} else if !r.Type().Out(n - 1).AssignableTo(reflect.TypeOf((*error)(nil)).Elem()) {
+		return nil, fmt.Errorf("cannot call func whose last arg is not error")
+	}
+	reflectArgs := []reflect.Value{}
+	for _, a := range args {
+		reflectArgs = append(reflectArgs, reflect.ValueOf(a))
+	}
+	var out []reflect.Value
+	if r.Type().IsVariadic() {
+		out = r.CallSlice(reflectArgs)
+	} else {
+		out = r.Call(reflectArgs)
+	}
+	err := out[n-1].Interface().(error)
+	var value any
+	if n > 1 {
+		value = out[0].Interface()
+	}
+	return &result{
+		Value: value,
+		Error: err,
+	}, nil
+}
+
+type result struct {
+	Value any
+	Error error
+}
+
+func (r *result) OK() bool {
+	return r.Error == nil
 }
 
 // Skeleton versions of the built-in functions in templates. This is needed to

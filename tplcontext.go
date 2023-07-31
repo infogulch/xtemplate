@@ -27,10 +27,9 @@ type TemplateContext struct {
 	RespStatus func(int) string
 	Next       caddyhttp.Handler
 
-	fs   fs.FS
-	tx   *sql.Tx
-	log  *zap.Logger
-	tmpl *template.Template
+	t   *Templates
+	tx  *sql.Tx
+	log *zap.Logger
 }
 
 // OriginalReq returns the original, unmodified, un-rewritten request as
@@ -90,7 +89,7 @@ func (c *TemplateContext) ReadFile(filename string) (string, error) {
 	defer bufPool.Put(buf)
 
 	filename = path.Clean(filename)
-	file, err := c.fs.Open(filename)
+	file, err := c.t.fs.Open(filename)
 	if err != nil {
 		return "", err
 	}
@@ -107,7 +106,7 @@ func (c *TemplateContext) ReadFile(filename string) (string, error) {
 // StatFile returns Stat of a filename
 func (c *TemplateContext) StatFile(filename string) (fs.FileInfo, error) {
 	filename = path.Clean(filename)
-	file, err := c.fs.Open(filename)
+	file, err := c.t.fs.Open(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +118,7 @@ func (c *TemplateContext) StatFile(filename string) (fs.FileInfo, error) {
 // ListFiles reads and returns a slice of names from the given
 // directory relative to the root of c.
 func (c *TemplateContext) ListFiles(name string) ([]string, error) {
-	entries, err := fs.ReadDir(c.fs, path.Clean(name))
+	entries, err := fs.ReadDir(c.t.fs, path.Clean(name))
 	if err != nil {
 		return nil, err
 	}
@@ -134,10 +133,10 @@ func (c *TemplateContext) ListFiles(name string) ([]string, error) {
 
 // funcFileExists returns true if filename can be opened successfully.
 func (c *TemplateContext) FileExists(filename string) (bool, error) {
-	if c.fs == nil {
+	if c.t.fs == nil {
 		return false, fmt.Errorf("root file system not specified")
 	}
-	file, err := c.fs.Open(filename)
+	file, err := c.t.fs.Open(filename)
 	if err == nil {
 		file.Close()
 		return true, nil
@@ -216,7 +215,7 @@ func (c *TemplateContext) Template(name string, context any) (string, error) {
 	buf.Reset()
 	defer bufPool.Put(buf)
 
-	t := c.tmpl.Lookup(name)
+	t := c.t.tmpl.Lookup(name)
 	if t == nil {
 		return "", fmt.Errorf("template name does not exist: '%s'", name)
 	}
@@ -224,6 +223,10 @@ func (c *TemplateContext) Template(name string, context any) (string, error) {
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+func (c *TemplateContext) Funcs() template.FuncMap {
+	return c.t.customFuncs
 }
 
 // WrappedHeader wraps niladic functions so that they

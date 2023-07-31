@@ -164,21 +164,7 @@ func (t *Templates) initFuncs() error {
 	merge(sprig.HtmlFuncMap())
 
 	// add our own library
-	merge(template.FuncMap{
-		"stripHTML":        funcStripHTML,
-		"markdown":         funcMarkdown,
-		"splitFrontMatter": funcSplitFrontMatter,
-		"httpError":        funcHTTPError,
-		"humanize":         funcHumanize,
-		"trustHtml":        funcTrustHtml,
-		"trustAttr":        funcTrustAttr,
-		"trustJS":          funcTrustJS,
-		"trustJSStr":       funcTrustJSStr,
-		"trustSrcSet":      funcTrustSrcSet,
-		"uuid":             funcUuid,
-		"idx":              funcIdx,
-		"ksuid":            funcKsuid,
-	})
+	merge(funcLibrary)
 
 	t.customFuncs = funcs
 	return nil
@@ -263,10 +249,9 @@ func (t *Templates) initRouter() error {
 				}
 			}
 			err = tmpl.Execute(io.Discard, &TemplateContext{
-				fs:   t.fs,
-				tx:   tx,
-				log:  logger,
-				tmpl: templates,
+				t:   t,
+				log: logger,
+				tx:  tx,
 			})
 			if err != nil {
 				tx.Rollback()
