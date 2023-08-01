@@ -50,9 +50,11 @@ func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddy
 		RespHeader: WrappedHeader{w.Header()},
 		Next:       next,
 
-		t:   t,
-		log: logger,
-		tx:  tx,
+		tmpl:  t.tmpl,
+		funcs: t.customFuncs,
+		fs:    t.fs,
+		log:   logger,
+		tx:    tx,
 	}
 
 	err = template.Execute(w, context)

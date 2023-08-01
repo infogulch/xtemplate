@@ -27,9 +27,11 @@ type TemplateContext struct {
 	RespStatus func(int) string
 	Next       caddyhttp.Handler
 
-	t   *Templates
-	tx  *sql.Tx
-	log *zap.Logger
+	tmpl  *template.Template
+	funcs template.FuncMap
+	fs    fs.FS
+	tx    *sql.Tx
+	log   *zap.Logger
 }
 
 // OriginalReq returns the original, unmodified, un-rewritten request as
@@ -89,7 +91,7 @@ func (c *TemplateContext) ReadFile(filename string) (string, error) {
 	defer bufPool.Put(buf)
 
 	filename = path.Clean(filename)
-	file, err := c.t.fs.Open(filename)
+	file, err := c.fs.Open(filename)
 	if err != nil {
 		return "", err
 	}
@@ -106,7 +108,7 @@ func (c *TemplateContext) ReadFile(filename string) (string, error) {
 // StatFile returns Stat of a filename
 func (c *TemplateContext) StatFile(filename string) (fs.FileInfo, error) {
 	filename = path.Clean(filename)
-	file, err := c.t.fs.Open(filename)
+	file, err := c.fs.Open(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +120,7 @@ func (c *TemplateContext) StatFile(filename string) (fs.FileInfo, error) {
 // ListFiles reads and returns a slice of names from the given
 // directory relative to the root of c.
 func (c *TemplateContext) ListFiles(name string) ([]string, error) {
-	entries, err := fs.ReadDir(c.t.fs, path.Clean(name))
+	entries, err := fs.ReadDir(c.fs, path.Clean(name))
 	if err != nil {
 		return nil, err
 	}
@@ -133,10 +135,10 @@ func (c *TemplateContext) ListFiles(name string) ([]string, error) {
 
 // funcFileExists returns true if filename can be opened successfully.
 func (c *TemplateContext) FileExists(filename string) (bool, error) {
-	if c.t.fs == nil {
+	if c.fs == nil {
 		return false, fmt.Errorf("root file system not specified")
 	}
-	file, err := c.t.fs.Open(filename)
+	file, err := c.fs.Open(filename)
 	if err == nil {
 		file.Close()
 		return true, nil
@@ -162,23 +164,26 @@ func (c *TemplateContext) QueryRows(query string, params ...any) ([]map[string]a
 	defer result.Close()
 
 	var rows []map[string]any
+
+	// prepare scan output array
 	columns, err := result.Columns()
 	if err != nil {
 		return nil, err
 	}
 	n := len(columns)
-	arr := make([]any, n)
+	out := make([]any, n)
 	for i, _ := range columns {
-		arr[i] = new(any)
+		out[i] = new(any)
 	}
+
 	for result.Next() {
-		err = result.Scan(arr...)
+		err = result.Scan(out...)
 		if err != nil {
 			return nil, err
 		}
 		row := make(map[string]any, n)
 		for i, c := range columns {
-			row[c] = *arr[i].(*any)
+			row[c] = *out[i].(*any)
 		}
 		rows = append(rows, row)
 	}
@@ -215,7 +220,7 @@ func (c *TemplateContext) Template(name string, context any) (string, error) {
 	buf.Reset()
 	defer bufPool.Put(buf)
 
-	t := c.t.tmpl.Lookup(name)
+	t := c.tmpl.Lookup(name)
 	if t == nil {
 		return "", fmt.Errorf("template name does not exist: '%s'", name)
 	}
@@ -226,7 +231,7 @@ func (c *TemplateContext) Template(name string, context any) (string, error) {
 }
 
 func (c *TemplateContext) Funcs() template.FuncMap {
-	return c.t.customFuncs
+	return c.funcs
 }
 
 // WrappedHeader wraps niladic functions so that they

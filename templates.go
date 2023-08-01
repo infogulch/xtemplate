@@ -249,9 +249,11 @@ func (t *Templates) initRouter() error {
 				}
 			}
 			err = tmpl.Execute(io.Discard, &TemplateContext{
-				t:   t,
-				log: logger,
-				tx:  tx,
+				tmpl:  templates,
+				funcs: t.customFuncs,
+				fs:    t.fs,
+				log:   logger,
+				tx:    tx,
 			})
 			if err != nil {
 				tx.Rollback()
