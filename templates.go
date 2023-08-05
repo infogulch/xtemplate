@@ -28,22 +28,18 @@ import (
 )
 
 type Templates struct {
-	// The filesystem from which to load template files. May be "native"
-	// (default), or the caddy module ID of a module that implements the
-	// CustomFSProvider interface
-	FSModule caddy.ModuleID `json:"fs_module,omitempty"`
-
 	// The root path from which to load template files within the selected
 	// filesystem (the native filesystem by default). Default is the current
 	// working directory.
-	Root string `json:"root,omitempty"`
+	TemplateRoot string `json:"template_root,omitempty"`
+
+	// The root path to reference files from within template funcs. The default,
+	// empty string means the local filesystem funcs in templates are disabled.
+	ContextRoot string `json:"context_root,omitempty"`
 
 	// The template action delimiters. If set, must be precisely two elements:
 	// the opening and closing delimiters. Default: `["{{", "}}"]`
 	Delimiters []string `json:"delimiters,omitempty"`
-
-	// A list of caddy module IDs from which to load template FuncMaps, by
-	FuncModules []caddy.ModuleID `json:"func_modules,omitempty"`
 
 	// The database driver and connection string. If set, must be precicely two
 	// elements: the driver name and the connection string.
@@ -52,13 +48,17 @@ type Templates struct {
 		Connstr string `json:"connstr,omitempty"`
 	} `json:"database,omitempty"`
 
-	ctx         caddy.Context
-	fs          fs.FS
-	customFuncs template.FuncMap
-	router      *httprouter.Router
-	db          *sql.DB
-	stopWatcher chan<- struct{}
-	tmpl        *template.Template
+	TemplateFS fs.FS
+	ContextFS  fs.FS
+	ExtraFuncs template.FuncMap
+
+	DB *sql.DB
+
+	ctx    caddy.Context
+	funcs  template.FuncMap
+	router *httprouter.Router
+	stop   chan<- struct{}
+	tmpl   *template.Template
 }
 
 // Interface guards
@@ -87,7 +87,12 @@ func (t *Templates) Provision(ctx caddy.Context) error {
 
 	t.ctx = ctx
 
-	err = t.initFS()
+	err = t.initContextFS()
+	if err != nil {
+		return err
+	}
+
+	err = t.initTemplateFS()
 	if err != nil {
 		return err
 	}
@@ -110,30 +115,38 @@ func (t *Templates) Provision(ctx caddy.Context) error {
 	return nil
 }
 
-func (t *Templates) initFS() error {
+func (t *Templates) initContextFS() error {
+	if t.ContextFS != nil {
+		return nil
+	}
+	if len(t.ContextRoot) == 0 {
+		return nil
+	}
+
+	t.ContextFS = os.DirFS(t.ContextRoot)
+
+	if st, err := fs.Stat(t.ContextFS, "."); err != nil || !st.IsDir() {
+		return fmt.Errorf("root file path does not exist in filesystem")
+	}
+
+	return nil
+}
+
+func (t *Templates) initTemplateFS() error {
+	if t.TemplateFS != nil {
+		return nil
+	}
+
 	var root string
-	if len(t.Root) > 0 {
-		root = t.Root
+	if len(t.TemplateRoot) > 0 {
+		root = t.TemplateRoot
 	} else {
 		root = "."
 	}
 
-	if t.FSModule == "" || t.FSModule == "native" {
-		t.fs = os.DirFS(root)
-	} else {
-		modInfo, err := caddy.GetModule(string(t.FSModule))
-		if err != nil {
-			return fmt.Errorf("module '%s' not found", t.FSModule)
-		}
-		mod := modInfo.New()
-		fsp, ok := mod.(CustomFSProvider)
-		if !ok {
-			return fmt.Errorf("module %s does not implement TemplatesFSProvider", t.FSModule)
-		}
-		t.fs = fsp.CustomTemplateFS()
-	}
+	t.TemplateFS = os.DirFS(root)
 
-	if st, err := fs.Stat(t.fs, "."); err != nil || !st.IsDir() {
+	if st, err := fs.Stat(t.TemplateFS, "."); err != nil || !st.IsDir() {
 		return fmt.Errorf("root file path does not exist in filesystem")
 	}
 
@@ -147,26 +160,12 @@ func (t *Templates) initFuncs() error {
 			funcs[name] = fn
 		}
 	}
-
-	for _, modid := range t.FuncModules {
-		modInfo, err := caddy.GetModule(string(modid))
-		if err != nil {
-			return fmt.Errorf("module '%s' does not exist", modid)
-		}
-		mod := modInfo.New()
-		fnMod, ok := mod.(CustomFunctionsProvider)
-		if !ok {
-			return fmt.Errorf("module %q does not satisfy the CustomFunctions interface", modid)
-		}
-		merge(fnMod.CustomTemplateFunctions())
+	if t.ExtraFuncs != nil {
+		merge(t.ExtraFuncs)
 	}
-
 	merge(sprig.HtmlFuncMap())
-
-	// add our own library
 	merge(funcLibrary)
-
-	t.customFuncs = funcs
+	t.funcs = funcs
 	return nil
 }
 
@@ -179,13 +178,13 @@ func (t *Templates) initRouter() error {
 	}
 
 	// Define the template instance that will accumulate all template definitions.
-	templates := template.New(".").Delims(dl, dr).Funcs(t.customFuncs)
+	templates := template.New(".").Delims(dl, dr).Funcs(t.funcs)
 
 	// Find all files and send the ones that match *.html into a channel. Will check walkErr later.
 	files := make(chan string)
 	var walkErr error
 	go func() {
-		walkErr = fs.WalkDir(t.fs, ".", func(path string, d fs.DirEntry, err error) error {
+		walkErr = fs.WalkDir(t.TemplateFS, ".", func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
@@ -201,7 +200,7 @@ func (t *Templates) initRouter() error {
 
 	// Ingest all templates; add GET handlers for template files that don't start with '_'
 	for path := range files {
-		content, err := fs.ReadFile(t.fs, path)
+		content, err := fs.ReadFile(t.TemplateFS, path)
 		if err != nil {
 			return err
 		}
@@ -209,7 +208,7 @@ func (t *Templates) initRouter() error {
 		logger.Debug("found template file", zap.Any("path", path), zap.String("startswith", string(content[:min(len(content), 20)])))
 		// parse each template file manually to have more control over its final
 		// names in the template namespace.
-		newtemplates, err := parse.Parse(path, string(content), dl, dr, t.customFuncs, buliltinsSkeleton)
+		newtemplates, err := parse.Parse(path, string(content), dl, dr, t.funcs, buliltinsSkeleton)
 		if err != nil {
 			return err
 		}
@@ -241,8 +240,8 @@ func (t *Templates) initRouter() error {
 		if strings.HasPrefix(tmpl.Name(), "INIT ") {
 			var tx *sql.Tx
 			var err error
-			if t.db != nil {
-				tx, err = t.db.Begin()
+			if t.DB != nil {
+				tx, err = t.DB.Begin()
 				if err != nil {
 					// logger.Warn("failed begin database transaction", zap.Error(err))
 					return caddyhttp.Error(http.StatusInternalServerError, err)
@@ -250,8 +249,8 @@ func (t *Templates) initRouter() error {
 			}
 			err = tmpl.Execute(io.Discard, &TemplateContext{
 				tmpl:  templates,
-				funcs: t.customFuncs,
-				fs:    t.fs,
+				funcs: t.funcs,
+				fs:    t.ContextFS,
 				log:   logger,
 				tx:    tx,
 			})
@@ -301,13 +300,12 @@ func (t *Templates) initDB() (err error) {
 		return nil
 	}
 
-	t.db, err = sql.Open(t.Database.Driver, t.Database.Connstr)
+	t.DB, err = sql.Open(t.Database.Driver, t.Database.Connstr)
 	return
 }
 
 func (t *Templates) initWatcher() error {
-	// Don't watch for changes when using a custom filesystem.
-	if t.FSModule != "" && t.FSModule != "native" {
+	if t.TemplateRoot == "" {
 		return nil
 	}
 
@@ -317,7 +315,7 @@ func (t *Templates) initWatcher() error {
 	}
 
 	// Watch every directory under t.Root, recursively, as recommended by `watcher.Add` docs.
-	err = filepath.WalkDir(t.Root, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(t.ContextRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -345,11 +343,11 @@ func (t *Templates) initWatcher() error {
 	// this one. It's easier to create a new watcher from scratch than trying to
 	// interpret events to sync the watcher with the live directory structure.
 	halt := make(chan struct{})
-	t.stopWatcher = halt
+	t.stop = halt
 	go func() {
 		delay := 200 * time.Millisecond
 		var timer *time.Timer
-		t.ctx.Logger().Info("started watching files", zap.String("directory", t.Root))
+		t.ctx.Logger().Info("started watching files", zap.String("directory", t.ContextRoot))
 	begin:
 		select {
 		case <-watcher.Events:
@@ -384,14 +382,13 @@ func (t *Templates) initWatcher() error {
 // Cleanup discards resources held by t. Implements caddy.CleanerUpper.
 func (t *Templates) Cleanup() error {
 	t.router = nil
-	t.fs = nil
-	t.customFuncs = nil
-	if t.db != nil {
-		t.db.Close()
-		t.db = nil
+	t.funcs = nil
+	if t.DB != nil {
+		t.DB.Close()
+		t.DB = nil
 	}
-	if t.stopWatcher != nil {
-		t.stopWatcher <- struct{}{}
+	if t.stop != nil {
+		t.stop <- struct{}{}
 	}
 
 	return nil

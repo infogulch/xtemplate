@@ -86,6 +86,9 @@ func (c *TemplateContext) Host() (string, error) {
 // trusted files. If it is not trusted, be sure to use escaping functions
 // in your template.
 func (c *TemplateContext) ReadFile(filename string) (string, error) {
+	if c.fs == nil {
+		return "", fmt.Errorf("context file system is not configured")
+	}
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer bufPool.Put(buf)
@@ -107,6 +110,9 @@ func (c *TemplateContext) ReadFile(filename string) (string, error) {
 
 // StatFile returns Stat of a filename
 func (c *TemplateContext) StatFile(filename string) (fs.FileInfo, error) {
+	if c.fs == nil {
+		return nil, fmt.Errorf("context file system is not configured")
+	}
 	filename = path.Clean(filename)
 	file, err := c.fs.Open(filename)
 	if err != nil {
@@ -120,6 +126,9 @@ func (c *TemplateContext) StatFile(filename string) (fs.FileInfo, error) {
 // ListFiles reads and returns a slice of names from the given
 // directory relative to the root of c.
 func (c *TemplateContext) ListFiles(name string) ([]string, error) {
+	if c.fs == nil {
+		return nil, fmt.Errorf("context file system is not configured")
+	}
 	entries, err := fs.ReadDir(c.fs, path.Clean(name))
 	if err != nil {
 		return nil, err
@@ -136,7 +145,7 @@ func (c *TemplateContext) ListFiles(name string) ([]string, error) {
 // funcFileExists returns true if filename can be opened successfully.
 func (c *TemplateContext) FileExists(filename string) (bool, error) {
 	if c.fs == nil {
-		return false, fmt.Errorf("root file system not specified")
+		return false, fmt.Errorf("context file system is not configured")
 	}
 	file, err := c.fs.Open(filename)
 	if err == nil {
@@ -172,7 +181,7 @@ func (c *TemplateContext) QueryRows(query string, params ...any) ([]map[string]a
 	}
 	n := len(columns)
 	out := make([]any, n)
-	for i, _ := range columns {
+	for i := range columns {
 		out[i] = new(any)
 	}
 

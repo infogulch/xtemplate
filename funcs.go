@@ -224,8 +224,12 @@ func funcTry(fn any, args ...any) (*result, error) {
 	} else {
 		out = r.Call(reflectArgs)
 	}
-	err := out[n-1].Interface().(error)
+	var err error
 	var value any
+	ierr := out[n-1].Interface()
+	if ierr != nil {
+		err = ierr.(error)
+	}
 	if n > 1 {
 		value = out[0].Interface()
 	}
@@ -246,7 +250,8 @@ func (r *result) OK() bool {
 
 // Skeleton versions of the built-in functions in templates. This is needed to
 // make text/template/parse.Parse parse correctly because the number of
-// arguments is checked at parse time, but they are never called.
+// arguments is checked at parse time, but they are never not called and the
+// argument types are not checked, just their number.
 var buliltinsSkeleton template.FuncMap = template.FuncMap{
 	"and":      func(any, ...any) any { return nil },
 	"call":     func(any, ...any) (any, error) { return nil, nil },

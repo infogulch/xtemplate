@@ -33,8 +33,8 @@ func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddy
 
 	var tx *sql.Tx
 	var err error
-	if t.db != nil {
-		tx, err = t.db.Begin()
+	if t.DB != nil {
+		tx, err = t.DB.Begin()
 		if err != nil {
 			logger.Info("failed to begin database transaction", zap.Error(err))
 			return caddyhttp.Error(http.StatusInternalServerError, err)
@@ -51,8 +51,8 @@ func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddy
 		Next:       next,
 
 		tmpl:  t.tmpl,
-		funcs: t.customFuncs,
-		fs:    t.fs,
+		funcs: t.funcs,
+		fs:    t.ContextFS,
 		log:   logger,
 		tx:    tx,
 	}
