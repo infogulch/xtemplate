@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -14,7 +15,7 @@ import (
 )
 
 func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
-	logger := t.ctx.Logger().Named(r.URL.Path)
+	logger := t.ctx.Logger().Named(fmt.Sprintf("request-%s", caddyhttp.GetVar(r.Context(), "uuid").(fmt.Stringer)))
 	handle, params, _ := t.router.Lookup(r.Method, r.URL.Path)
 	if handle == nil {
 		logger.Debug("no handler for request", zap.String("method", r.Method), zap.String("path", r.URL.Path))

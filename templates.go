@@ -23,7 +23,6 @@ import (
 	sprig "github.com/go-task/slim-sprig"
 	"github.com/julienschmidt/httprouter"
 	"go.uber.org/zap"
-	"golang.org/x/exp/constraints"
 	"golang.org/x/exp/slices"
 )
 
@@ -126,7 +125,7 @@ func (t *Templates) initContextFS() error {
 	t.ContextFS = os.DirFS(t.ContextRoot)
 
 	if st, err := fs.Stat(t.ContextFS, "."); err != nil || !st.IsDir() {
-		return fmt.Errorf("root file path does not exist in filesystem")
+		return fmt.Errorf("root file path does not exist in filesystem: %v", err)
 	}
 
 	return nil
@@ -147,7 +146,7 @@ func (t *Templates) initTemplateFS() error {
 	t.TemplateFS = os.DirFS(root)
 
 	if st, err := fs.Stat(t.TemplateFS, "."); err != nil || !st.IsDir() {
-		return fmt.Errorf("root file path does not exist in filesystem")
+		return fmt.Errorf("root file path does not exist in filesystem: %v", err)
 	}
 
 	return nil
@@ -170,7 +169,7 @@ func (t *Templates) initFuncs() error {
 }
 
 func (t *Templates) initRouter() error {
-	logger := t.ctx.Logger().Named("provision.router")
+	log := t.ctx.Logger().Named("provision.router")
 
 	dl, dr := "{{", "}}"
 	if len(t.Delimiters) != 0 {
@@ -191,7 +190,7 @@ func (t *Templates) initRouter() error {
 			if ext := filepath.Ext(path); ext == ".html" {
 				files <- path
 			} else {
-				logger.Debug("file ignored", zap.String("path", path), zap.String("ext", ext))
+				log.Debug("file ignored", zap.String("path", path), zap.String("ext", ext))
 			}
 			return err
 		})
@@ -202,37 +201,35 @@ func (t *Templates) initRouter() error {
 	for path := range files {
 		content, err := fs.ReadFile(t.TemplateFS, path)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not read template file '%s': %v", path, err)
 		}
 		path = filepath.Clean("/" + path)
-		logger.Debug("found template file", zap.Any("path", path), zap.String("startswith", string(content[:min(len(content), 20)])))
 		// parse each template file manually to have more control over its final
 		// names in the template namespace.
 		newtemplates, err := parse.Parse(path, string(content), dl, dr, t.funcs, buliltinsSkeleton)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not parse template file '%s': %v", path, err)
 		}
 		// add all templates
 		for name, tree := range newtemplates {
-			logger.Debug("adding defined template", zap.String("name", name), zap.String("path", path))
 			_, err = templates.AddParseTree(name, tree)
 			if err != nil {
-				return err
+				return fmt.Errorf("could not add template '%s' from '%s': %v", name, path, err)
 			}
 		}
 		// add the route handler template
 		if !strings.HasPrefix(filepath.Base(path), "_") {
 			route := "GET " + strings.TrimSuffix(path, filepath.Ext(path))
-			logger.Debug("adding filename route template", zap.String("route", route), zap.String("path", path))
+			log.Debug("adding filename route template", zap.String("route", route), zap.String("path", path))
 			_, err = templates.AddParseTree(route, newtemplates[path])
 			if err != nil {
-				return err
+				return fmt.Errorf("could not add parse tree from '%s': %v", path, err)
 			}
 		}
 	}
 
 	if walkErr != nil {
-		return walkErr
+		return fmt.Errorf("error scanning file tree: %v", walkErr)
 	}
 
 	// Invoke all initilization templates, aka any template whose name starts with "INIT "
@@ -243,20 +240,19 @@ func (t *Templates) initRouter() error {
 			if t.DB != nil {
 				tx, err = t.DB.Begin()
 				if err != nil {
-					// logger.Warn("failed begin database transaction", zap.Error(err))
-					return caddyhttp.Error(http.StatusInternalServerError, err)
+					return fmt.Errorf("failed to begin transaction for '%s': %v", tmpl.Name(), err)
 				}
 			}
 			err = tmpl.Execute(io.Discard, &TemplateContext{
 				tmpl:  templates,
 				funcs: t.funcs,
 				fs:    t.ContextFS,
-				log:   logger,
+				log:   log,
 				tx:    tx,
 			})
 			if err != nil {
 				tx.Rollback()
-				return err
+				return fmt.Errorf("template initializer '%s' failed: %v", tmpl.Name(), err)
 			}
 			tx.Commit()
 		}
@@ -275,7 +271,7 @@ func (t *Templates) initRouter() error {
 		if path.Base(path_) == "index" {
 			path_ = path.Dir(path_)
 		}
-		logger.Debug("adding route handler", zap.String("method", method), zap.String("path", path_), zap.Any("template_name", tmpl.Name()))
+		log.Debug("adding route handler", zap.String("method", method), zap.String("path", path_), zap.Any("template_name", tmpl.Name()))
 		tmpl := tmpl // create unique variable for closure
 		router.Handle(method, path_, func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 			*r.Context().Value("🙈").(**template.Template) = tmpl
@@ -315,7 +311,7 @@ func (t *Templates) initWatcher() error {
 	}
 
 	// Watch every directory under t.Root, recursively, as recommended by `watcher.Add` docs.
-	err = filepath.WalkDir(t.ContextRoot, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(t.TemplateRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -326,7 +322,7 @@ func (t *Templates) initWatcher() error {
 	})
 	if err != nil {
 		watcher.Close()
-		return err
+		return fmt.Errorf("scanning for directories to watch failed: %v", err)
 	}
 
 	// The watcher state machine waits for change events from the filesystem and
@@ -347,7 +343,7 @@ func (t *Templates) initWatcher() error {
 	go func() {
 		delay := 200 * time.Millisecond
 		var timer *time.Timer
-		t.ctx.Logger().Info("started watching files", zap.String("directory", t.ContextRoot))
+		t.ctx.Logger().Info("started watching files", zap.String("directory", t.TemplateRoot))
 	begin:
 		select {
 		case <-watcher.Events:
@@ -392,11 +388,4 @@ func (t *Templates) Cleanup() error {
 	}
 
 	return nil
-}
-
-func min[T constraints.Ordered](a, b T) T {
-	if a < b {
-		return a
-	}
-	return b
 }

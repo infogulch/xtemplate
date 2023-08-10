@@ -12,6 +12,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
@@ -27,11 +28,12 @@ type TemplateContext struct {
 	RespStatus func(int) string
 	Next       caddyhttp.Handler
 
-	tmpl  *template.Template
-	funcs template.FuncMap
-	fs    fs.FS
-	tx    *sql.Tx
-	log   *zap.Logger
+	tmpl       *template.Template
+	funcs      template.FuncMap
+	fs         fs.FS
+	tx         *sql.Tx
+	log        *zap.Logger
+	queryTimes []time.Duration
 }
 
 // OriginalReq returns the original, unmodified, un-rewritten request as
@@ -159,6 +161,9 @@ func (c *TemplateContext) Exec(query string, params ...any) (sql.Result, error) 
 	if c.tx == nil {
 		return nil, fmt.Errorf("database is not configured")
 	}
+	start := time.Now()
+	defer func() { c.queryTimes = append(c.queryTimes, time.Since(start)) }()
+
 	return c.tx.Exec(query, params...)
 }
 
@@ -166,6 +171,9 @@ func (c *TemplateContext) QueryRows(query string, params ...any) ([]map[string]a
 	if c.tx == nil {
 		return nil, fmt.Errorf("database is not configured")
 	}
+	start := time.Now()
+	defer func() { c.queryTimes = append(c.queryTimes, time.Since(start)) }()
+
 	result, err := c.tx.Query(query, params...)
 	if err != nil {
 		return nil, err
@@ -222,6 +230,23 @@ func (c *TemplateContext) QueryVal(query string, params ...any) (any, error) {
 		return v, nil
 	}
 	panic("impossible condition")
+}
+
+func (c *TemplateContext) QueryStats() struct {
+	Count         int
+	TotalDuration time.Duration
+} {
+	var sum time.Duration
+	for _, v := range c.queryTimes {
+		sum += v
+	}
+	return struct {
+		Count         int
+		TotalDuration time.Duration
+	}{
+		Count:         len(c.queryTimes),
+		TotalDuration: sum,
+	}
 }
 
 func (c *TemplateContext) Template(name string, context any) (string, error) {
