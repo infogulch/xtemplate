@@ -34,8 +34,8 @@ var funcLibrary template.FuncMap = template.FuncMap{
 	"trustJSStr":       funcTrustJSStr,
 	"trustSrcSet":      funcTrustSrcSet,
 	"uuid":             funcUuid,
-	"idx":              funcIdx,
 	"ksuid":            funcKsuid,
+	"idx":              funcIdx,
 	"try":              funcTry,
 }
 
@@ -143,7 +143,7 @@ func funcTrustJS(s string) template.JS {
 }
 
 // funcTrustJSStr marks the string s as safe and does not escape its contents in
-// script tag context.
+// script expression context.
 func funcTrustJSStr(s string) template.JSStr {
 	return template.JSStr(s)
 }
@@ -154,12 +154,12 @@ func funcTrustSrcSet(s string) template.Srcset {
 	return template.Srcset(s)
 }
 
-func funcUuid() uuid.UUID {
-	return uuid.New()
-}
-
 func funcIdx(idx int, arr any) any {
 	return reflect.ValueOf(arr).Index(idx).Interface()
+}
+
+func funcUuid() uuid.UUID {
+	return uuid.New()
 }
 
 func funcKsuid() ksuid.KSUID {

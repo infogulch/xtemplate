@@ -13,18 +13,18 @@ func init() {
 // CaddyModule returns the Caddy module information.
 func (Templates) CaddyModule() caddy.ModuleInfo {
 	return caddy.ModuleInfo{
-		ID:  "http.handlers.xtemplates",
+		ID:  "http.handlers.xtemplate",
 		New: func() caddy.Module { return new(Templates) },
 	}
 }
 
 func init() {
-	httpcaddyfile.RegisterHandlerDirective("xtemplates", parseCaddyfile)
+	httpcaddyfile.RegisterHandlerDirective("xtemplate", parseCaddyfile)
 }
 
 // parseCaddyfile sets up the handler from Caddyfile tokens. Syntax:
 //
-//	xtemplates [<matcher>] {
+//	xtemplate [<matcher>] {
 //	    database <driver> <connstr>
 //	    delimiters <open_delim> <close_delim>
 //	    root <path>
@@ -52,7 +52,11 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 				if len(t.Delimiters) != 2 {
 					return nil, h.ArgErr()
 				}
-			case "root":
+			case "template_root":
+				if !h.Args(&t.TemplateRoot) {
+					return nil, h.ArgErr()
+				}
+			case "context_root":
 				if !h.Args(&t.ContextRoot) {
 					return nil, h.ArgErr()
 				}
