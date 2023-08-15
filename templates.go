@@ -17,10 +17,10 @@ import (
 	"text/template/parse"
 	"time"
 
+	"github.com/Masterminds/sprig/v3"
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/fsnotify/fsnotify"
-	sprig "github.com/go-task/slim-sprig"
 	"github.com/julienschmidt/httprouter"
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
@@ -162,7 +162,7 @@ func (t *Templates) initFuncs() error {
 	if t.ExtraFuncs != nil {
 		merge(t.ExtraFuncs)
 	}
-	merge(sprig.HtmlFuncMap())
+	merge(sprig.GenericFuncMap())
 	merge(funcLibrary)
 	t.funcs = funcs
 	return nil
