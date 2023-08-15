@@ -204,25 +204,31 @@ func funcHumanize(formatType, data string) (string, error) {
 }
 
 func funcTry(fn any, args ...any) (*result, error) {
-	r := reflect.ValueOf(fn)
-	if r.Kind() != reflect.Func {
+	fnv := reflect.ValueOf(fn)
+	if fnv.Kind() != reflect.Func {
 		return nil, fmt.Errorf("not a function")
 	}
-	n := r.Type().NumOut()
+	n := fnv.Type().NumOut()
 	if n != 1 && n != 2 {
 		return nil, fmt.Errorf("cannot call func that has %d outputs", n)
-	} else if !r.Type().Out(n - 1).AssignableTo(reflect.TypeOf((*error)(nil)).Elem()) {
+	} else if !fnv.Type().Out(n - 1).AssignableTo(reflect.TypeOf((*error)(nil)).Elem()) {
 		return nil, fmt.Errorf("cannot call func whose last arg is not error")
 	}
 	reflectArgs := []reflect.Value{}
-	for _, a := range args {
-		reflectArgs = append(reflectArgs, reflect.ValueOf(a))
+	for i, a := range args {
+		var arg reflect.Value
+		if a != nil {
+			arg = reflect.ValueOf(a)
+		} else {
+			arg = reflect.New(fnv.Type().In(i)).Elem()
+		}
+		reflectArgs = append(reflectArgs, arg)
 	}
 	var out []reflect.Value
-	if r.Type().IsVariadic() {
-		out = r.CallSlice(reflectArgs)
+	if fnv.Type().IsVariadic() {
+		out = fnv.CallSlice(reflectArgs)
 	} else {
-		out = r.Call(reflectArgs)
+		out = fnv.Call(reflectArgs)
 	}
 	var err error
 	var value any
