@@ -190,7 +190,7 @@ func funcHumanize(formatType, data string) (string, error) {
 	case "time":
 		timelayout := time.RFC1123Z
 		if len(parts) > 1 {
-			timelayout = parts[1]
+			timelayout = formatType[len(parts[0])+1:]
 		}
 
 		dataint, dataerr := time.Parse(timelayout, data)
