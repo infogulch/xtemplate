@@ -268,6 +268,18 @@ func (c *TemplateContext) Funcs() template.FuncMap {
 	return c.funcs
 }
 
+type TemplateContextVars struct {
+	*TemplateContext
+	Vars map[string]any
+}
+
+func (c *TemplateContext) WithVars(vars map[string]any) TemplateContextVars {
+	return TemplateContextVars{
+		TemplateContext: c,
+		Vars: vars,
+	}
+}
+
 // WrappedHeader wraps niladic functions so that they
 // can be used in templates. (Template functions must
 // return a value.)
