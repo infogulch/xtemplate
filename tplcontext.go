@@ -27,6 +27,7 @@ type TemplateContext struct {
 	RespHeader WrappedHeader
 	RespStatus func(int) string
 	Next       caddyhttp.Handler
+	Config     map[string]string
 
 	tmpl       *template.Template
 	funcs      template.FuncMap
@@ -276,7 +277,7 @@ type TemplateContextVars struct {
 func (c *TemplateContext) WithVars(vars map[string]any) TemplateContextVars {
 	return TemplateContextVars{
 		TemplateContext: c,
-		Vars: vars,
+		Vars:            vars,
 	}
 }
 

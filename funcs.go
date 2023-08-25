@@ -41,6 +41,8 @@ var funcLibrary template.FuncMap = template.FuncMap{
 
 // funcStripHTML returns s without HTML tags. It is fairly naive
 // but works with most valid HTML inputs.
+//
+// Future: Use https://github.com/microcosm-cc/bluemonday ?
 func funcStripHTML(s string) string {
 	var buf bytes.Buffer
 	var inTag, inQuotes bool

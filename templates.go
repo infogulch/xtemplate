@@ -47,6 +47,8 @@ type Templates struct {
 		Connstr string `json:"connstr,omitempty"`
 	} `json:"database,omitempty"`
 
+	Config map[string]string `json:"config"`
+
 	TemplateFS fs.FS
 	ContextFS  fs.FS
 	ExtraFuncs template.FuncMap
@@ -244,11 +246,12 @@ func (t *Templates) initRouter() error {
 				}
 			}
 			err = tmpl.Execute(io.Discard, &TemplateContext{
-				tmpl:  templates,
-				funcs: t.funcs,
-				fs:    t.ContextFS,
-				log:   log,
-				tx:    tx,
+				tmpl:   templates,
+				funcs:  t.funcs,
+				fs:     t.ContextFS,
+				log:    log,
+				tx:     tx,
+				Config: t.Config,
 			})
 			if err != nil {
 				tx.Rollback()

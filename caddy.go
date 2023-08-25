@@ -31,6 +31,7 @@ func init() {
 //	}
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
 	t := new(Templates)
+	t.Config = make(map[string]string)
 	for h.Next() {
 		for h.NextBlock(0) {
 			switch h.Val() {
@@ -59,6 +60,18 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 			case "context_root":
 				if !h.Args(&t.ContextRoot) {
 					return nil, h.ArgErr()
+				}
+			case "config":
+				for nesting := h.Nesting(); h.NextBlock(nesting); {
+					var key, val string
+					key = h.Val()
+					if _, ok := t.Config[key]; ok {
+						return nil, h.Errf("Config key '%s' repeated", key)
+					}
+					if !h.Args(&val) {
+						return nil, h.ArgErr()
+					}
+					t.Config[key] = val
 				}
 			}
 		}

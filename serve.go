@@ -50,6 +50,7 @@ func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddy
 		RespStatus: func(c int) string { statusCode = c; return "" },
 		RespHeader: WrappedHeader{w.Header()},
 		Next:       next,
+		Config:     t.Config,
 
 		tmpl:  t.tmpl,
 		funcs: t.funcs,
