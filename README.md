@@ -343,6 +343,8 @@ CGO_ENABLED=1 xcaddy build --with github.com/infogulch/caddy-xtemplate
 
 # build enable the sqlite_json build tag to get json funcs
 GOFLAGS='-tags="sqlite_json"' CGO_ENABLED=1 xcaddy build --with github.com/infogulch/caddy-xtemplate
+
+TZ=UTC git --no-pager show --quiet --abbrev=12 --date='format-local:%Y%m%d%H%M%S' --format="%cd-%h"
 ```
 
 ## Project lineage and license

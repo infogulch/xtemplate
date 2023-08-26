@@ -73,6 +73,8 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 					}
 					t.Config[key] = val
 				}
+			case "extra_funcs_modules":
+				t.ExtraFuncsModules = h.RemainingArgs()
 			}
 		}
 	}
