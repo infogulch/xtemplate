@@ -49,7 +49,7 @@ type Templates struct {
 
 	Config map[string]string `json:"config,omitempty"`
 
-	ExtraFuncsModules []string `json:"extra_funcs_modules,omitempty"`
+	FuncsModules []string `json:"funcs_modules,omitempty"`
 
 	TemplateFS fs.FS
 	ContextFS  fs.FS
@@ -157,6 +157,7 @@ func (t *Templates) initTemplateFS() error {
 }
 
 func (t *Templates) initFuncs() error {
+	log := t.ctx.Logger().Named("provision.funcs")
 	funcs := make(template.FuncMap)
 	merge := func(m template.FuncMap) {
 		for name, fn := range m {
@@ -166,13 +167,14 @@ func (t *Templates) initFuncs() error {
 	if t.ExtraFuncs != nil {
 		merge(t.ExtraFuncs)
 	}
-	for _, m := range t.ExtraFuncsModules {
+	for _, m := range t.FuncsModules {
 		mi, err := caddy.GetModule("xtemplate.funcs." + m)
 		if err != nil {
 			return err
 		}
-		fm := mi.New().(interface{ Funcs() template.FuncMap })
-		merge(fm.Funcs())
+		fm := mi.New().(interface{ Funcs() template.FuncMap }).Funcs()
+		log.Debug("got funcs from module", zap.String("module", m), zap.Any("funcmap", fm))
+		merge(fm)
 	}
 	merge(sprig.GenericFuncMap())
 	merge(funcLibrary)
