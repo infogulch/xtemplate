@@ -158,22 +158,30 @@ func (c *TemplateContext) FileExists(filename string) (bool, error) {
 	return false, nil
 }
 
-func (c *TemplateContext) Exec(query string, params ...any) (sql.Result, error) {
+func (c *TemplateContext) Exec(query string, params ...any) (result sql.Result, err error) {
 	if c.tx == nil {
 		return nil, fmt.Errorf("database is not configured")
 	}
 	start := time.Now()
-	defer func() { c.queryTimes = append(c.queryTimes, time.Since(start)) }()
+	defer func() {
+		duration := time.Since(start)
+		c.queryTimes = append(c.queryTimes, duration)
+		c.log.Debug("Exec", zap.String("query", query), zap.Any("params", params), zap.Error(err))
+	}()
 
 	return c.tx.Exec(query, params...)
 }
 
-func (c *TemplateContext) QueryRows(query string, params ...any) ([]map[string]any, error) {
+func (c *TemplateContext) QueryRows(query string, params ...any) (rows []map[string]any, err error) {
 	if c.tx == nil {
 		return nil, fmt.Errorf("database is not configured")
 	}
 	start := time.Now()
-	defer func() { c.queryTimes = append(c.queryTimes, time.Since(start)) }()
+	defer func() {
+		duration := time.Since(start)
+		c.queryTimes = append(c.queryTimes, duration)
+		c.log.Debug("QueryRows", zap.String("query", query), zap.Any("params", params), zap.Error(err))
+	}()
 
 	result, err := c.tx.Query(query, params...)
 	if err != nil {
@@ -181,10 +189,10 @@ func (c *TemplateContext) QueryRows(query string, params ...any) ([]map[string]a
 	}
 	defer result.Close()
 
-	var rows []map[string]any
+	var columns []string
 
 	// prepare scan output array
-	columns, err := result.Columns()
+	columns, err = result.Columns()
 	if err != nil {
 		return nil, err
 	}

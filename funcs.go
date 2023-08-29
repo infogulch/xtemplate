@@ -206,6 +206,9 @@ func funcHumanize(formatType, data string) (string, error) {
 }
 
 func funcTry(fn any, args ...any) (*result, error) {
+	if fn == nil {
+		return nil, fmt.Errorf("nil func")
+	}
 	fnv := reflect.ValueOf(fn)
 	if fnv.Kind() != reflect.Func {
 		return nil, fmt.Errorf("not a function")
