@@ -15,7 +15,7 @@ rendered sites feel as interactive as a Single Page Apps.
 >   - [Define templates and import content from other files](#define-templates-and-import-content-from-other-files)
 >   - [File-based routing & custom routes](#file-based-routing--custom-routes)
 >   - [Automatic reload](#automatic-reload)
-> - 🐾 [Example](#example)
+> - 🐾 [Showcase](#showcase)
 > - 🏃 [Quickstart](#quickstart)
 > - 👓 [Config](#config)
 > - 💼 [Template syntax](#template-syntax)
@@ -50,12 +50,12 @@ rendered sites feel as interactive as a Single Page Apps.
 ```html
 <html>
   <title>Home</title>
-  {{template "/shared/_head.html" .}}
   <!-- import the contents of a file -->
+  {{template "/shared/_head.html" .}}
 
   <body>
-    {{template "navbar" .}}
     <!-- invoke a custom template defined anywhere -->
+    {{template "navbar" .}}
     ...
   </body>
 </html>
@@ -84,16 +84,16 @@ parameters and wildcards, which are made available in the template as values in
 the `.Param` key while serving a request.
 
 ```html
-{{define "GET /contact/:id"}}
 <!-- match on path parameters -->
+{{define "GET /contact/:id"}}
 {{$contact := .QueryRow `SELECT name,phone FROM contacts WHERE id=?`
 (.Params.ByName "id")}}
 <div>
   <span>Name: {{.name}}</span>
   <span>Phone: {{.phone}}</span>
 </div>
-{{end}} {{define "DELETE /contact/:id"}}
 <!-- match on any http method -->
+{{end}} {{define "DELETE /contact/:id"}}
 {{$_ := .Exec `DELETE from contacts WHERE id=?` (.Params.ByName "id")}} OK
 {{end}}
 ```
@@ -106,9 +106,10 @@ the old version and prints the loading error out in Caddy's logs.
 
 > Ctrl+S > Alt+Tab > F5
 
-# Example
+# Showcase
 
-> **_See the todos example repository that exercises most features:_** > https://github.com/infogulch/todos
+* [infogulch/xrss](https://github.com/infogulch/xrss), an rss feed reader built with htmx and tailwindcss.
+* [infogulch/todos](https://github.com/infogulch/todos), a demo todomvc application.
 
 # Quickstart
 
@@ -122,7 +123,7 @@ Write your caddy config and use the xtemplate http handler:
 ```
 :8080
 
-route /* {
+route {
     xtemplate {
         template_root templates
     }
@@ -139,24 +140,33 @@ Run caddy with your config: `caddy run --config Caddyfile`
 
 # Config
 
-The `xtemplate` caddy config has three options:
+xtemplate is configured through caddy's configuration system. Here are the
+config fields available to a Caddyfile:
 
 ```
 xtemplate {
     template_root <root directory where template files are loaded>
     context_root <root directory that template funcs have access to>
-    delimiters <left> <right>        # defaults: {{ and }}
-    database {                       # default empty, no db available
-        driver <driver>              # driver and connstr are passed directly to sql.Open
-        connstr <connection string>  # check your sql driver for connstr details
+    delimiters <left> <right>         # defaults: {{ and }}
+    database {                        # default empty, no db available
+        driver <driver>               # driver and connstr are passed directly to sql.Open
+        connstr <connection string>   # check your sql driver for connstr details
     }
+    config {                          # a map of configs, accessible in the template as .Config
+      key1 value1
+      key2 value2
+    }
+    funcs_modules <mod1> <mod2>       # a list of caddy modules under the `xtemplate.funcs.*`
+                                      # namespace that implement the FuncsProvider interface,
+                                      # to add custom funcs to the Template FuncMap.
 }
 ```
 
-These sql drivers are currently imported (see [db.go](db.go)):
+These sql drivers are available by default. Modify [db.go](db.go) and recompile
+xtemplate to include your preferred drivers.
 
 - [mattn/sqlite3](https://pkg.go.dev/github.com/mattn/go-sqlite3#section-readme) (requires building with `CGO_ENABLED=1`, not available from the caddy build server)
-- [cznic/sqlite](https://pkg.go.dev/modernc.org/sqlite?utm_source=godoc) (available from the caddy build server)
+- [cznic/sqlite](https://pkg.go.dev/modernc.org/sqlite?utm_source=godoc) (available without CGo, including from the caddy build server)
 
 # Template syntax
 
@@ -202,6 +212,7 @@ for details.
 - Other
   - `.Template` evaluate the template name with the given context and return the result as a string.
   - `.Funcs` returns a list of all the custom FuncMap funcs that are available to call. Useful in combination with the `try` func.
+  - `.Config` is a map of config strings set in the Caddyfile. See [Config](#config).
 
 ### Functions
 
@@ -321,7 +332,6 @@ Expand for a listing of Sprig funcs.
 - `humanize` Transforms size and time inputs to a human readable format using the [go-humanize](https://github.com/dustin/go-humanize) library. Call with two parameters, the format type and the value to format. Format types are:
   - **size** which turns an integer amount of bytes into a string like `2.3 MB`, for example: `{{humanize "size" "2048000"}}`
   - **time** which turns a time string into a relative time string like `2 weeks ago`, for example: `{{humanize "time" "Fri, 05 May 2022 15:04:05 +0200"}}`
-- `uuid` returns a RFC 4122 UUID using [google/uuid](https://github.com/google/uuid)
 - `ksuid` returns a 'K-Sortable Globally Unique ID' using [segmentio/ksuid](https://github.com/segmentio/ksuid)
 - `idx` gets an item from a list, similar to the built-in `index`, but with reversed args: index first, then array. This is useful to use index in a pipeline, for example: `{{generate-list | idx 5}}`
 - `try` takes a function that returns an error in the first argument and calls it with the values from the remaining arguments, and returns the result including any error as struct fields. This enables template authors to handle funcs that return errors within the template definition. Example: `{{ $result := try .QueryVal "SELECT 'oops' WHERE 1=0" }}{{if $result.OK}}{{$result.Value}}{{else}}QueryVal requires exactly one row. Error: {{$result.Error}}{{end}}`
@@ -349,8 +359,16 @@ TZ=UTC git --no-pager show --quiet --abbrev=12 --date='format-local:%Y%m%d%H%M%S
 
 ## Project lineage and license
 
-This project is based on and shares some code with the [templates module from
-the Caddy server][1], and is also licensed under the Apache 2.0 license. See
-[LICENSE](./LICENSE)
+The idea for this project started in
+[infogulch/go-htmx](https://github.com/infogulch/go-htmx) (now archived), which
+included the first implementations of template-name-based routing, exposing sql
+db functions to templates, and a persistent templates instance shared across
+requests and reloaded when template files changed.
+
+go-htmx was refactored and rebased on top of the [templates module from the
+Caddy server][1] to create `caddy-xtemplate` in order to get a jump start on
+broader web server features without having to implement them from scratch.
+
+`caddy-xtemplate` is licensed under the Apache 2.0 license. See [LICENSE](./LICENSE)
 
 [1]: https://github.com/caddyserver/caddy/tree/master/modules/caddyhttp/templates

@@ -13,7 +13,6 @@ import (
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/dustin/go-humanize"
-	"github.com/google/uuid"
 	"github.com/segmentio/ksuid"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
@@ -33,7 +32,6 @@ var funcLibrary template.FuncMap = template.FuncMap{
 	"trustJS":          funcTrustJS,
 	"trustJSStr":       funcTrustJSStr,
 	"trustSrcSet":      funcTrustSrcSet,
-	"uuid":             funcUuid,
 	"ksuid":            funcKsuid,
 	"idx":              funcIdx,
 	"try":              funcTry,
@@ -158,10 +156,6 @@ func funcTrustSrcSet(s string) template.Srcset {
 
 func funcIdx(idx int, arr any) any {
 	return reflect.ValueOf(arr).Index(idx).Interface()
-}
-
-func funcUuid() uuid.UUID {
-	return uuid.New()
 }
 
 func funcKsuid() ksuid.KSUID {

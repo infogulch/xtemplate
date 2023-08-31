@@ -1,6 +1,8 @@
 package xtemplate
 
 import (
+	"html/template"
+
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
@@ -79,4 +81,8 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 		}
 	}
 	return t, nil
+}
+
+type FuncsProvider interface {
+	Funcs() template.FuncMap
 }

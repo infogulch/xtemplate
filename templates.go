@@ -81,6 +81,15 @@ func (t *Templates) Validate() error {
 	if t.Database.Driver != "" && slices.Index(sql.Drivers(), t.Database.Driver) == -1 {
 		return fmt.Errorf("database driver '%s' does not exist", t.Database.Driver)
 	}
+	for _, m := range t.FuncsModules {
+		mi, err := caddy.GetModule("xtemplate.funcs." + m)
+		if err != nil {
+			return fmt.Errorf("failed to find module 'xtemplate.funcs.%s': %v", m, err)
+		}
+		if _, ok := mi.New().(FuncsProvider); !ok {
+			return fmt.Errorf("module 'xtemplate.funcs.%s' does not implement FuncsProvider", m)
+		}
+	}
 	return nil
 }
 
@@ -168,12 +177,9 @@ func (t *Templates) initFuncs() error {
 		merge(t.ExtraFuncs)
 	}
 	for _, m := range t.FuncsModules {
-		mi, err := caddy.GetModule("xtemplate.funcs." + m)
-		if err != nil {
-			return err
-		}
-		fm := mi.New().(interface{ Funcs() template.FuncMap }).Funcs()
-		log.Debug("got funcs from module", zap.String("module", m), zap.Any("funcmap", fm))
+		mi, _ := caddy.GetModule("xtemplate.funcs." + m)
+		fm := mi.New().(FuncsProvider).Funcs()
+		log.Debug("got funcs from module", zap.String("module", "xtemplate.funcs."+m), zap.Any("funcmap", fm))
 		merge(fm)
 	}
 	merge(sprig.GenericFuncMap())
@@ -266,10 +272,14 @@ func (t *Templates) initRouter() error {
 				Config: t.Config,
 			})
 			if err != nil {
-				tx.Rollback()
+				if tx != nil {
+					tx.Rollback()
+				}
 				return fmt.Errorf("template initializer '%s' failed: %v", tmpl.Name(), err)
 			}
-			tx.Commit()
+			if tx != nil {
+				tx.Commit()
+			}
 		}
 	}
 
