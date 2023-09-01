@@ -11,6 +11,7 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/mattn/go-sqlite3 v1.14.17
+	github.com/microcosm-cc/bluemonday v1.0.25
 	github.com/segmentio/ksuid v1.0.4
 	github.com/yuin/goldmark v1.5.5
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20220924101305-151362477c87
@@ -28,6 +29,7 @@ require (
 	github.com/Microsoft/go-winio v0.6.0 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr v1.4.10 // indirect
 	github.com/aryann/difflib v0.0.0-20210328193216-ff5ff6dc229b // indirect
+	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/caddyserver/certmagic v0.17.2 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
@@ -50,6 +52,7 @@ require (
 	github.com/google/cel-go v0.13.0 // indirect
 	github.com/google/pprof v0.0.0-20221118152302-e6195bd50e26 // indirect
 	github.com/google/uuid v1.3.0 // indirect
+	github.com/gorilla/css v1.0.0 // indirect
 	github.com/huandu/xstrings v1.3.3 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
@@ -108,13 +111,13 @@ require (
 	go.step.sm/linkedca v0.19.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	golang.org/x/crypto v0.5.0 // indirect
-	golang.org/x/mod v0.6.0 // indirect
-	golang.org/x/net v0.7.0 // indirect
-	golang.org/x/sys v0.5.0 // indirect
-	golang.org/x/term v0.5.0 // indirect
-	golang.org/x/text v0.7.0 // indirect
-	golang.org/x/tools v0.2.0 // indirect
+	golang.org/x/crypto v0.12.0 // indirect
+	golang.org/x/mod v0.8.0 // indirect
+	golang.org/x/net v0.14.0 // indirect
+	golang.org/x/sys v0.11.0 // indirect
+	golang.org/x/term v0.11.0 // indirect
+	golang.org/x/text v0.12.0 // indirect
+	golang.org/x/tools v0.6.0 // indirect
 	google.golang.org/genproto v0.0.0-20230202175211-008b39050e57 // indirect
 	google.golang.org/grpc v1.52.3 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect

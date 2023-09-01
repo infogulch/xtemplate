@@ -13,6 +13,7 @@ import (
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/dustin/go-humanize"
+	"github.com/microcosm-cc/bluemonday"
 	"github.com/segmentio/ksuid"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
@@ -22,7 +23,7 @@ import (
 )
 
 var funcLibrary template.FuncMap = template.FuncMap{
-	"stripHTML":        funcStripHTML,
+	"sanitizeHtml":     funcSanitizeHtml,
 	"markdown":         funcMarkdown,
 	"splitFrontMatter": funcSplitFrontMatter,
 	"httpError":        funcHTTPError,
@@ -37,39 +38,20 @@ var funcLibrary template.FuncMap = template.FuncMap{
 	"try":              funcTry,
 }
 
-// funcStripHTML returns s without HTML tags. It is fairly naive
-// but works with most valid HTML inputs.
-//
-// Future: Use https://github.com/microcosm-cc/bluemonday ?
-func funcStripHTML(s string) string {
-	var buf bytes.Buffer
-	var inTag, inQuotes bool
-	var tagStart int
-	for i, ch := range s {
-		if inTag {
-			if ch == '>' && !inQuotes {
-				inTag = false
-			} else if ch == '<' && !inQuotes {
-				// false start
-				buf.WriteString(s[tagStart:i])
-				tagStart = i
-			} else if ch == '"' {
-				inQuotes = !inQuotes
-			}
-			continue
-		}
-		if ch == '<' {
-			inTag = true
-			tagStart = i
-			continue
-		}
-		buf.WriteRune(ch)
+var blueMondayPolicies map[string]*bluemonday.Policy = map[string]*bluemonday.Policy{
+	"strict": bluemonday.StrictPolicy(),
+	"ugc":    bluemonday.UGCPolicy(),
+	"externalugc": bluemonday.UGCPolicy().
+		AddTargetBlankToFullyQualifiedLinks(true).
+		AllowRelativeURLs(false),
+}
+
+func funcSanitizeHtml(policyName string, html string) (template.HTML, error) {
+	policy, ok := blueMondayPolicies[policyName]
+	if !ok {
+		return "", fmt.Errorf("failed to find policy name '%s'", policyName)
 	}
-	if inTag {
-		// false start
-		buf.WriteString(s[tagStart:])
-	}
-	return buf.String()
+	return template.HTML(policy.Sanitize(html)), nil
 }
 
 // funcMarkdown renders the markdown body as HTML. The resulting
