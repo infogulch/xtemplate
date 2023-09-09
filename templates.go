@@ -138,7 +138,7 @@ func (t *Templates) initContextFS() error {
 	t.ContextFS = os.DirFS(t.ContextRoot)
 
 	if st, err := fs.Stat(t.ContextFS, "."); err != nil || !st.IsDir() {
-		return fmt.Errorf("root file path does not exist in filesystem: %v", err)
+		return fmt.Errorf("context file path does not exist in filesystem: %v", err)
 	}
 
 	return nil
