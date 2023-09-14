@@ -2,11 +2,9 @@ package xtemplate
 
 import (
 	"bytes"
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-	"html/template"
 	"net/http"
 	"strconv"
 
@@ -16,13 +14,11 @@ import (
 
 func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	logger := t.ctx.Logger().Named(fmt.Sprintf("request-%s", caddyhttp.GetVar(r.Context(), "uuid").(fmt.Stringer)))
-	handle, params, _ := t.router.Lookup(r.Method, r.URL.Path)
-	if handle == nil {
+	template, params, _, _ := t.router.LookupEndpoint(r.Method, r.URL.Path)
+	if template == nil {
 		logger.Debug("no handler for request", zap.String("method", r.Method), zap.String("path", r.URL.Path))
 		return caddyhttp.Error(http.StatusNotFound, nil)
 	}
-	var template *template.Template
-	handle(nil, new(http.Request).WithContext(context.WithValue(context.Background(), "🙈", &template)), nil)
 	logger.Debug("handling request", zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Any("params", params), zap.String("name", template.Name()))
 
 	buf := bufPool.Get().(*bytes.Buffer)

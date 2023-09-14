@@ -86,15 +86,17 @@ the `.Param` key while serving a request.
 ```html
 <!-- match on path parameters -->
 {{define "GET /contact/:id"}}
-{{$contact := .QueryRow `SELECT name,phone FROM contacts WHERE id=?`
-(.Params.ByName "id")}}
+{{$contact := .QueryRow `SELECT name,phone FROM contacts WHERE id=?` (.Params.ByName "id")}}
 <div>
   <span>Name: {{.name}}</span>
   <span>Phone: {{.phone}}</span>
 </div>
+{{end}}
+
 <!-- match on any http method -->
-{{end}} {{define "DELETE /contact/:id"}}
-{{$_ := .Exec `DELETE from contacts WHERE id=?` (.Params.ByName "id")}} OK
+{{define "DELETE /contact/:id"}}
+{{$_ := .Exec `DELETE from contacts WHERE id=?` (.Params.ByName "id")}}
+{{.RespStatus 204}}
 {{end}}
 ```
 
@@ -199,10 +201,10 @@ for details.
   - `.RespHeader.Add` Adds a header field to the HTTP response. `{{.RespHeader.Add "Field-Name" "val"}}`
   - `.RespHeader.Set` Sets a header field on the HTTP response, replacing any existing value.
   - `.RespHeader.Del` Deletes a header field on the HTTP response.
-- File related funcs. File operations are rooted at the directory specified by the `root` config option.
-  - `.ReadFile` reads and returns the contents of another file, as-is. Note that the contents are NOT escaped, so you should only read trusted files.
-  - `.ListFiles` returns a list of the files in the given directory, which is relative to the template context's file root.
-  - `.FileExists` returns true if filename can be opened successfully
+- File related funcs. File operations are rooted at the directory specified by the `context_root` config option.
+  - `.ReadFile` reads and returns the contents of a file, as-is. Note that the contents are NOT escaped, so you should only read trusted files.
+  - `.ListFiles` returns a list of the files in the given directory.
+  - `.FileExists` returns true if filename can be opened successfully.
   - `.StatFile` returns Stat of a filename.
 - Database related funcs. All funcs accept a query string and any number of parameters. Prefer using parameters over building the query string dynamically.
   - `.Exec` executes a statment

@@ -16,14 +16,14 @@ import (
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
-	"github.com/julienschmidt/httprouter"
+	"github.com/infogulch/pathmatcher"
 	"go.uber.org/zap"
 )
 
 // TemplateContext is the TemplateContext with which HTTP templates are executed.
 type TemplateContext struct {
 	Req        *http.Request
-	Params     httprouter.Params
+	Params     pathmatcher.Params
 	RespHeader WrappedHeader
 	RespStatus func(int) string
 	Next       caddyhttp.Handler

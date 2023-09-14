@@ -8,7 +8,6 @@ import (
 	"html/template"
 	"io"
 	"io/fs"
-	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -21,7 +20,7 @@ import (
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/fsnotify/fsnotify"
-	"github.com/julienschmidt/httprouter"
+	"github.com/infogulch/pathmatcher"
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 )
@@ -59,7 +58,7 @@ type Templates struct {
 
 	ctx    caddy.Context
 	funcs  template.FuncMap
-	router *httprouter.Router
+	router *pathmatcher.HttpMatcher[template.Template]
 	stop   chan<- struct{}
 	tmpl   *template.Template
 }
@@ -138,7 +137,7 @@ func (t *Templates) initContextFS() error {
 	t.ContextFS = os.DirFS(t.ContextRoot)
 
 	if st, err := fs.Stat(t.ContextFS, "."); err != nil || !st.IsDir() {
-		return fmt.Errorf("root file path does not exist in filesystem: %v", err)
+		return fmt.Errorf("context file path does not exist in filesystem: %v", err)
 	}
 
 	return nil
@@ -284,7 +283,7 @@ func (t *Templates) initRouter() error {
 	}
 
 	// Add all routing templates to the internal router
-	router := httprouter.New()
+	router := pathmatcher.NewHttpMatcher[template.Template]()
 	matcher, _ := regexp.Compile("^(GET|POST|PUT|PATCH|DELETE) (.*)$")
 	count := 0
 	for _, tmpl := range templates.Templates() {
@@ -298,9 +297,7 @@ func (t *Templates) initRouter() error {
 		}
 		log.Debug("adding route handler", zap.String("method", method), zap.String("path", path_), zap.Any("template_name", tmpl.Name()))
 		tmpl := tmpl // create unique variable for closure
-		router.Handle(method, path_, func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-			*r.Context().Value("🙈").(**template.Template) = tmpl
-		})
+		router.AddEndpoint(method, path_, tmpl)
 		count += 1
 	}
 
