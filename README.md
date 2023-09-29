@@ -4,7 +4,7 @@ enough to host an entire server-side application in it. Designed with the
 [htmx.org](https://htmx.org/) js library in mind, which makes server side
 rendered sites feel as interactive as a Single Page Apps.
 
-> ⚠️ This project is in active development, expect regular breaking changes. ⚠️
+> ⚠️ This project is still in development, expect breaking changes. ⚠️
 
 > ---
 >

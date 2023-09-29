@@ -68,7 +68,7 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 					var key, val string
 					key = h.Val()
 					if _, ok := t.Config[key]; ok {
-						return nil, h.Errf("Config key '%s' repeated", key)
+						return nil, h.Errf("config key '%s' repeated", key)
 					}
 					if !h.Args(&val) {
 						return nil, h.ArgErr()
@@ -77,6 +77,8 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 				}
 			case "funcs_modules":
 				t.FuncsModules = h.RemainingArgs()
+			default:
+				return nil, h.Errf("unknown config option")
 			}
 		}
 	}
