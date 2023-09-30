@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -12,14 +11,15 @@ import (
 	"go.uber.org/zap"
 )
 
-func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
-	logger := t.ctx.Logger().Named(fmt.Sprintf("request-%s", caddyhttp.GetVar(r.Context(), "uuid").(fmt.Stringer)))
+func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request, _ caddyhttp.Handler) error {
+	logger := t.log.WithGroup("xtemplate-render").With("method", r.Method, "path", r.URL.Path)
 	template, params, _, _ := t.router.LookupEndpoint(r.Method, r.URL.Path)
 	if template == nil {
-		logger.Debug("no handler for request", zap.String("method", r.Method), zap.String("path", r.URL.Path))
+		logger.Debug("no handler for request")
 		return caddyhttp.Error(http.StatusNotFound, nil)
 	}
-	logger.Debug("handling request", zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Any("params", params), zap.String("name", template.Name()))
+	logger = logger.With("params", params, "name", template.Name())
+	logger.Debug("handling request")
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
@@ -33,7 +33,7 @@ func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddy
 	if t.DB != nil {
 		tx, err = t.DB.Begin()
 		if err != nil {
-			logger.Info("failed to begin database transaction", zap.Error(err))
+			logger.Info("failed to begin database transaction", "error", err)
 			return caddyhttp.Error(http.StatusInternalServerError, err)
 		}
 	}
@@ -45,7 +45,6 @@ func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddy
 		Params:     params,
 		RespStatus: func(c int) string { statusCode = c; return "" },
 		RespHeader: WrappedHeader{w.Header()},
-		Next:       next,
 		Config:     t.Config,
 
 		tmpl:  t.tmpl,
@@ -60,18 +59,18 @@ func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddy
 		var handlerErr caddyhttp.HandlerError
 		if errors.As(err, &handlerErr) {
 			if dberr := tx.Commit(); dberr != nil {
-				logger.Info("error committing transaction", zap.Error(err))
+				logger.Info("failed to commit transaction", "error", err)
 			}
 			return handlerErr
 		}
 		logger.Info("error executing template", zap.Error(err))
 		if dberr := tx.Rollback(); dberr != nil {
-			logger.Info("error rolling back transaction", zap.Error(err))
+			logger.Info("failed to roll back transaction", "error", err)
 		}
 		return caddyhttp.Error(http.StatusInternalServerError, err)
 	} else {
 		if dberr := tx.Commit(); dberr != nil {
-			logger.Info("error committing transaction", zap.Error(err))
+			logger.Info("error committing transaction", "error", err)
 		}
 	}
 

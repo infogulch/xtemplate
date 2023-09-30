@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net"
 	"net/http"
 	"path"
@@ -14,10 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/caddyserver/caddy/v2"
-	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/infogulch/pathmatcher"
-	"go.uber.org/zap"
 )
 
 // TemplateContext is the TemplateContext with which HTTP templates are executed.
@@ -26,28 +24,14 @@ type TemplateContext struct {
 	Params     pathmatcher.Params
 	RespHeader WrappedHeader
 	RespStatus func(int) string
-	Next       caddyhttp.Handler
 	Config     map[string]string
 
 	tmpl       *template.Template
 	funcs      template.FuncMap
 	fs         fs.FS
 	tx         *sql.Tx
-	log        *zap.Logger
+	log        *slog.Logger
 	queryTimes []time.Duration
-}
-
-// OriginalReq returns the original, unmodified, un-rewritten request as
-// it originally came in over the wire.
-func (c *TemplateContext) OriginalReq() http.Request {
-	or, _ := c.Req.Context().Value(caddyhttp.OriginalRequestCtxKey).(http.Request)
-	return or
-}
-
-func (c *TemplateContext) Placeholder(name string) string {
-	repl := c.Req.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
-	value, _ := repl.GetString(name)
-	return value
 }
 
 // Cookie gets the value of a cookie with name name.
@@ -166,7 +150,7 @@ func (c *TemplateContext) Exec(query string, params ...any) (result sql.Result, 
 	defer func() {
 		duration := time.Since(start)
 		c.queryTimes = append(c.queryTimes, duration)
-		c.log.Debug("Exec", zap.String("query", query), zap.Any("params", params), zap.Error(err))
+		c.log.Debug("Exec", "query", query, "params", params, "error", err)
 	}()
 
 	return c.tx.Exec(query, params...)
@@ -180,7 +164,7 @@ func (c *TemplateContext) QueryRows(query string, params ...any) (rows []map[str
 	defer func() {
 		duration := time.Since(start)
 		c.queryTimes = append(c.queryTimes, duration)
-		c.log.Debug("QueryRows", zap.String("query", query), zap.Any("params", params), zap.Error(err))
+		c.log.Debug("QueryRows", "query", query, "params", params, "error", err)
 	}()
 
 	result, err := c.tx.Query(query, params...)

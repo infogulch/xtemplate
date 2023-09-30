@@ -17,7 +17,8 @@ require (
 	github.com/segmentio/ksuid v1.0.4
 	github.com/yuin/goldmark v1.5.5
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20220924101305-151362477c87
-	go.uber.org/zap v1.24.0
+	go.uber.org/zap v1.26.0
+	go.uber.org/zap/exp v0.2.0
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.24.0
@@ -111,8 +112,7 @@ require (
 	go.step.sm/cli-utils v0.7.5 // indirect
 	go.step.sm/crypto v0.23.2 // indirect
 	go.step.sm/linkedca v0.19.0 // indirect
-	go.uber.org/atomic v1.9.0 // indirect
-	go.uber.org/multierr v1.6.0 // indirect
+	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/crypto v0.13.0 // indirect
 	golang.org/x/mod v0.12.0 // indirect
 	golang.org/x/net v0.15.0 // indirect

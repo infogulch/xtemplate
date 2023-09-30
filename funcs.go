@@ -22,7 +22,7 @@ import (
 	gmhtml "github.com/yuin/goldmark/renderer/html"
 )
 
-var funcLibrary template.FuncMap = template.FuncMap{
+var xtemplateFuncs template.FuncMap = template.FuncMap{
 	"sanitizeHtml":     funcSanitizeHtml,
 	"markdown":         funcMarkdown,
 	"splitFrontMatter": funcSplitFrontMatter,
