@@ -6,83 +6,108 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-
-	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
-	"go.uber.org/zap"
 )
 
-func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request, _ caddyhttp.Handler) error {
-	logger := t.log.WithGroup("xtemplate-render").With("method", r.Method, "path", r.URL.Path)
+func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log := t.log.WithGroup("xtemplate-render").With("method", r.Method, "path", r.URL.Path)
 	template, params, _, _ := t.router.LookupEndpoint(r.Method, r.URL.Path)
 	if template == nil {
-		logger.Debug("no handler for request")
-		return caddyhttp.Error(http.StatusNotFound, nil)
+		log.Debug("no handler for request")
+		http.NotFound(w, r)
+		return
 	}
-	logger = logger.With("params", params, "name", template.Name())
-	logger.Debug("handling request")
+	log = log.With("params", params, "name", template.Name())
+	log.Debug("handling request")
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer bufPool.Put(buf)
-
-	alwaysbuffer := func(_ int, _ http.Header) bool { return true }
-	rec := caddyhttp.NewResponseRecorder(w, buf, alwaysbuffer)
 
 	var tx *sql.Tx
 	var err error
 	if t.DB != nil {
 		tx, err = t.DB.Begin()
 		if err != nil {
-			logger.Info("failed to begin database transaction", "error", err)
-			return caddyhttp.Error(http.StatusInternalServerError, err)
+			log.Info("failed to begin database transaction", "error", err)
+			http.Error(w, "unable to connect to the database", http.StatusInternalServerError)
+			return
 		}
 	}
 
-	r.ParseForm()
-	var statusCode = 200
+	var statusCode = http.StatusOK
+	var headers = http.Header{}
 	context := &TemplateContext{
 		Req:        r,
 		Params:     params,
 		RespStatus: func(c int) string { statusCode = c; return "" },
-		RespHeader: WrappedHeader{w.Header()},
+		RespHeader: WrappedHeader{headers},
 		Config:     t.Config,
 
 		tmpl:  t.tmpl,
 		funcs: t.funcs,
 		fs:    t.ContextFS,
-		log:   logger,
+		log:   log,
 		tx:    tx,
 	}
 
-	err = template.Execute(w, context)
-	if err != nil {
-		var handlerErr caddyhttp.HandlerError
-		if errors.As(err, &handlerErr) {
-			if dberr := tx.Commit(); dberr != nil {
-				logger.Info("failed to commit transaction", "error", err)
-			}
-			return handlerErr
-		}
-		logger.Info("error executing template", zap.Error(err))
-		if dberr := tx.Rollback(); dberr != nil {
-			logger.Info("failed to roll back transaction", "error", err)
-		}
-		return caddyhttp.Error(http.StatusInternalServerError, err)
-	} else {
-		if dberr := tx.Commit(); dberr != nil {
-			logger.Info("error committing transaction", "error", err)
-		}
-	}
+	r.ParseForm()
+	err = template.Execute(buf, context)
 
-	rec.WriteHeader(statusCode)
-	rec.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
-	rec.Header().Del("Accept-Ranges") // we don't know ranges for dynamically-created content
-	rec.Header().Del("Last-Modified") // useless for dynamic content since it's always changing
+	headers.Set("Content-Length", strconv.Itoa(buf.Len()))
+	headers.Del("Accept-Ranges") // we don't know ranges for dynamically-created content
+	headers.Del("Last-Modified") // useless for dynamic content since it's always changing
 
 	// we don't know a way to quickly generate etag for dynamic content,
 	// and weak etags still cause browsers to rely on it even after a
 	// refresh, so disable them until we find a better way to do this
-	rec.Header().Del("Etag")
+	headers.Del("Etag")
 
-	return rec.WriteResponse()
+	if err != nil {
+		var handlerErr HandlerError
+		if errors.As(err, &handlerErr) {
+			if dberr := tx.Commit(); dberr != nil {
+				log.Info("failed to commit transaction", "error", dberr)
+			}
+			log.Debug("forwarding response handling", "handler", handlerErr)
+			handlerErr.ServeHTTP(w, r)
+			return
+		}
+		log.Info("error executing template", "error", err)
+		if dberr := tx.Rollback(); dberr != nil {
+			log.Info("failed to roll back transaction", "error", err)
+		}
+		http.Error(w, "failed to render response", http.StatusInternalServerError)
+		return
+	} else {
+		if dberr := tx.Commit(); dberr != nil {
+			log.Info("failed to commit transaction", "error", dberr)
+			http.Error(w, "failed to commit database transaction", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.WriteHeader(statusCode)
+	headers.Write(w)
+	w.Write(buf.Bytes())
 }
+
+type HandlerError interface {
+	Error() string
+	ServeHTTP(w http.ResponseWriter, r *http.Request)
+}
+
+// interface guard
+var _ = (error)((HandlerError)(nil))
+
+type FuncHandlerError struct {
+	name string
+	fn   func(w http.ResponseWriter, r *http.Request)
+}
+
+func NewHandlerError(name string, fn func(w http.ResponseWriter, r *http.Request)) HandlerError {
+	return FuncHandlerError{name, fn}
+}
+
+func (fhe FuncHandlerError) Error() string { return fhe.name }
+
+func (fhe FuncHandlerError) ServeHTTP(w http.ResponseWriter, r *http.Request) { fhe.fn(w, r) }

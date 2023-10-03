@@ -9,7 +9,6 @@ import (
 	"os"
 
 	"log/slog"
-	_ "log/slog"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
@@ -164,8 +163,9 @@ func (m *XTemplateModule) Cleanup() error {
 	return nil
 }
 
-func (m *XTemplateModule) ServeHTTP(w http.ResponseWriter, r *http.Request, n caddyhttp.Handler) error {
-	return m.template.ServeHTTP(w, r, n)
+func (m *XTemplateModule) ServeHTTP(w http.ResponseWriter, r *http.Request, _ caddyhttp.Handler) error {
+	m.template.ServeHTTP(w, r)
+	return nil
 }
 
 // Interface guards

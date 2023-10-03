@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
@@ -11,7 +12,6 @@ import (
 
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/caddyserver/caddy/v2"
-	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/dustin/go-humanize"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/segmentio/ksuid"
@@ -26,7 +26,8 @@ var xtemplateFuncs template.FuncMap = template.FuncMap{
 	"sanitizeHtml":     funcSanitizeHtml,
 	"markdown":         funcMarkdown,
 	"splitFrontMatter": funcSplitFrontMatter,
-	"httpError":        funcHTTPError,
+	"abortWithStatus":  funcAbortWithStatus,
+	"status":           funcStatus,
 	"humanize":         funcHumanize,
 	"trustHtml":        funcTrustHtml,
 	"trustAttr":        funcTrustAttr,
@@ -100,10 +101,90 @@ func funcSplitFrontMatter(input any) (parsedMarkdownDoc, error) {
 	return parsedMarkdownDoc{Meta: meta, Body: body}, nil
 }
 
-// funcHTTPError returns a structured HTTP handler error. EXPERIMENTAL; SUBJECT TO CHANGE.
-// Example usage: `{{if not (fileExists $includeFile)}}{{httpError 404}}{{end}}`
-func funcHTTPError(statusCode int) (bool, error) {
-	return false, caddyhttp.Error(statusCode, nil)
+// funcAbortWithStatus stops rendering the reponse template and immediately returns the status indicated.
+// Example usage: `{{if not (fileExists $includeFile)}}{{abortWithStatus 404}}{{end}}`
+func funcAbortWithStatus(statusCode int) (struct{}, error) {
+	return struct{}{}, NewHandlerError("abort", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(statusCode)
+	})
+}
+
+// See status.go
+var validStatus = map[string]int{
+	"Continue":           http.StatusContinue,
+	"SwitchingProtocols": http.StatusSwitchingProtocols,
+	"Processing":         http.StatusProcessing,
+	"EarlyHints":         http.StatusEarlyHints,
+
+	"OK":                   http.StatusOK,
+	"Created":              http.StatusCreated,
+	"Accepted":             http.StatusAccepted,
+	"NonAuthoritativeInfo": http.StatusNonAuthoritativeInfo,
+	"NoContent":            http.StatusNoContent,
+	"ResetContent":         http.StatusResetContent,
+	"PartialContent":       http.StatusPartialContent,
+	"MultiStatus":          http.StatusMultiStatus,
+	"AlreadyReported":      http.StatusAlreadyReported,
+	"IMUsed":               http.StatusIMUsed,
+
+	"MultipleChoices":   http.StatusMultipleChoices,
+	"MovedPermanently":  http.StatusMovedPermanently,
+	"Found":             http.StatusFound,
+	"SeeOther":          http.StatusSeeOther,
+	"NotModified":       http.StatusNotModified,
+	"UseProxy":          http.StatusUseProxy,
+	"TemporaryRedirect": http.StatusTemporaryRedirect,
+	"PermanentRedirect": http.StatusPermanentRedirect,
+
+	"BadRequest":                   http.StatusBadRequest,
+	"Unauthorized":                 http.StatusUnauthorized,
+	"PaymentRequired":              http.StatusPaymentRequired,
+	"Forbidden":                    http.StatusForbidden,
+	"NotFound":                     http.StatusNotFound,
+	"MethodNotAllowed":             http.StatusMethodNotAllowed,
+	"NotAcceptable":                http.StatusNotAcceptable,
+	"ProxyAuthRequired":            http.StatusProxyAuthRequired,
+	"RequestTimeout":               http.StatusRequestTimeout,
+	"Conflict":                     http.StatusConflict,
+	"Gone":                         http.StatusGone,
+	"LengthRequired":               http.StatusLengthRequired,
+	"PreconditionFailed":           http.StatusPreconditionFailed,
+	"RequestEntityTooLarge":        http.StatusRequestEntityTooLarge,
+	"RequestURITooLong":            http.StatusRequestURITooLong,
+	"UnsupportedMediaType":         http.StatusUnsupportedMediaType,
+	"RequestedRangeNotSatisfiable": http.StatusRequestedRangeNotSatisfiable,
+	"ExpectationFailed":            http.StatusExpectationFailed,
+	"Teapot":                       http.StatusTeapot,
+	"MisdirectedRequest":           http.StatusMisdirectedRequest,
+	"UnprocessableEntity":          http.StatusUnprocessableEntity,
+	"Locked":                       http.StatusLocked,
+	"FailedDependency":             http.StatusFailedDependency,
+	"TooEarly":                     http.StatusTooEarly,
+	"UpgradeRequired":              http.StatusUpgradeRequired,
+	"PreconditionRequired":         http.StatusPreconditionRequired,
+	"TooManyRequests":              http.StatusTooManyRequests,
+	"RequestHeaderFieldsTooLarge":  http.StatusRequestHeaderFieldsTooLarge,
+	"UnavailableForLegalReasons":   http.StatusUnavailableForLegalReasons,
+
+	"InternalServerError":           http.StatusInternalServerError,
+	"NotImplemented":                http.StatusNotImplemented,
+	"BadGateway":                    http.StatusBadGateway,
+	"ServiceUnavailable":            http.StatusServiceUnavailable,
+	"GatewayTimeout":                http.StatusGatewayTimeout,
+	"HTTPVersionNotSupported":       http.StatusHTTPVersionNotSupported,
+	"VariantAlsoNegotiates":         http.StatusVariantAlsoNegotiates,
+	"InsufficientStorage":           http.StatusInsufficientStorage,
+	"LoopDetected":                  http.StatusLoopDetected,
+	"NotExtended":                   http.StatusNotExtended,
+	"NetworkAuthenticationRequired": http.StatusNetworkAuthenticationRequired,
+}
+
+// funcStatus looks up an HTTP status code by string.
+func funcStatus(status string) (int, error) {
+	if code, ok := validStatus[status]; ok {
+		return code, nil
+	}
+	return 0, fmt.Errorf("invalid http status name: '%s'", status)
 }
 
 // funcTrustHtml marks the string s as safe and does not escape its contents in
