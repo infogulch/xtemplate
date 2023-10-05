@@ -114,16 +114,12 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 
 	// ExtraFuncs
 	{
-		funcs := make(template.FuncMap)
 		for _, m := range m.FuncsModules {
 			mi, _ := caddy.GetModule("xtemplate.funcs." + m)
 			fm := mi.New().(FuncsProvider).Funcs()
 			log.Debug("got funcs from module", zap.String("module", "xtemplate.funcs."+m), zap.Any("funcmap", fm))
-			for name, fn := range fm {
-				funcs[name] = fn
-			}
+			t.ExtraFuncs = append(t.ExtraFuncs, fm)
 		}
-		t.ExtraFuncs = funcs
 	}
 
 	if m.Database.Driver != "" {

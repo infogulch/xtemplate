@@ -24,7 +24,7 @@ import (
 type Templates struct {
 	TemplateFS fs.FS
 	ContextFS  fs.FS
-	ExtraFuncs template.FuncMap
+	ExtraFuncs []template.FuncMap
 	DB         *sql.DB
 	WatchPaths []string
 	Config     map[string]string
@@ -43,7 +43,7 @@ func (t *Templates) initRouter() error {
 	// Init funcs
 	{
 		funcs := make(template.FuncMap)
-		for _, fm := range []template.FuncMap{t.ExtraFuncs, sprig.GenericFuncMap(), xtemplateFuncs} {
+		for _, fm := range append(t.ExtraFuncs, sprig.GenericFuncMap(), xtemplateFuncs) {
 			for n, f := range fm {
 				funcs[n] = f
 			}

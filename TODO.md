@@ -3,7 +3,6 @@
 
 ## Features
 
-- [ ] Make extrafuncs an array
 - [ ] Split xtemplate from caddy so it can be used standalone
     - [ ] Split into separate packages `xtemplate` and `xtemplate/caddy`, rename repo to `xtemplate` (?)
     - [ ] Integrate a static file server based on `caddy.caddyhttp.file_server`
@@ -20,5 +19,6 @@
 
 # DONE
 
+- [x] Make extrafuncs an array
 - Split xtemplate from caddy so it can be used standalone
     - [x] Isolate caddy integration into one file
