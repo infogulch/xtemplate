@@ -28,27 +28,28 @@ type Templates struct {
 	Delims     struct{ L, R string }
 	Log        *slog.Logger
 
+	runtime *runtime
+}
+
+type runtime struct {
 	funcs  template.FuncMap
-	router *pathmatcher.HttpMatcher[template.Template]
 	tmpl   *template.Template
+	router *pathmatcher.HttpMatcher[template.Template]
 }
 
 func (t *Templates) Reload() error {
 	log := t.Log.WithGroup("xtemplate-init")
 
 	// Init funcs
-	{
-		funcs := make(template.FuncMap)
-		for _, fm := range append(t.ExtraFuncs, sprig.GenericFuncMap(), xtemplateFuncs) {
-			for n, f := range fm {
-				funcs[n] = f
-			}
+	funcs := make(template.FuncMap)
+	for _, fm := range append(t.ExtraFuncs, sprig.GenericFuncMap(), xtemplateFuncs) {
+		for n, f := range fm {
+			funcs[n] = f
 		}
-		t.funcs = funcs
 	}
 
 	// Define the template instance that will accumulate all template definitions.
-	templates := template.New(".").Delims(t.Delims.L, t.Delims.R).Funcs(t.funcs)
+	templates := template.New(".").Delims(t.Delims.L, t.Delims.R).Funcs(funcs)
 
 	// Find all files and send the ones that match *.html into a channel. Will check walkErr later.
 	files := make(chan string)
@@ -77,7 +78,7 @@ func (t *Templates) Reload() error {
 		path = filepath.Clean("/" + path)
 		// parse each template file manually to have more control over its final
 		// names in the template namespace.
-		newtemplates, err := parse.Parse(path, string(content), t.Delims.L, t.Delims.R, t.funcs, buliltinsSkeleton)
+		newtemplates, err := parse.Parse(path, string(content), t.Delims.L, t.Delims.R, funcs, buliltinsSkeleton)
 		if err != nil {
 			return fmt.Errorf("could not parse template file '%s': %v", path, err)
 		}
@@ -116,7 +117,7 @@ func (t *Templates) Reload() error {
 			}
 			err = tmpl.Execute(io.Discard, &TemplateContext{
 				tmpl:   templates,
-				funcs:  t.funcs,
+				funcs:  funcs,
 				fs:     t.ContextFS,
 				log:    log,
 				tx:     tx,
@@ -153,7 +154,10 @@ func (t *Templates) Reload() error {
 		count += 1
 	}
 
-	t.router = router
-	t.tmpl = templates
+	t.runtime = &runtime{
+		funcs,
+		templates,
+		router,
+	}
 	return nil
 }

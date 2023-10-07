@@ -10,7 +10,8 @@ import (
 
 func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log := t.Log.WithGroup("xtemplate-render").With("method", r.Method, "path", r.URL.Path)
-	template, params, _, _ := t.router.LookupEndpoint(r.Method, r.URL.Path)
+	runtime := t.runtime
+	template, params, _, _ := runtime.router.LookupEndpoint(r.Method, r.URL.Path)
 	if template == nil {
 		log.Debug("no handler for request")
 		http.NotFound(w, r)
@@ -43,8 +44,8 @@ func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		RespHeader: WrappedHeader{headers},
 		Config:     t.Config,
 
-		tmpl:  t.tmpl,
-		funcs: t.funcs,
+		tmpl:  runtime.tmpl,
+		funcs: runtime.funcs,
 		fs:    t.ContextFS,
 		log:   log,
 		tx:    tx,
