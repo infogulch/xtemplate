@@ -3,7 +3,6 @@
 ### Features
 
 - [ ] Split xtemplate from caddy so it can be used standalone
-    - [ ] Split watcher into a separate component
     - [ ] Integrate a static file server based on `caddy.caddyhttp.file_server`
     - [ ] Split into separate packages `xtemplate` and `xtemplate/caddy`, rename repo to `xtemplate` (?)
 
@@ -28,4 +27,5 @@
 
 - [x] Make extrafuncs an array
 - Split xtemplate from caddy so it can be used standalone
+    - [x] Split watcher into a separate component
     - [x] Isolate caddy integration into one file

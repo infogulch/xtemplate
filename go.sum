@@ -344,6 +344,8 @@ github.com/inconshreveable/mousetrap v1.0.1/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLf
 github.com/influxdata/influxdb1-client v0.0.0-20191209144304-8bf82d3c094d/go.mod h1:qj24IKcXYK6Iy9ceXlo3Tc+vtHo9lIhSX5JddghvEPo=
 github.com/infogulch/pathmatcher v0.0.0-20230914071938-016df9445214 h1:CndxiflRBA9pgZNk0+PRRolR3WCkkWl2WIehzzmtHOs=
 github.com/infogulch/pathmatcher v0.0.0-20230914071938-016df9445214/go.mod h1:ywO4eSHD1ARQElpii9hjqkPYFZ+IZKJ+3qDo9IZyt78=
+github.com/infogulch/watch v0.1.1 h1:hlVhuxLlmidrUB8lBN4JGjGC/SAucT3sUjRu0pYKwR4=
+github.com/infogulch/watch v0.1.1/go.mod h1:i9OU29MppSWictJKM3LoipjLVw+6VHiOK/SrzfujJGc=
 github.com/jackc/chunkreader v1.0.0/go.mod h1:RT6O25fNZIuasFJRyZ4R/Y2BbhasbmZXF9QQ7T3kePo=
 github.com/jackc/chunkreader/v2 v2.0.0/go.mod h1:odVSm741yZoC3dpHEUXIqA9tQRhFrgOHwnPIn9lDKlk=
 github.com/jackc/chunkreader/v2 v2.0.1 h1:i+RDz65UE+mmpjTfyz0MoVTnzeYxroil2G82ki7MGG8=

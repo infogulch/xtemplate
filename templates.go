@@ -14,10 +14,8 @@ import (
 	"regexp"
 	"strings"
 	"text/template/parse"
-	"time"
 
 	"github.com/Masterminds/sprig/v3"
-	"github.com/fsnotify/fsnotify"
 	"github.com/infogulch/pathmatcher"
 )
 
@@ -26,18 +24,16 @@ type Templates struct {
 	ContextFS  fs.FS
 	ExtraFuncs []template.FuncMap
 	DB         *sql.DB
-	WatchPaths []string
 	Config     map[string]string
 	Delims     struct{ L, R string }
 	Log        *slog.Logger
 
 	funcs  template.FuncMap
 	router *pathmatcher.HttpMatcher[template.Template]
-	stop   chan<- struct{}
 	tmpl   *template.Template
 }
 
-func (t *Templates) initRouter() error {
+func (t *Templates) Reload() error {
 	log := t.Log.WithGroup("xtemplate-init")
 
 	// Init funcs
@@ -157,106 +153,7 @@ func (t *Templates) initRouter() error {
 		count += 1
 	}
 
-	err := t.initWatcher()
-	if err != nil {
-		return err
-	}
-
-	// Important! Set t.router as the very last step to not confuse the watcher
-	// state machine.
 	t.router = router
 	t.tmpl = templates
-	return nil
-}
-
-func (t *Templates) initWatcher() error {
-	if len(t.WatchPaths) == 0 {
-		return nil
-	}
-
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return err
-	}
-
-	// Watch every directory under WatchPaths, recursively, as recommended by `watcher.Add` docs.
-	for _, path := range t.WatchPaths {
-		err = filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() {
-				err = watcher.Add(path)
-			}
-			return err
-		})
-		if err != nil {
-			watcher.Close()
-			return fmt.Errorf("scanning for directories to watch failed: %v", err)
-		}
-	}
-
-	// The watcher state machine waits for change events from the filesystem and
-	// tries to reload.
-	//
-	// After the first change event arrives, wait for further events until 200ms
-	// passes with no events. This 'debounce' check tries to avoid a burst of
-	// reloads if multiple files are changed in quick succession (e.g. editor
-	// save all, or vcs checkout).
-	//
-	// After waiting, try to reinitialize the router and load all templates. If
-	// it fails then go back to waiting again. If it succeeds then the new
-	// router is already in effect and a new watcher has been created, so close
-	// this one. It's easier to create a new watcher from scratch than trying to
-	// interpret events to sync the watcher with the live directory structure.
-	halt := make(chan struct{})
-	t.stop = halt
-	go func() {
-		delay := 200 * time.Millisecond
-		var timer *time.Timer
-		t.Log.Info("started watching files", "directories", t.WatchPaths)
-	begin:
-		select {
-		case <-watcher.Events:
-		case <-halt:
-			goto halt
-		}
-		timer = time.NewTimer(delay)
-	debounce:
-		select {
-		case <-watcher.Events:
-			if !timer.Stop() {
-				<-timer.C
-			}
-			timer.Reset(delay)
-			goto debounce
-		case <-halt:
-			goto halt
-		case <-timer.C:
-			// only fall through if the timer expires first
-		}
-		if err := t.initRouter(); err != nil {
-			t.Log.Info("failed to reload templates", "error", err)
-			goto begin
-		}
-	halt:
-		watcher.Close()
-		t.Log.Info("closed watcher")
-	}()
-	return nil
-}
-
-// Cleanup discards resources held by t. Implements caddy.CleanerUpper.
-func (t *Templates) Cleanup() error {
-	t.router = nil
-	t.funcs = nil
-	if t.DB != nil {
-		t.DB.Close()
-		t.DB = nil
-	}
-	if t.stop != nil {
-		t.stop <- struct{}{}
-	}
-
 	return nil
 }

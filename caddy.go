@@ -2,18 +2,20 @@ package xtemplate
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
 	"os"
+	"time"
 
 	"log/slog"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
-	"go.uber.org/zap"
+	"github.com/infogulch/watch"
 	"go.uber.org/zap/exp/zapslog"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
@@ -57,17 +59,18 @@ type XTemplateModule struct {
 	FuncsModules []string `json:"funcs_modules,omitempty"`
 
 	template *Templates
+	halt     chan<- struct{}
 }
 
 // Validate ensures t has a valid configuration. Implements caddy.Validator.
-func (t *XTemplateModule) Validate() error {
-	if len(t.Delimiters) != 0 && len(t.Delimiters) != 2 {
+func (m *XTemplateModule) Validate() error {
+	if len(m.Delimiters) != 0 && len(m.Delimiters) != 2 {
 		return fmt.Errorf("delimiters must consist of exactly two elements: opening and closing")
 	}
-	if t.Database.Driver != "" && slices.Index(sql.Drivers(), t.Database.Driver) == -1 {
-		return fmt.Errorf("database driver '%s' does not exist", t.Database.Driver)
+	if m.Database.Driver != "" && slices.Index(sql.Drivers(), m.Database.Driver) == -1 {
+		return fmt.Errorf("database driver '%s' does not exist", m.Database.Driver)
 	}
-	for _, m := range t.FuncsModules {
+	for _, m := range m.FuncsModules {
 		mi, err := caddy.GetModule("xtemplate.funcs." + m)
 		if err != nil {
 			return fmt.Errorf("failed to find module 'xtemplate.funcs.%s': %v", m, err)
@@ -81,12 +84,14 @@ func (t *XTemplateModule) Validate() error {
 
 // Provision provisions t. Implements caddy.Provisioner.
 func (m *XTemplateModule) Provision(ctx caddy.Context) error {
-	log := ctx.Logger().Named("provision")
+	log := slog.New(zapslog.NewHandler(ctx.Logger().Core(), nil))
 
 	t := &Templates{
 		Config: maps.Clone(m.Config),
-		Log:    slog.New(zapslog.NewHandler(ctx.Logger().Core(), nil)),
+		Log:    log,
 	}
+
+	var watchPaths []string
 
 	// Context FS
 	if m.ContextRoot != "" {
@@ -95,7 +100,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 			return fmt.Errorf("context file path does not exist in filesystem: %v", err)
 		}
 		t.ContextFS = cfs
-		t.WatchPaths = append(t.WatchPaths, m.ContextRoot)
+		watchPaths = append(watchPaths, m.ContextRoot)
 	}
 
 	// Template FS
@@ -109,7 +114,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 			return fmt.Errorf("root file path does not exist in filesystem: %v", err)
 		}
 		t.TemplateFS = tfs
-		t.WatchPaths = append(t.WatchPaths, root)
+		watchPaths = append(watchPaths, root)
 	}
 
 	// ExtraFuncs
@@ -117,7 +122,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 		for _, m := range m.FuncsModules {
 			mi, _ := caddy.GetModule("xtemplate.funcs." + m)
 			fm := mi.New().(FuncsProvider).Funcs()
-			log.Debug("got funcs from module", zap.String("module", "xtemplate.funcs."+m), zap.Any("funcmap", fm))
+			log.Debug("got funcs from module", "module", "xtemplate.funcs."+m, "funcmap", fm)
 			t.ExtraFuncs = append(t.ExtraFuncs, fm)
 		}
 	}
@@ -139,7 +144,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 	}
 
 	{
-		err := t.initRouter()
+		err := t.Reload()
 		if err != nil {
 			return err
 		}
@@ -147,14 +152,47 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 
 	m.template = t
 
+	{
+		changed, halt, err := watch.WatchDirs(watchPaths, 200*time.Millisecond, log)
+		if err != nil {
+			return err
+		}
+		m.halt = halt
+		go func() {
+			for {
+				select {
+				case _, ok := <-changed:
+					if !ok {
+						return
+					}
+					err := t.Reload()
+					if err != nil {
+						log.Info("failed to reload xtemplate: %w", err)
+					} else {
+						log.Info("reloaded templates after file changed")
+					}
+				}
+			}
+		}()
+	}
 	return nil
 }
 
+// Cleanup discards resources held by t. Implements caddy.CleanerUpper.
 func (m *XTemplateModule) Cleanup() error {
+	if m.halt != nil {
+		m.halt <- struct{}{}
+		close(m.halt)
+		m.halt = nil
+	}
 	if m.template != nil {
-		err := m.template.Cleanup()
+		var dberr error
+		if m.template.DB != nil {
+			dberr = m.template.DB.Close()
+			m.template.DB = nil
+		}
 		m.template = nil
-		return err
+		return errors.Join(dberr)
 	}
 	return nil
 }

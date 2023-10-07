@@ -1,8 +1,6 @@
 module github.com/infogulch/caddy-xtemplate
 
-go 1.21
-
-toolchain go1.21.0
+go 1.21.0
 
 require (
 	github.com/BurntSushi/toml v1.3.2
@@ -12,6 +10,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/infogulch/pathmatcher v0.0.0-20230914071938-016df9445214
+	github.com/infogulch/watch v0.1.1
 	github.com/mattn/go-sqlite3 v1.14.17
 	github.com/microcosm-cc/bluemonday v1.0.25
 	github.com/segmentio/ksuid v1.0.4
