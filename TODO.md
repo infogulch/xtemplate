@@ -1,9 +1,9 @@
-
 # TODO
 
 ### Features
 
 - [ ] Split xtemplate from caddy so it can be used standalone
+    - [ ] Split watcher into a separate component
     - [ ] Integrate a static file server based on `caddy.caddyhttp.file_server`
     - [ ] Split into separate packages `xtemplate` and `xtemplate/caddy`, rename repo to `xtemplate` (?)
 
@@ -16,9 +16,12 @@
 
 # BACKLOG
 
+- [ ] Client side auto reload
 - [ ] Investigate integrating into another web framework (gox/gin etc)
 - [ ] Document how to use standalone
 - [ ] Demo how to use standalone
+- [ ] SSE https://thedevelopercafe.com/articles/server-sent-events-in-go-595ae2740c7a
+- [ ] NATS https://github.com/nats-io/nats.go
 
 
 # DONE
