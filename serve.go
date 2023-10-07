@@ -11,7 +11,7 @@ import (
 func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log := t.Log.WithGroup("xtemplate-render").With("method", r.Method, "path", r.URL.Path)
 	runtime := t.runtime
-	template, params, _, _ := runtime.router.LookupEndpoint(r.Method, r.URL.Path)
+	_, template, params, _ := runtime.router.Find(r.Method, r.URL.Path)
 	if template == nil {
 		log.Debug("no handler for request")
 		http.NotFound(w, r)

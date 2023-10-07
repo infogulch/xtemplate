@@ -34,7 +34,7 @@ type XTemplate struct {
 type runtime struct {
 	funcs  template.FuncMap
 	tmpl   *template.Template
-	router *pathmatcher.HttpMatcher[template.Template]
+	router *pathmatcher.HttpMatcher[*template.Template]
 }
 
 func (t *XTemplate) Reload() error {
@@ -136,7 +136,7 @@ func (t *XTemplate) Reload() error {
 	}
 
 	// Add all routing templates to the internal router
-	router := pathmatcher.NewHttpMatcher[template.Template]()
+	router := pathmatcher.NewHttpMatcher[*template.Template]()
 	matcher, _ := regexp.Compile("^(GET|POST|PUT|PATCH|DELETE) (.*)$")
 	count := 0
 	for _, tmpl := range templates.Templates() {
@@ -150,7 +150,7 @@ func (t *XTemplate) Reload() error {
 		}
 		log.Debug("adding route handler", "method", method, "path", path_, "template_name", tmpl.Name())
 		tmpl := tmpl // create unique variable for closure
-		router.AddEndpoint(method, path_, tmpl)
+		router.Add(method, path_, tmpl)
 		count += 1
 	}
 

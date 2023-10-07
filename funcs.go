@@ -11,7 +11,6 @@ import (
 	"time"
 
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
-	"github.com/caddyserver/caddy/v2"
 	"github.com/dustin/go-humanize"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/segmentio/ksuid"
@@ -57,9 +56,7 @@ func funcSanitizeHtml(policyName string, html string) (template.HTML, error) {
 
 // funcMarkdown renders the markdown body as HTML. The resulting
 // HTML is NOT escaped so that it can be rendered as HTML.
-func funcMarkdown(input any) (string, error) {
-	inputStr := caddy.ToString(input)
-
+func funcMarkdown(input string) (string, error) {
 	md := goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,
@@ -82,7 +79,7 @@ func funcMarkdown(input any) (string, error) {
 	buf.Reset()
 	defer bufPool.Put(buf)
 
-	err := md.Convert([]byte(inputStr), buf)
+	err := md.Convert([]byte(input), buf)
 	if err != nil {
 		return "", err
 	}
@@ -93,8 +90,8 @@ func funcMarkdown(input any) (string, error) {
 // splitFrontMatter parses front matter out from the beginning of input,
 // and returns the separated key-value pairs and the body/content. input
 // must be a "stringy" value.
-func funcSplitFrontMatter(input any) (parsedMarkdownDoc, error) {
-	meta, body, err := extractFrontMatter(caddy.ToString(input))
+func funcSplitFrontMatter(input string) (parsedMarkdownDoc, error) {
+	meta, body, err := extractFrontMatter(input)
 	if err != nil {
 		return parsedMarkdownDoc{}, err
 	}

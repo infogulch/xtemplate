@@ -1,8 +1,7 @@
-package xtemplate
+package xtemplate_caddy
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -13,9 +12,9 @@ import (
 	"log/slog"
 
 	"github.com/caddyserver/caddy/v2"
-	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/infogulch/watch"
+	"github.com/infogulch/xtemplate"
 	"go.uber.org/zap/exp/zapslog"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
@@ -58,8 +57,12 @@ type XTemplateModule struct {
 
 	FuncsModules []string `json:"funcs_modules,omitempty"`
 
-	template *XTemplate
+	template *xtemplate.XTemplate
 	halt     chan<- struct{}
+}
+
+type FuncsProvider interface {
+	Funcs() template.FuncMap
 }
 
 // Validate ensures t has a valid configuration. Implements caddy.Validator.
@@ -86,7 +89,7 @@ func (m *XTemplateModule) Validate() error {
 func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 	log := slog.New(zapslog.NewHandler(ctx.Logger().Core(), nil))
 
-	t := &XTemplate{
+	t := &xtemplate.XTemplate{
 		Config: maps.Clone(m.Config),
 		Log:    log,
 	}
@@ -178,6 +181,11 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 	return nil
 }
 
+func (m *XTemplateModule) ServeHTTP(w http.ResponseWriter, r *http.Request, _ caddyhttp.Handler) error {
+	m.template.ServeHTTP(w, r)
+	return nil
+}
+
 // Cleanup discards resources held by t. Implements caddy.CleanerUpper.
 func (m *XTemplateModule) Cleanup() error {
 	if m.halt != nil {
@@ -192,90 +200,15 @@ func (m *XTemplateModule) Cleanup() error {
 			m.template.DB = nil
 		}
 		m.template = nil
-		return errors.Join(dberr)
+		return dberr
 	}
-	return nil
-}
-
-func (m *XTemplateModule) ServeHTTP(w http.ResponseWriter, r *http.Request, _ caddyhttp.Handler) error {
-	m.template.ServeHTTP(w, r)
 	return nil
 }
 
 // Interface guards
 var (
-	_ caddy.Provisioner  = (*XTemplateModule)(nil)
-	_ caddy.Validator    = (*XTemplateModule)(nil)
-	_ caddy.CleanerUpper = (*XTemplateModule)(nil)
-
+	_ caddy.Validator             = (*XTemplateModule)(nil)
+	_ caddy.Provisioner           = (*XTemplateModule)(nil)
 	_ caddyhttp.MiddlewareHandler = (*XTemplateModule)(nil)
+	_ caddy.CleanerUpper          = (*XTemplateModule)(nil)
 )
-
-func init() {
-	httpcaddyfile.RegisterHandlerDirective("xtemplate", parseCaddyfile)
-}
-
-// parseCaddyfile sets up the handler from Caddyfile tokens. Syntax:
-//
-//	xtemplate [<matcher>] {
-//	    database <driver> <connstr>
-//	    delimiters <open_delim> <close_delim>
-//	    root <path>
-//	}
-func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
-	t := new(XTemplateModule)
-	t.Config = make(map[string]string)
-	for h.Next() {
-		for h.NextBlock(0) {
-			switch h.Val() {
-			case "database":
-				for nesting := h.Nesting(); h.NextBlock(nesting); {
-					switch h.Val() {
-					case "driver":
-						if !h.Args(&t.Database.Driver) {
-							return nil, h.ArgErr()
-						}
-					case "connstr":
-						if !h.Args(&t.Database.Connstr) {
-							return nil, h.ArgErr()
-						}
-					}
-				}
-			case "delimiters":
-				t.Delimiters = h.RemainingArgs()
-				if len(t.Delimiters) != 2 {
-					return nil, h.ArgErr()
-				}
-			case "template_root":
-				if !h.Args(&t.TemplateRoot) {
-					return nil, h.ArgErr()
-				}
-			case "context_root":
-				if !h.Args(&t.ContextRoot) {
-					return nil, h.ArgErr()
-				}
-			case "config":
-				for nesting := h.Nesting(); h.NextBlock(nesting); {
-					var key, val string
-					key = h.Val()
-					if _, ok := t.Config[key]; ok {
-						return nil, h.Errf("config key '%s' repeated", key)
-					}
-					if !h.Args(&val) {
-						return nil, h.ArgErr()
-					}
-					t.Config[key] = val
-				}
-			case "funcs_modules":
-				t.FuncsModules = h.RemainingArgs()
-			default:
-				return nil, h.Errf("unknown config option")
-			}
-		}
-	}
-	return t, nil
-}
-
-type FuncsProvider interface {
-	Funcs() template.FuncMap
-}
