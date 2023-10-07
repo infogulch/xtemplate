@@ -85,7 +85,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 
 	t := &Templates{
 		Config: maps.Clone(m.Config),
-		log:    slog.New(zapslog.NewHandler(ctx.Logger().Core(), nil)),
+		Log:    slog.New(zapslog.NewHandler(ctx.Logger().Core(), nil)),
 	}
 
 	// Context FS

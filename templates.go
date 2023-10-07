@@ -29,8 +29,8 @@ type Templates struct {
 	WatchPaths []string
 	Config     map[string]string
 	Delims     struct{ L, R string }
+	Log        *slog.Logger
 
-	log    *slog.Logger
 	funcs  template.FuncMap
 	router *pathmatcher.HttpMatcher[template.Template]
 	stop   chan<- struct{}
@@ -38,7 +38,7 @@ type Templates struct {
 }
 
 func (t *Templates) initRouter() error {
-	log := t.log.WithGroup("xtemplate-init")
+	log := t.Log.WithGroup("xtemplate-init")
 
 	// Init funcs
 	{
@@ -214,7 +214,7 @@ func (t *Templates) initWatcher() error {
 	go func() {
 		delay := 200 * time.Millisecond
 		var timer *time.Timer
-		t.log.Info("started watching files", "directories", t.WatchPaths)
+		t.Log.Info("started watching files", "directories", t.WatchPaths)
 	begin:
 		select {
 		case <-watcher.Events:
@@ -236,12 +236,12 @@ func (t *Templates) initWatcher() error {
 			// only fall through if the timer expires first
 		}
 		if err := t.initRouter(); err != nil {
-			t.log.Info("failed to reload templates", "error", err)
+			t.Log.Info("failed to reload templates", "error", err)
 			goto begin
 		}
 	halt:
 		watcher.Close()
-		t.log.Info("closed watcher")
+		t.Log.Info("closed watcher")
 	}()
 	return nil
 }

@@ -9,7 +9,7 @@ import (
 )
 
 func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log := t.log.WithGroup("xtemplate-render").With("method", r.Method, "path", r.URL.Path)
+	log := t.Log.WithGroup("xtemplate-render").With("method", r.Method, "path", r.URL.Path)
 	template, params, _, _ := t.router.LookupEndpoint(r.Method, r.URL.Path)
 	if template == nil {
 		log.Debug("no handler for request")
