@@ -19,7 +19,7 @@ import (
 	"github.com/infogulch/pathmatcher"
 )
 
-type Templates struct {
+type XTemplate struct {
 	TemplateFS fs.FS
 	ContextFS  fs.FS
 	ExtraFuncs []template.FuncMap
@@ -37,7 +37,7 @@ type runtime struct {
 	router *pathmatcher.HttpMatcher[template.Template]
 }
 
-func (t *Templates) Reload() error {
+func (t *XTemplate) Reload() error {
 	log := t.Log.WithGroup("xtemplate-init")
 
 	// Init funcs

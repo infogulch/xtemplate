@@ -8,7 +8,7 @@ import (
 	"strconv"
 )
 
-func (t *Templates) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log := t.Log.WithGroup("xtemplate-render").With("method", r.Method, "path", r.URL.Path)
 	runtime := t.runtime
 	template, params, _, _ := runtime.router.LookupEndpoint(r.Method, r.URL.Path)

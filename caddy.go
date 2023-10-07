@@ -58,7 +58,7 @@ type XTemplateModule struct {
 
 	FuncsModules []string `json:"funcs_modules,omitempty"`
 
-	template *Templates
+	template *XTemplate
 	halt     chan<- struct{}
 }
 
@@ -86,7 +86,7 @@ func (m *XTemplateModule) Validate() error {
 func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 	log := slog.New(zapslog.NewHandler(ctx.Logger().Core(), nil))
 
-	t := &Templates{
+	t := &XTemplate{
 		Config: maps.Clone(m.Config),
 		Log:    log,
 	}
