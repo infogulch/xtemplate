@@ -5,7 +5,7 @@ go 1.21.0
 require (
 	github.com/caddyserver/caddy/v2 v2.7.4
 	github.com/infogulch/watch v0.1.2
-	github.com/infogulch/xtemplate v0.1.0
+	github.com/infogulch/xtemplate v0.1.1
 	go.uber.org/zap/exp v0.2.0
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
 )

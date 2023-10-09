@@ -101,7 +101,7 @@ func funcSplitFrontMatter(input string) (parsedMarkdownDoc, error) {
 
 // funcReturn causes the template to exit early
 func funcReturn() (string, error) {
-	return "", &ReturnError{}
+	return "", ReturnError{}
 }
 
 // funcAbortWithStatus stops rendering the reponse template and immediately returns the status indicated.
