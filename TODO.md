@@ -18,8 +18,7 @@
 - [ ] Investigate integrating into another web framework (gox/gin etc)
 - [ ] Document how to use standalone
 - [ ] Demo how to use standalone
-- [ ] SSE https://thedevelopercafe.com/articles/server-sent-events-in-go-595ae2740c7a
-- [ ] NATS https://github.com/nats-io/nats.go
+- [ ] Build a way to send live updates to a page by rendering a template to an SSE stream. Maybe backed by NATS.io?
 
 
 # DONE

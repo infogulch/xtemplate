@@ -54,6 +54,7 @@ func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	err = template.Execute(buf, context)
 
+	headers.Set("Content-Type", "text/html; charset=utf-8")
 	headers.Set("Content-Length", strconv.Itoa(buf.Len()))
 	headers.Del("Accept-Ranges") // we don't know ranges for dynamically-created content
 	headers.Del("Last-Modified") // useless for dynamic content since it's always changing
@@ -63,7 +64,8 @@ func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// refresh, so disable them until we find a better way to do this
 	headers.Del("Etag")
 
-	if err != nil {
+	var returnErr ReturnError
+	if err != nil && !errors.As(err, &returnErr) {
 		var handlerErr HandlerError
 		if errors.As(err, &handlerErr) {
 			if dberr := tx.Commit(); dberr != nil {
@@ -87,10 +89,20 @@ func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	for name, values := range headers {
+		for _, value := range values {
+			w.Header().Add(name, value)
+		}
+	}
 	w.WriteHeader(statusCode)
-	headers.Write(w)
 	w.Write(buf.Bytes())
 }
+
+type ReturnError struct{}
+
+func (ReturnError) Error() string { return "returned" }
+
+var _ = (error)((*ReturnError)(nil))
 
 type HandlerError interface {
 	Error() string

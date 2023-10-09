@@ -26,6 +26,7 @@ var xtemplateFuncs template.FuncMap = template.FuncMap{
 	"markdown":         funcMarkdown,
 	"splitFrontMatter": funcSplitFrontMatter,
 	"abortWithStatus":  funcAbortWithStatus,
+	"return":           funcReturn,
 	"status":           funcStatus,
 	"humanize":         funcHumanize,
 	"trustHtml":        funcTrustHtml,
@@ -96,6 +97,11 @@ func funcSplitFrontMatter(input string) (parsedMarkdownDoc, error) {
 		return parsedMarkdownDoc{}, err
 	}
 	return parsedMarkdownDoc{Meta: meta, Body: body}, nil
+}
+
+// funcReturn causes the template to exit early
+func funcReturn() (string, error) {
+	return "", &ReturnError{}
 }
 
 // funcAbortWithStatus stops rendering the reponse template and immediately returns the status indicated.
