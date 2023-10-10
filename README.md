@@ -1,4 +1,4 @@
-`caddy-xtemplate` is a [Caddy](https://caddyserver.com) module that extends
+`xtemplate` is a [Caddy](https://caddyserver.com) module that extends
 Go's [`html/template` library](https://pkg.go.dev/html/template) to be capable
 enough to host an entire server-side application in it. Designed with the
 [htmx.org](https://htmx.org/) js library in mind, which makes server side
@@ -118,7 +118,7 @@ the old version and prints the loading error out in Caddy's logs.
 Download caddy with all standard modules, plus the `xtemplate` module (!important)
 from Caddy's build and download server:
 
-https://caddyserver.com/download?package=github.com%2Finfogulch%2Fcaddy-xtemplate
+https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate
 
 Write your caddy config and use the xtemplate http handler:
 
@@ -346,18 +346,18 @@ Expand for a listing of Sprig funcs.
 To work on this project, install [`xcaddy`](https://github.com/caddyserver/xcaddy), then build from the repo root:
 
 ```sh
-# build a caddy executable with the latest version of caddy-xtemplate from github:
-xcaddy build --with github.com/infogulch/caddy-xtemplate
+# build a caddy executable with the latest version of xtemplate from github:
+xcaddy build --with github.com/infogulch/xtemplate
 
 # build a caddy executable and override the xtemplate module with your
 # modifications in the current directory:
-xcaddy build --with github.com/infogulch/caddy-xtemplate=.
+xcaddy build --with github.com/infogulch/xtemplate=.
 
 # build with CGO in order to use the sqlite3 db driver
-CGO_ENABLED=1 xcaddy build --with github.com/infogulch/caddy-xtemplate
+CGO_ENABLED=1 xcaddy build --with github.com/infogulch/xtemplate
 
 # build enable the sqlite_json build tag to get json funcs
-GOFLAGS='-tags="sqlite_json"' CGO_ENABLED=1 xcaddy build --with github.com/infogulch/caddy-xtemplate
+GOFLAGS='-tags="sqlite_json"' CGO_ENABLED=1 xcaddy build --with github.com/infogulch/xtemplate
 
 TZ=UTC git --no-pager show --quiet --abbrev=12 --date='format-local:%Y%m%d%H%M%S' --format="%cd-%h"
 ```
@@ -371,9 +371,9 @@ db functions to templates, and a persistent templates instance shared across
 requests and reloaded when template files changed.
 
 go-htmx was refactored and rebased on top of the [templates module from the
-Caddy server][1] to create `caddy-xtemplate` in order to get a jump start on
+Caddy server][1] to create `xtemplate` in order to get a jump start on
 broader web server features without having to implement them from scratch.
 
-`caddy-xtemplate` is licensed under the Apache 2.0 license. See [LICENSE](./LICENSE)
+`xtemplate` is licensed under the Apache 2.0 license. See [LICENSE](./LICENSE)
 
 [1]: https://github.com/caddyserver/caddy/tree/master/modules/caddyhttp/templates
