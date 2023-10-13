@@ -8,7 +8,7 @@ require (
 	github.com/alecthomas/chroma/v2 v2.9.1
 	github.com/dustin/go-humanize v1.0.1
 	github.com/infogulch/pathmatcher v0.2.0
-	github.com/infogulch/watch v0.1.2
+	github.com/infogulch/watch v0.1.3
 	github.com/mattn/go-sqlite3 v1.14.17
 	github.com/microcosm-cc/bluemonday v1.0.25
 	github.com/segmentio/ksuid v1.0.4

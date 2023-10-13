@@ -94,7 +94,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 		Log:    log.WithGroup("xtemplate"),
 	}
 
-	var watchPaths []string
+	var watchDirs []string
 
 	// Context FS
 	if m.ContextRoot != "" {
@@ -103,7 +103,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 			return fmt.Errorf("context file path does not exist in filesystem: %v", err)
 		}
 		t.ContextFS = cfs
-		watchPaths = append(watchPaths, m.ContextRoot)
+		watchDirs = append(watchDirs, m.ContextRoot)
 	}
 
 	// Template FS
@@ -117,7 +117,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 			return fmt.Errorf("root file path does not exist in filesystem: %v", err)
 		}
 		t.TemplateFS = tfs
-		watchPaths = append(watchPaths, root)
+		watchDirs = append(watchDirs, root)
 	}
 
 	// ExtraFuncs
@@ -155,28 +155,21 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 
 	m.template = t
 
-	{
-		changed, halt, err := watch.WatchDirs(watchPaths, 200*time.Millisecond, log)
+	if len(watchDirs) > 0 {
+		changed, halt, err := watch.WatchDirs(watchDirs, 200*time.Millisecond)
 		if err != nil {
 			return err
 		}
 		m.halt = halt
-		go func() {
-			for {
-				select {
-				case _, ok := <-changed:
-					if !ok {
-						return
-					}
-					err := t.Reload()
-					if err != nil {
-						log.Info("failed to reload xtemplate", "error", err)
-					} else {
-						log.Info("reloaded templates after file changed")
-					}
-				}
+		watch.React(changed, halt, func() (halt bool) {
+			err := t.Reload()
+			if err != nil {
+				log.Info("failed to reload xtemplate", "error", err)
+			} else {
+				log.Info("reloaded templates after file changed")
 			}
-		}()
+			return
+		})
 	}
 	return nil
 }

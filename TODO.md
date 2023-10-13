@@ -4,6 +4,7 @@
 
 - [ ] Split xtemplate from caddy so it can be used standalone
     - [ ] Integrate a static file server based on `caddy.caddyhttp.file_server`
+        - Serve static files from tempalates dir that are not .html files
 - [ ] Add "Why?" section to readme.
 
 ### Automation
