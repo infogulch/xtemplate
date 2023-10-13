@@ -28,3 +28,4 @@
     - [x] Split watcher into a separate component
     - [x] Isolate caddy integration into one file
     - [x] Split into separate packages `xtemplate` and `xtemplate/caddy`, rename repo to `xtemplate`
+    - [x] Write basic server based on net/http
