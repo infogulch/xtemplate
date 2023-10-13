@@ -32,7 +32,7 @@ type flags struct {
 
 func parseflags() (f flags) {
 	flag.BoolVar(&f.help, "help", false, "Display help")
-	flag.StringVar(&f.listen_addr, "listen", "0.0.0.0:80", "Listen address")
+	flag.StringVar(&f.listen_addr, "listen", "0.0.0.0:8080", "Listen address")
 	flag.StringVar(&f.template_root, "template-root", "templates", "Template root directory")
 	flag.StringVar(&f.context_root, "context-root", "", "Context root directory")
 	flag.BoolVar(&f.watch_template, "watch-template", true, "Watch the template directory and reload if changed")
@@ -101,7 +101,8 @@ func main() {
 		dowatch(watch, func() error { return x.Reload() }, log)
 	}
 
-	http.ListenAndServe("127.0.0.1:8080", &x)
+	log.Info("serving", "address", flags.listen_addr)
+	fmt.Println(http.ListenAndServe(flags.listen_addr, &x))
 }
 
 func dowatch(dirs []string, do func() error, log *slog.Logger) {
