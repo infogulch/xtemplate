@@ -2,12 +2,15 @@ package xtemplate
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/segmentio/ksuid"
 )
 
 func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -22,14 +25,16 @@ func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log := t.Log.With(slog.Group("serve",
+		slog.String("requestid", getRequestId(r.Context())),
 		slog.String("method", r.Method),
 		slog.String("path", r.URL.Path),
-		slog.String("user-agent", r.Header.Get("User-Agent")),
 	))
-	log.Debug("found response template",
+	log.DebugContext(r.Context(), "serving request",
 		slog.String("template-name", template.Name()),
 		slog.Any("params", params),
-		slog.DurationValue(time.Since(start)))
+		slog.Duration("handler-lookup-duration", time.Since(start)),
+		slog.String("user-agent", r.Header.Get("User-Agent")),
+	)
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
@@ -63,6 +68,8 @@ func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	r.ParseForm()
 	err = template.Execute(buf, context)
+
+	log.Debug("executed template", slog.Any("template error", err), slog.Int("length", buf.Len()))
 
 	headers.Set("Content-Type", "text/html; charset=utf-8")
 	headers.Set("Content-Length", strconv.Itoa(buf.Len()))
@@ -110,7 +117,21 @@ func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(context.status)
 	w.Write(buf.Bytes())
 
-	log.Debug("done", slog.DurationValue(time.Since(start)), slog.Int("status", context.status))
+	log.Debug("done", slog.Duration("response-duration", time.Since(start)), slog.Int("response-status", context.status))
+}
+
+func getRequestId(ctx context.Context) string {
+	// caddy request id
+	if v := ctx.Value("vars"); v != nil {
+		if mv, ok := v.(map[string]any); ok {
+			if anyrid, ok := mv["uuid"]; ok {
+				if rid, ok := anyrid.(string); ok {
+					return rid
+				}
+			}
+		}
+	}
+	return ksuid.New().String()
 }
 
 // ReturnError is a sentinel value returned by the `return` template
