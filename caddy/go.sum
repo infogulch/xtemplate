@@ -360,8 +360,8 @@ github.com/infogulch/pathmatcher v0.2.0 h1:pi8/e2BQ8x1nB1WAEnnVOIw+EciKDDSUYqDZs
 github.com/infogulch/pathmatcher v0.2.0/go.mod h1:ywO4eSHD1ARQElpii9hjqkPYFZ+IZKJ+3qDo9IZyt78=
 github.com/infogulch/watch v0.1.2 h1:7mF3VN1T1Nby5NO0npTqE+OgHR7+OfJO261stDJH7TY=
 github.com/infogulch/watch v0.1.2/go.mod h1:i9OU29MppSWictJKM3LoipjLVw+6VHiOK/SrzfujJGc=
-github.com/infogulch/xtemplate v0.1.1 h1:+nGXlKkPM+/vYX0rpWXdk/SMFomMn60mOnQiJk2Xs9I=
-github.com/infogulch/xtemplate v0.1.1/go.mod h1:bIMBcUB3Pio3lwX2TCaQW5RKrdvVi8CSCc3uH0qBy8g=
+github.com/infogulch/xtemplate v0.1.2 h1:ytJtL3301cKkr9i3zdf/s1Bdh08KDWv/mWdvWyXbMjQ=
+github.com/infogulch/xtemplate v0.1.2/go.mod h1:FZwceAVuWokIWwb9jjMvnd0iaZTU3j2Ur08wGk+wHh4=
 github.com/jackc/chunkreader v1.0.0/go.mod h1:RT6O25fNZIuasFJRyZ4R/Y2BbhasbmZXF9QQ7T3kePo=
 github.com/jackc/chunkreader/v2 v2.0.0/go.mod h1:odVSm741yZoC3dpHEUXIqA9tQRhFrgOHwnPIn9lDKlk=
 github.com/jackc/chunkreader/v2 v2.0.1 h1:i+RDz65UE+mmpjTfyz0MoVTnzeYxroil2G82ki7MGG8=

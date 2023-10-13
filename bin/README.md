@@ -1,6 +1,19 @@
-This package wraps `xtemplate` into a usable binary.
+This package wraps `xtemplate` into a basic web server binary with CLI options.
 
-Usage:
+This is meant to serve as a starting point and demonstration for how to
+integrate the XTemplate library into a web server.
+
+### Build
+
+```sh
+# build from ./bin
+go build -o xtemplate
+
+# build from repo root
+go build -o xtemplate ./bin
+```
+
+### Usage
 
 ```
 $ ./xtemplate --help
@@ -28,4 +41,10 @@ xtemplate is a hypertext preprocessor and http templating web server
         Watch the context directory and reload if changed
   -watch-template
         Watch the template directory and reload if changed (default true)
+```
+
+### Example
+
+```
+xtemplate -template-root templates -watch-template -log -4
 ```

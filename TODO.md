@@ -6,6 +6,13 @@
     - [ ] Integrate a static file server based on `caddy.caddyhttp.file_server`
 - [ ] Add "Why?" section to readme.
 
+### Automation
+
+- Add github workflows
+    - [ ] Set up go tests
+    - [ ] Set up hurl tests
+    - [ ] Publish binaries and release when a git tag is pushed
+
 ### Demos
 
 - [ ] Demonstrate how to do auth with xtemplate
@@ -20,6 +27,7 @@
 - [ ] Document how to use standalone
 - [ ] Demo how to use standalone
 - [ ] Build a way to send live updates to a page by rendering a template to an SSE stream. Maybe backed by NATS.io?
+- [ ] Consider using the functional options pattern for configuring XTemplate
 
 
 # DONE
@@ -31,3 +39,5 @@
     - [x] Split into separate packages `xtemplate` and `xtemplate/caddy`, rename repo to `xtemplate`
     - [x] Write basic server based on net/http
     - [x] Update docs describe the separate packages
+- [x] Add github automation
+    - [x] Build and upload binaries

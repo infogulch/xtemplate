@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    branches: [ "master" ]
+    tags: [ "v**" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test -v ./...
+
+    - run: go build -o xtemplate ./bin
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: xtemplate
+        path: xtemplate
