@@ -11,6 +11,9 @@ go build -o xtemplate
 
 # build from repo root
 go build -o xtemplate ./bin
+
+# build with sqlite3 driver and json extensions
+GOFLAGS='-tags="sqlite_json"' CGO_ENABLED=1 go build -o xtemplate
 ```
 
 ### Usage

@@ -75,8 +75,10 @@ func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Info("error executing template", "error", err)
-		if dberr := tx.Rollback(); dberr != nil {
-			log.Info("failed to roll back transaction", "error", err)
+		if tx != nil {
+			if dberr := tx.Rollback(); dberr != nil {
+				log.Info("failed to roll back transaction", "error", dberr)
+			}
 		}
 		http.Error(w, "failed to render response", http.StatusInternalServerError)
 		return

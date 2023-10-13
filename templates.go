@@ -92,12 +92,12 @@ func (t *XTemplate) Reload() error {
 		}
 		// add the route handler template
 		if !strings.HasPrefix(filepath.Base(path_), "_") {
-			path_ = strings.TrimSuffix(path_, filepath.Ext(path_))
-			if path.Base(path_) == "index" {
-				path_ = path.Dir(path_)
+			routePath := strings.TrimSuffix(path_, filepath.Ext(path_))
+			if path.Base(routePath) == "index" {
+				routePath = path.Dir(routePath)
 			}
-			route := "GET " + path_
-			log.Debug("adding filename route template", "route", route, "path", path_)
+			route := "GET " + routePath
+			log.Debug("adding filename route template", "route", route, "routePath", routePath, "path", path_)
 			_, err = templates.AddParseTree(route, newtemplates[path_])
 			if err != nil {
 				return fmt.Errorf("could not add parse tree from '%s': %v", path_, err)
