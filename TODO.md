@@ -4,6 +4,7 @@
 
 - [ ] Split xtemplate from caddy so it can be used standalone
     - [ ] Integrate a static file server based on `caddy.caddyhttp.file_server`
+- [ ] Add "Why?" section to readme.
 
 ### Demos
 
@@ -29,3 +30,4 @@
     - [x] Isolate caddy integration into one file
     - [x] Split into separate packages `xtemplate` and `xtemplate/caddy`, rename repo to `xtemplate`
     - [x] Write basic server based on net/http
+    - [x] Update docs describe the separate packages

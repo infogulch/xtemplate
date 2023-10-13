@@ -20,18 +20,23 @@ import (
 
 // TemplateContext is the TemplateContext with which HTTP templates are executed.
 type TemplateContext struct {
-	Req        *http.Request
-	Params     pathmatcher.Params
-	RespHeader WrappedHeader
-	RespStatus func(int) string
-	Config     map[string]string
+	Req     *http.Request
+	Params  pathmatcher.Params
+	Headers WrappedHeader
+	Config  map[string]string
 
+	status     int
 	tmpl       *template.Template
 	funcs      template.FuncMap
 	fs         fs.FS
 	tx         *sql.Tx
 	log        *slog.Logger
 	queryTimes []time.Duration
+}
+
+func (c *TemplateContext) Status(status int) string {
+	c.status = status
+	return ""
 }
 
 // Cookie gets the value of a cookie with name name.

@@ -1,9 +1,10 @@
-// xtemplate is a Caddy module that extends Go's html/template to be
-// capable enough to host an entire server-side application in it.
+// xtemplate extends Go's html/template to be capable enough to define an entire
+// server-side application with just templates.
 package xtemplate
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -38,7 +39,7 @@ type runtime struct {
 }
 
 func (t *XTemplate) Reload() error {
-	log := t.Log.WithGroup("xtemplate-init")
+	log := t.Log.WithGroup("reload")
 
 	// Init funcs
 	funcs := make(template.FuncMap)
@@ -70,32 +71,36 @@ func (t *XTemplate) Reload() error {
 	}()
 
 	// Ingest all templates; add GET handlers for template files that don't start with '_'
-	for path := range files {
-		content, err := fs.ReadFile(t.TemplateFS, path)
+	for path_ := range files {
+		content, err := fs.ReadFile(t.TemplateFS, path_)
 		if err != nil {
-			return fmt.Errorf("could not read template file '%s': %v", path, err)
+			return fmt.Errorf("could not read template file '%s': %v", path_, err)
 		}
-		path = filepath.Clean("/" + path)
+		path_ = filepath.Clean("/" + path_)
 		// parse each template file manually to have more control over its final
 		// names in the template namespace.
-		newtemplates, err := parse.Parse(path, string(content), t.Delims.L, t.Delims.R, funcs, buliltinsSkeleton)
+		newtemplates, err := parse.Parse(path_, string(content), t.Delims.L, t.Delims.R, funcs, buliltinsSkeleton)
 		if err != nil {
-			return fmt.Errorf("could not parse template file '%s': %v", path, err)
+			return fmt.Errorf("could not parse template file '%s': %v", path_, err)
 		}
 		// add all templates
 		for name, tree := range newtemplates {
 			_, err = templates.AddParseTree(name, tree)
 			if err != nil {
-				return fmt.Errorf("could not add template '%s' from '%s': %v", name, path, err)
+				return fmt.Errorf("could not add template '%s' from '%s': %v", name, path_, err)
 			}
 		}
 		// add the route handler template
-		if !strings.HasPrefix(filepath.Base(path), "_") {
-			route := "GET " + strings.TrimSuffix(path, filepath.Ext(path))
-			log.Debug("adding filename route template", "route", route, "path", path)
-			_, err = templates.AddParseTree(route, newtemplates[path])
+		if !strings.HasPrefix(filepath.Base(path_), "_") {
+			path_ = strings.TrimSuffix(path_, filepath.Ext(path_))
+			if path.Base(path_) == "index" {
+				path_ = path.Dir(path_)
+			}
+			route := "GET " + path_
+			log.Debug("adding filename route template", "route", route, "path", path_)
+			_, err = templates.AddParseTree(route, newtemplates[path_])
 			if err != nil {
-				return fmt.Errorf("could not add parse tree from '%s': %v", path, err)
+				return fmt.Errorf("could not add parse tree from '%s': %v", path_, err)
 			}
 		}
 	}
@@ -112,7 +117,7 @@ func (t *XTemplate) Reload() error {
 			if t.DB != nil {
 				tx, err = t.DB.Begin()
 				if err != nil {
-					return fmt.Errorf("failed to begin transaction for '%s': %v", tmpl.Name(), err)
+					return fmt.Errorf("failed to begin transaction for '%s': %w", tmpl.Name(), err)
 				}
 			}
 			err = tmpl.Execute(io.Discard, &TemplateContext{
@@ -125,12 +130,18 @@ func (t *XTemplate) Reload() error {
 			})
 			if err != nil {
 				if tx != nil {
-					tx.Rollback()
+					txerr := tx.Rollback()
+					if txerr != nil {
+						err = errors.Join(err, txerr)
+					}
 				}
-				return fmt.Errorf("template initializer '%s' failed: %v", tmpl.Name(), err)
+				return fmt.Errorf("template initializer '%s' failed: %w", tmpl.Name(), err)
 			}
 			if tx != nil {
-				tx.Commit()
+				err = tx.Commit()
+				if err != nil {
+					return fmt.Errorf("template initializer commit failed: %w", err)
+				}
 			}
 		}
 	}
@@ -145,15 +156,14 @@ func (t *XTemplate) Reload() error {
 			continue
 		}
 		method, path_ := matches[1], matches[2]
-		if path.Base(path_) == "index" {
-			path_ = path.Dir(path_)
-		}
 		log.Debug("adding route handler", "method", method, "path", path_, "template_name", tmpl.Name())
 		tmpl := tmpl // create unique variable for closure
 		router.Add(method, path_, tmpl)
 		count += 1
 	}
 
+	// Set runtime in one pointer assignment, avoiding race conditions where the
+	// inner fields don't match.
 	t.runtime = &runtime{
 		funcs,
 		templates,

@@ -1,10 +1,15 @@
-`xtemplate` is a [Caddy](https://caddyserver.com) module that extends
-Go's [`html/template` library](https://pkg.go.dev/html/template) to be capable
-enough to host an entire server-side application in it. Designed with the
-[htmx.org](https://htmx.org/) js library in mind, which makes server side
-rendered sites feel as interactive as a Single Page Apps.
+# XTemplate
 
-> ⚠️ This project is still in development, expect breaking changes. ⚠️
+`xtemplate` is a hypertext preprocessor that extends Go's
+[`html/template` library][html-template] to be capable enough to host an entire
+server-side web application using just template definitions. Designed with the
+[htmx.org][htmx] js library in mind, which makes server side rendered sites feel
+as interactive as a Single Page Apps.
+
+[html-template]: https://pkg.go.dev/html/template
+[htmx]: https://htmx.org/
+
+> ⚠️ This project is still in development. ⚠️
 
 > ---
 >
@@ -13,19 +18,19 @@ rendered sites feel as interactive as a Single Page Apps.
 > - ✨ [Features](#features)
 >   - [Query the database directly within template definitions](#query-the-database-directly-within-template-definitions)
 >   - [Define templates and import content from other files](#define-templates-and-import-content-from-other-files)
->   - [File-based routing & custom routes](#file-based-routing--custom-routes)
+>   - [File-based routing](#file-based-routing)
+>   - [Custom routes](#custom-routes)
 >   - [Automatic reload](#automatic-reload)
-> - 🐾 [Showcase](#showcase)
-> - 🏃 [Quickstart](#quickstart)
-> - 👓 [Config](#config)
-> - 💼 [Template syntax](#template-syntax)
+> - 🏆 [Showcase](#showcase)
+> - 📦 [How to use](#how-to-use)
+> - 📐 [Template syntax](#template-syntax)
 >   - [Context values](#context-values)
 >   - [Functions](#functions)
 >     - [Stdlib Functions](#go-stdlib-template-functions)
 >     - [Sprig Functions](#sprig-library-template-functions)
 >     - [xtemplate Functions](#xtemplate-functions)
 > - 🛠️ [Development](#development)
-> - ✅ [License](#project-lineage-and-license)
+> - ✅ [License](#project-history-and-license)
 >
 > ---
 
@@ -50,7 +55,7 @@ rendered sites feel as interactive as a Single Page Apps.
 ```html
 <html>
   <title>Home</title>
-  <!-- import the contents of a file -->
+  <!-- import the contents of another file -->
   {{template "/shared/_head.html" .}}
 
   <body>
@@ -61,11 +66,11 @@ rendered sites feel as interactive as a Single Page Apps.
 </html>
 ```
 
-### File-based routing & custom routes
+### File-based routing
 
-`GET` requests for any file will invoke the template file at that path. Except
-files that start with `_` which are not routed, this lets you define templates
-that only other templates can invoke.
+`GET` requests for a path with a matching template file will invoke the template
+file at that path, with the exception that files starting with `_` are not
+routed. This allows defining templates that only other templates can invoke.
 
 ```
 .
@@ -77,8 +82,10 @@ that only other templates can invoke.
     └── _head.html      (not routed)
 ```
 
-Create custom route handlers by defining a template with a name matching the
-pattern `<method> <path>`. Use
+### Custom routes
+
+Create custom route handlers for any http method and parametrized path by
+defining a template whose name matches the pattern `<method> <path>`. Uses
 [httprouter](https://github.com/julienschmidt/httprouter) syntax for path
 parameters and wildcards, which are made available in the template as values in
 the `.Param` key while serving a request.
@@ -88,8 +95,8 @@ the `.Param` key while serving a request.
 {{define "GET /contact/:id"}}
 {{$contact := .QueryRow `SELECT name,phone FROM contacts WHERE id=?` (.Params.ByName "id")}}
 <div>
-  <span>Name: {{.name}}</span>
-  <span>Phone: {{.phone}}</span>
+  <span>Name: {{$contact.name}}</span>
+  <span>Phone: {{$contact.phone}}</span>
 </div>
 {{end}}
 
@@ -104,71 +111,22 @@ the `.Param` key while serving a request.
 
 Templates are reloaded and validated automatically as soon as they are modified,
 no need to restart the server. If there's a syntax error it continues to serve
-the old version and prints the loading error out in Caddy's logs.
+the old version and prints the loading error out in the logs.
 
 > Ctrl+S > Alt+Tab > F5
 
 # Showcase
 
-* [infogulch/xrss](https://github.com/infogulch/xrss), an rss feed reader built with htmx and tailwindcss.
+* [infogulch/xrss](https://github.com/infogulch/xrss), an rss feed reader built with htmx and inline css.
 * [infogulch/todos](https://github.com/infogulch/todos), a demo todomvc application.
 
-# Quickstart
+# How to use
 
-Download caddy with all standard modules, plus the `xtemplate` module (!important)
-from Caddy's build and download server:
+XTemplate is three Go packages in this repository:
 
-https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate
-
-Write your caddy config and use the xtemplate http handler:
-
-```
-:8080
-
-route {
-    xtemplate {
-        template_root templates
-    }
-}
-```
-
-Write `.html` files in the root directory specified in your Caddy config.
-
-Run caddy with your config: `caddy run --config Caddyfile`
-
-> Remember Caddy is a super http server, check out the caddy docs for features
-> you may want to layer on top. Examples: serving static files (css/js libs), set
-> up an auth proxy, caching, rate limiting, automatic https, and more!
-
-# Config
-
-xtemplate is configured through caddy's configuration system. Here are the
-config fields available to a Caddyfile:
-
-```
-xtemplate {
-    template_root <root directory where template files are loaded>
-    context_root <root directory that template funcs have access to>
-    delimiters <left> <right>         # defaults: {{ and }}
-    database {                        # default empty, no db available
-        driver <driver>               # driver and connstr are passed directly to sql.Open
-        connstr <connection string>   # check your sql driver for connstr details
-    }
-    config {                          # a map of configs, accessible in the template as .Config
-      key1 value1
-      key2 value2
-    }
-    funcs_modules <mod1> <mod2>       # a list of caddy modules under the `xtemplate.funcs.*`
-                                      # namespace that implement the FuncsProvider interface,
-                                      # to add custom funcs to the Template FuncMap.
-}
-```
-
-These sql drivers are available by default. Modify [db.go](db.go) and recompile
-xtemplate to include your preferred drivers.
-
-- [mattn/sqlite3](https://pkg.go.dev/github.com/mattn/go-sqlite3#section-readme) (requires building with `CGO_ENABLED=1`, not available from the caddy build server)
-- [cznic/sqlite](https://pkg.go.dev/modernc.org/sqlite?utm_source=godoc) (available without CGo, including from the caddy build server)
+* `github.com/infogulch/xtemplate`, a library that loads template files and implements `http.Handler`, routing requests to templates. Use it in your own Go application by depending on it as a library and using the [`XTemplate` struct](templates.go) struct.
+* `github.com/infogulch/xtemplate/bin`, a simple binary that configures `XTemplate` with CLI args and serves http requests with it. Build it yourself or download the binary from github releases.
+* `github.com/infogulch/xtemplate/caddy`, a caddy module that integrates xtemplate into the caddy web server.
 
 # Template syntax
 
@@ -341,39 +299,20 @@ Expand for a listing of Sprig funcs.
 - `idx` gets an item from a list, similar to the built-in `index`, but with reversed args: index first, then array. This is useful to use index in a pipeline, for example: `{{generate-list | idx 5}}`
 - `try` takes a function that returns an error in the first argument and calls it with the values from the remaining arguments, and returns the result including any error as struct fields. This enables template authors to handle funcs that return errors within the template definition. Example: `{{ $result := try .QueryVal "SELECT 'oops' WHERE 1=0" }}{{if $result.OK}}{{$result.Value}}{{else}}QueryVal requires exactly one row. Error: {{$result.Error}}{{end}}`
 
-# Development
+## Project history and license
 
-To work on this project, install [`xcaddy`](https://github.com/caddyserver/xcaddy), then build from the repo root:
-
-```sh
-# build a caddy executable with the latest version of xtemplate from github:
-xcaddy build --with github.com/infogulch/xtemplate
-
-# build a caddy executable and override the xtemplate module with your
-# modifications in the current directory:
-xcaddy build --with github.com/infogulch/xtemplate=.
-
-# build with CGO in order to use the sqlite3 db driver
-CGO_ENABLED=1 xcaddy build --with github.com/infogulch/xtemplate
-
-# build enable the sqlite_json build tag to get json funcs
-GOFLAGS='-tags="sqlite_json"' CGO_ENABLED=1 xcaddy build --with github.com/infogulch/xtemplate
-
-TZ=UTC git --no-pager show --quiet --abbrev=12 --date='format-local:%Y%m%d%H%M%S' --format="%cd-%h"
-```
-
-## Project lineage and license
-
-The idea for this project started in
-[infogulch/go-htmx](https://github.com/infogulch/go-htmx) (now archived), which
-included the first implementations of template-name-based routing, exposing sql
-db functions to templates, and a persistent templates instance shared across
-requests and reloaded when template files changed.
+The idea for this project started as [infogulch/go-htmx][go-htmx] (now
+archived), which included the first implementations of template-name-based
+routing, exposing sql db functions to templates, and a persistent templates
+instance shared across requests and reloaded when template files changed.
 
 go-htmx was refactored and rebased on top of the [templates module from the
-Caddy server][1] to create `xtemplate` in order to get a jump start on
-broader web server features without having to implement them from scratch.
+Caddy server][caddyhttp-templates] to create `caddy-xtemplate` to add some extra
+features including reading files directly and built-in funcs for markdown
+conversion, and to get a jump start on supporting the broad array of web server
+features without having to implement them from scratch.
 
 `xtemplate` is licensed under the Apache 2.0 license. See [LICENSE](./LICENSE)
 
-[1]: https://github.com/caddyserver/caddy/tree/master/modules/caddyhttp/templates
+[go-htmx]: https://github.com/infogulch/go-htmx
+[caddyhttp-templates]: https://github.com/caddyserver/caddy/tree/master/modules/caddyhttp/templates

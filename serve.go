@@ -9,15 +9,15 @@ import (
 )
 
 func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log := t.Log.WithGroup("xtemplate-render").With("method", r.Method, "path", r.URL.Path)
-	runtime := t.runtime
+	log := t.Log.WithGroup("serve").With("method", r.Method, "path", r.URL.Path)
+	runtime := t.runtime // copy the runtime in case it's updated during the request
 	_, template, params, _ := runtime.router.Find(r.Method, r.URL.Path)
 	if template == nil {
 		log.Debug("no handler for request")
 		http.NotFound(w, r)
 		return
 	}
-	log = log.With("params", params, "name", template.Name())
+	log = log.With("params", params, "template-name", template.Name())
 	log.Debug("handling request")
 
 	buf := bufPool.Get().(*bytes.Buffer)
@@ -35,20 +35,19 @@ func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var statusCode = http.StatusOK
 	var headers = http.Header{}
 	context := &TemplateContext{
-		Req:        r,
-		Params:     params,
-		RespStatus: func(c int) string { statusCode = c; return "" },
-		RespHeader: WrappedHeader{headers},
-		Config:     t.Config,
+		Req:     r,
+		Params:  params,
+		Headers: WrappedHeader{headers},
+		Config:  t.Config,
 
-		tmpl:  runtime.tmpl,
-		funcs: runtime.funcs,
-		fs:    t.ContextFS,
-		log:   log,
-		tx:    tx,
+		status: http.StatusOK,
+		tmpl:   runtime.tmpl,
+		funcs:  runtime.funcs,
+		fs:     t.ContextFS,
+		log:    log,
+		tx:     tx,
 	}
 
 	r.ParseForm()
@@ -81,7 +80,7 @@ func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Error(w, "failed to render response", http.StatusInternalServerError)
 		return
-	} else {
+	} else if tx != nil {
 		if dberr := tx.Commit(); dberr != nil {
 			log.Info("failed to commit transaction", "error", dberr)
 			http.Error(w, "failed to commit database transaction", http.StatusInternalServerError)
@@ -89,21 +88,27 @@ func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	wheader := w.Header()
 	for name, values := range headers {
 		for _, value := range values {
-			w.Header().Add(name, value)
+			wheader.Add(name, value)
 		}
 	}
-	w.WriteHeader(statusCode)
+	w.WriteHeader(context.status)
 	w.Write(buf.Bytes())
 }
 
+// ReturnError is a sentinel value returned by the `return` template
+// func/keyword that indicates a successful/normal exit but allows the template
+// to exit early.
 type ReturnError struct{}
 
 func (ReturnError) Error() string { return "returned" }
 
 var _ = (error)((*ReturnError)(nil))
 
+// HandlerError is a special error that hijacks the normal response handling and
+// passes response handling off to the ServeHTTP method on this error value.
 type HandlerError interface {
 	Error() string
 	ServeHTTP(w http.ResponseWriter, r *http.Request)
@@ -112,15 +117,17 @@ type HandlerError interface {
 // interface guard
 var _ = (error)((HandlerError)(nil))
 
-type FuncHandlerError struct {
+type funcHandlerError struct {
 	name string
 	fn   func(w http.ResponseWriter, r *http.Request)
 }
 
+// NewHandlerError returns a new HandlerError based on a string and a function
+// that matches the ServeHTTP signature.
 func NewHandlerError(name string, fn func(w http.ResponseWriter, r *http.Request)) HandlerError {
-	return FuncHandlerError{name, fn}
+	return funcHandlerError{name, fn}
 }
 
-func (fhe FuncHandlerError) Error() string { return fhe.name }
+func (fhe funcHandlerError) Error() string { return fhe.name }
 
-func (fhe FuncHandlerError) ServeHTTP(w http.ResponseWriter, r *http.Request) { fhe.fn(w, r) }
+func (fhe funcHandlerError) ServeHTTP(w http.ResponseWriter, r *http.Request) { fhe.fn(w, r) }
