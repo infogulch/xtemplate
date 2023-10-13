@@ -78,7 +78,7 @@ func main() {
 		// ExtraFuncs
 		Delims: struct{ L, R string }{L: flags.l_delim, R: flags.r_delim},
 		DB:     db,
-		Log:    log,
+		Log:    log.WithGroup("xtemplate"),
 	}
 	err = x.Reload()
 	if err != nil {
@@ -102,7 +102,7 @@ func main() {
 	}
 
 	log.Info("serving", "address", flags.listen_addr)
-	fmt.Println(http.ListenAndServe(flags.listen_addr, &x))
+	fmt.Printf("server stopped: %v\n", http.ListenAndServe(flags.listen_addr, &x))
 }
 
 func dowatch(dirs []string, do func() error, log *slog.Logger) {

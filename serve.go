@@ -4,21 +4,32 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log := t.Log.WithGroup("serve").With("method", r.Method, "path", r.URL.Path)
+	start := time.Now()
 	runtime := t.runtime // copy the runtime in case it's updated during the request
+
 	_, template, params, _ := runtime.router.Find(r.Method, r.URL.Path)
 	if template == nil {
-		log.Debug("no handler for request")
+		t.Log.Debug("no handler for request", "method", r.Method, "path", r.URL.Path)
 		http.NotFound(w, r)
 		return
 	}
-	log = log.With("params", params, "template-name", template.Name())
-	log.Debug("handling request")
+
+	log := t.Log.With(slog.Group("serve",
+		slog.String("method", r.Method),
+		slog.String("path", r.URL.Path),
+		slog.String("user-agent", r.Header.Get("User-Agent")),
+	))
+	log.Debug("found response template",
+		slog.String("template-name", template.Name()),
+		slog.Any("params", params),
+		slog.DurationValue(time.Since(start)))
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
@@ -98,6 +109,8 @@ func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(context.status)
 	w.Write(buf.Bytes())
+
+	log.Debug("done", slog.DurationValue(time.Since(start)), slog.Int("status", context.status))
 }
 
 // ReturnError is a sentinel value returned by the `return` template
