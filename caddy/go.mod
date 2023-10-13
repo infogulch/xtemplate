@@ -6,8 +6,10 @@ require (
 	github.com/caddyserver/caddy/v2 v2.7.4
 	github.com/infogulch/watch v0.1.2
 	github.com/infogulch/xtemplate v0.1.1
+	github.com/mattn/go-sqlite3 v1.14.17
 	go.uber.org/zap/exp v0.2.0
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
+	modernc.org/sqlite v1.26.0
 )
 
 require (
@@ -66,7 +68,6 @@ require (
 	github.com/manifoldco/promptui v0.9.0 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
-	github.com/mattn/go-sqlite3 v1.14.17 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
 	github.com/mholt/acmez v1.2.0 // indirect
@@ -131,7 +132,6 @@ require (
 	modernc.org/mathutil v1.6.0 // indirect
 	modernc.org/memory v1.7.2 // indirect
 	modernc.org/opt v0.1.3 // indirect
-	modernc.org/sqlite v1.26.0 // indirect
 	modernc.org/strutil v1.2.0 // indirect
 	modernc.org/token v1.1.0 // indirect
 )

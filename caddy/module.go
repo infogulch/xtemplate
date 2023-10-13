@@ -91,7 +91,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 
 	t := &xtemplate.XTemplate{
 		Config: maps.Clone(m.Config),
-		Log:    log,
+		Log:    log.WithGroup("xtemplate"),
 	}
 
 	var watchPaths []string
@@ -170,7 +170,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 					}
 					err := t.Reload()
 					if err != nil {
-						log.Info("failed to reload xtemplate: %w", err)
+						log.Info("failed to reload xtemplate", "error", err)
 					} else {
 						log.Info("reloaded templates after file changed")
 					}
