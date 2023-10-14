@@ -6,9 +6,11 @@ require (
 	github.com/BurntSushi/toml v1.3.2
 	github.com/Masterminds/sprig/v3 v3.2.3
 	github.com/alecthomas/chroma/v2 v2.9.1
+	github.com/andybalholm/brotli v1.0.5
 	github.com/dustin/go-humanize v1.0.1
 	github.com/infogulch/pathmatcher v0.2.0
 	github.com/infogulch/watch v0.1.3
+	github.com/klauspost/compress v1.17.0
 	github.com/mattn/go-sqlite3 v1.14.17
 	github.com/microcosm-cc/bluemonday v1.0.25
 	github.com/segmentio/ksuid v1.0.4
@@ -21,7 +23,6 @@ require (
 require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.2.1 // indirect
-	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
