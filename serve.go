@@ -85,8 +85,10 @@ func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil && !errors.As(err, &returnErr) {
 		var handlerErr HandlerError
 		if errors.As(err, &handlerErr) {
-			if dberr := tx.Commit(); dberr != nil {
-				log.Info("failed to commit transaction", "error", dberr)
+			if tx != nil {
+				if dberr := tx.Commit(); dberr != nil {
+					log.Info("failed to commit transaction", "error", dberr)
+				}
 			}
 			log.Debug("forwarding response handling", "handler", handlerErr)
 			handlerErr.ServeHTTP(w, r)
