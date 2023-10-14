@@ -5,7 +5,7 @@ go 1.21.0
 require (
 	github.com/caddyserver/caddy/v2 v2.7.4
 	github.com/infogulch/watch v0.1.3
-	github.com/infogulch/xtemplate v0.1.2
+	github.com/infogulch/xtemplate v0.1.3
 	github.com/mattn/go-sqlite3 v1.14.17
 	go.uber.org/zap/exp v0.2.0
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
@@ -21,6 +21,7 @@ require (
 	github.com/Masterminds/sprig/v3 v3.2.3 // indirect
 	github.com/Microsoft/go-winio v0.6.0 // indirect
 	github.com/alecthomas/chroma/v2 v2.9.1 // indirect
+	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df // indirect
 	github.com/aryann/difflib v0.0.0-20210328193216-ff5ff6dc229b // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
