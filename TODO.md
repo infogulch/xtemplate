@@ -3,8 +3,6 @@
 ### Features
 
 - [ ] Split xtemplate from caddy so it can be used standalone
-    - [ ] Integrate a static file server based on `caddy.caddyhttp.file_server`
-        - Serve static files from tempalates dir that are not .html files
 - [ ] Add "Why?" section to readme.
 
 ### Automation
@@ -29,6 +27,8 @@
 - [ ] Demo how to use standalone
 - [ ] Build a way to send live updates to a page by rendering a template to an SSE stream. Maybe backed by NATS.io?
 - [ ] Consider using the functional options pattern for configuring XTemplate
+- [ ] Convert *runtime to an `atomic.Pointer[T]`
+- [ ] Allow .ServeFile to serve files from contextfs
 
 
 # DONE
@@ -40,5 +40,6 @@
     - [x] Split into separate packages `xtemplate` and `xtemplate/caddy`, rename repo to `xtemplate`
     - [x] Write basic server based on net/http
     - [x] Update docs describe the separate packages
+    - [x] Integrate a static file server
 - [x] Add github automation
     - [x] Build and upload binaries

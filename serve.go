@@ -53,17 +53,15 @@ func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var headers = http.Header{}
 	context := &TemplateContext{
-		Req:     r,
-		Params:  params,
-		Headers: WrappedHeader{headers},
-		Config:  t.Config,
+		Req:    r,
+		Params: params,
 
-		status: http.StatusOK,
-		tmpl:   runtime.tmpl,
-		funcs:  runtime.funcs,
-		fs:     t.ContextFS,
-		log:    log,
-		tx:     tx,
+		Headers: WrappedHeader{headers},
+		status:  http.StatusOK,
+
+		log:     log,
+		tx:      tx,
+		runtime: runtime,
 	}
 
 	r.ParseForm()

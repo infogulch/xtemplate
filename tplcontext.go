@@ -23,15 +23,16 @@ type TemplateContext struct {
 	Req     *http.Request
 	Params  pathmatcher.Params
 	Headers WrappedHeader
-	Config  map[string]string
 
 	status     int
-	tmpl       *template.Template
-	funcs      template.FuncMap
-	fs         fs.FS
+	runtime    *runtime
 	tx         *sql.Tx
 	log        *slog.Logger
 	queryTimes []time.Duration
+}
+
+func (c *TemplateContext) Config(key string) string {
+	return c.runtime.config[key]
 }
 
 func (c *TemplateContext) Status(status int) string {
@@ -78,7 +79,7 @@ func (c *TemplateContext) Host() (string, error) {
 // trusted files. If it is not trusted, be sure to use escaping functions
 // in your template.
 func (c *TemplateContext) ReadFile(filename string) (string, error) {
-	if c.fs == nil {
+	if c.runtime.contextFS == nil {
 		return "", fmt.Errorf("context file system is not configured")
 	}
 	buf := bufPool.Get().(*bytes.Buffer)
@@ -86,7 +87,7 @@ func (c *TemplateContext) ReadFile(filename string) (string, error) {
 	defer bufPool.Put(buf)
 
 	filename = path.Clean(filename)
-	file, err := c.fs.Open(filename)
+	file, err := c.runtime.contextFS.Open(filename)
 	if err != nil {
 		return "", err
 	}
@@ -102,11 +103,11 @@ func (c *TemplateContext) ReadFile(filename string) (string, error) {
 
 // StatFile returns Stat of a filename
 func (c *TemplateContext) StatFile(filename string) (fs.FileInfo, error) {
-	if c.fs == nil {
+	if c.runtime.contextFS == nil {
 		return nil, fmt.Errorf("context file system is not configured")
 	}
 	filename = path.Clean(filename)
-	file, err := c.fs.Open(filename)
+	file, err := c.runtime.contextFS.Open(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -118,10 +119,10 @@ func (c *TemplateContext) StatFile(filename string) (fs.FileInfo, error) {
 // ListFiles reads and returns a slice of names from the given
 // directory relative to the root of c.
 func (c *TemplateContext) ListFiles(name string) ([]string, error) {
-	if c.fs == nil {
+	if c.runtime.contextFS == nil {
 		return nil, fmt.Errorf("context file system is not configured")
 	}
-	entries, err := fs.ReadDir(c.fs, path.Clean(name))
+	entries, err := fs.ReadDir(c.runtime.contextFS, path.Clean(name))
 	if err != nil {
 		return nil, err
 	}
@@ -136,15 +137,60 @@ func (c *TemplateContext) ListFiles(name string) ([]string, error) {
 
 // funcFileExists returns true if filename can be opened successfully.
 func (c *TemplateContext) FileExists(filename string) (bool, error) {
-	if c.fs == nil {
+	if c.runtime.contextFS == nil {
 		return false, fmt.Errorf("context file system is not configured")
 	}
-	file, err := c.fs.Open(filename)
+	file, err := c.runtime.contextFS.Open(filename)
 	if err == nil {
 		file.Close()
 		return true, nil
 	}
 	return false, nil
+}
+
+func (c *TemplateContext) SRI(path string) (string, error) {
+	fileinfo, ok := c.runtime.files[path]
+	if !ok {
+		return "", fmt.Errorf("file does not exist: '%s'", path)
+	}
+	return fileinfo.hash, nil
+}
+
+func (c *TemplateContext) ServeFile() (string, error) {
+	return "", NewHandlerError("ServeFile", func(w http.ResponseWriter, r *http.Request) {
+		path := path.Clean(r.URL.Path)
+		fileinfo, ok := c.runtime.files[path]
+		if !ok {
+			c.log.Debug("tried to serve a file that doesn't exist", slog.String("path", path), slog.String("urlpath", r.URL.Path))
+			http.NotFound(w, r)
+			return
+		}
+		if queryhash := r.URL.Query().Get("hash"); queryhash != "" && queryhash != fileinfo.hash {
+			c.log.Debug("request for file with wrong hash query parameter", slog.String("expected", fileinfo.hash), slog.String("queryhash", queryhash))
+			http.NotFound(w, r)
+			return
+		}
+		// TODO actually match Accept-Encoding with fileinfo.encodings instead of just picking one arbitrarily
+		encoding := fileinfo.encodings[len(fileinfo.encodings)-1]
+		c.log.Debug("serving file request", slog.String("path", path), slog.String("encoding", encoding.encoding), slog.String("contenttype", fileinfo.contentType))
+		file, err := c.runtime.templateFS.Open(encoding.path)
+		if err != nil {
+			c.log.Debug("failed to open file", slog.Any("error", err), slog.String("encoding.path", encoding.path), slog.String("requestpath", r.URL.Path))
+			http.Error(w, "internal server error", 500)
+			return
+		}
+		defer file.Close()
+
+		w.Header().Add("Etag", `"`+fileinfo.hash+`"`)
+		w.Header().Add("Content-Type", fileinfo.contentType)
+		w.Header().Add("Content-Encoding", encoding.encoding)
+		// w.Header().Add("Access-Control-Allow-Origin", "*") // ???
+		if r.URL.Query().Get("hash") != "" {
+			// cache aggressively if the request is disambiguated by a valid hash
+			w.Header().Set("Cache-Control", "public, max-age=31536000")
+		}
+		http.ServeContent(w, r, encoding.path, encoding.modtime, file.(io.ReadSeeker))
+	})
 }
 
 func (c *TemplateContext) Exec(query string, params ...any) (result sql.Result, err error) {
@@ -252,7 +298,7 @@ func (c *TemplateContext) Template(name string, context any) (string, error) {
 	buf.Reset()
 	defer bufPool.Put(buf)
 
-	t := c.tmpl.Lookup(name)
+	t := c.runtime.templates.Lookup(name)
 	if t == nil {
 		return "", fmt.Errorf("template name does not exist: '%s'", name)
 	}
@@ -263,7 +309,7 @@ func (c *TemplateContext) Template(name string, context any) (string, error) {
 }
 
 func (c *TemplateContext) Funcs() template.FuncMap {
-	return c.funcs
+	return c.runtime.funcs
 }
 
 type TemplateContextVars struct {
