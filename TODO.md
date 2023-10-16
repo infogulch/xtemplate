@@ -2,14 +2,18 @@
 
 ### Features
 
-- [ ] Split xtemplate from caddy so it can be used standalone
+- [ ] Refactor router to return `http.Handler`, use custom handler for static files
+
+### Documentation
+
+- [ ] Highlight file server feature
 - [ ] Add "Why?" section to readme.
+- [ ] Organize docs according to https://diataxis.fr/
 
 ### Automation
 
 - Add github workflows
     - [ ] Set up go tests
-    - [ ] Set up hurl tests
     - [ ] Publish binaries and release when a git tag is pushed
 
 ### Demos
@@ -33,13 +37,17 @@
 
 # DONE
 
+## v0.1
+
 - [x] Make extrafuncs an array
-- Split xtemplate from caddy so it can be used standalone
+- [x] Split xtemplate from caddy so it can be used standalone
     - [x] Split watcher into a separate component
     - [x] Isolate caddy integration into one file
     - [x] Split into separate packages `xtemplate` and `xtemplate/caddy`, rename repo to `xtemplate`
     - [x] Write basic server based on net/http
     - [x] Update docs describe the separate packages
     - [x] Integrate a static file server
-- [x] Add github automation
+        - [x] Change file server to actually negotiate accept-encoding
+- [x] Set up automation
     - [x] Build and upload binaries
+    - [x] Set up hurl tests

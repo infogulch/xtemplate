@@ -1,0 +1,11 @@
+{
+	debug
+}
+
+:8080 {
+	route {
+		xtemplate {
+			template_root templates
+		}
+	}
+}

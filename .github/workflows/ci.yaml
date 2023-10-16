@@ -13,11 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-
-    - name: Set up Go
-      uses: actions/setup-go@v4
+    - uses: actions/setup-go@v4
       with:
         go-version: '1.21'
+    - uses: gacts/install-hurl@v1
 
     - name: Build
       run: go build -v ./...
@@ -25,9 +24,18 @@ jobs:
     - name: Test
       run: go test -v ./...
 
+    - name: Hurl Tests
+      run: ./test/run.sh
+
     - run: go build -o xtemplate ./bin
+    - run: go build -o caddy ./caddy
 
     - uses: actions/upload-artifact@v3
       with:
         name: xtemplate
         path: xtemplate
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: caddy
+        path: caddy
