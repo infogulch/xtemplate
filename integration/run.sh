@@ -7,7 +7,7 @@ go run ../bin -log -4 > xtemplate.log &              # exec go run in the backgr
 PID=$!                                               # grab the pid
 exit() {             # define exit handler
     sleep 0.1s       # wait for stdout to flush
-    kill $PID        # kill the process
+    pkill -P $PID    # kill the process
     popd > /dev/null # cd back to wherever the script was invoked from
 }
 trap exit EXIT   # register exit handler
