@@ -25,7 +25,7 @@ jobs:
       run: go test -v ./...
 
     - name: Hurl Tests
-      run: ./test/run.sh
+      run: ./integration/run.sh
 
     - run: go build -o xtemplate ./bin
     - run: go build -o caddy ./caddy
