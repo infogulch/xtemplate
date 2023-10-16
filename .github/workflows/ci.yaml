@@ -28,7 +28,7 @@ jobs:
       run: ./integration/run.sh
 
     - run: go build -o xtemplate ./bin
-    - run: go build -o caddy ./caddy
+    # - run: go build -o caddy ./caddy
 
     - uses: actions/upload-artifact@v3
       with:
