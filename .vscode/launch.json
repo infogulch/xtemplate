@@ -5,11 +5,11 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "xtemplate bin",
+            "name": "xtemplate cli",
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "./bin",
+            "program": "./cmd",
             "args": ["--template-root", "integration/templates", "--log", "-4"],
             "cwd": "${workspaceFolder}"
         }

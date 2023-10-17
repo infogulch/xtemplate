@@ -3,9 +3,9 @@
 # Set up xtemplate server and cleanup
 echo "Running xtemplate..."
 pushd `dirname "$(readlink -f "$0")"` > /dev/null    # cd to the directory where this script is
-go run ../bin -log -4 > xtemplate.log &              # exec go run in the background
+go run ../cmd --log -4 > xtemplate.log &             # exec go run in the background
 PID=$!                                               # grab the pid
-exit() {             # define exit handler
+exit() {
     sleep 0.1s       # wait for stdout to flush
     pkill -P $PID    # kill the process
     popd > /dev/null # cd back to wherever the script was invoked from

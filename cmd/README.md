@@ -6,11 +6,11 @@ integrate the XTemplate library into a web server.
 ### Build
 
 ```sh
-# build from ./bin
+# build from ./cmd
 go build -o xtemplate
 
 # build from repo root
-go build -o xtemplate ./bin
+go build -o xtemplate ./cmd
 
 # build with sqlite3 driver and json extensions
 GOFLAGS='-tags="sqlite_json"' CGO_ENABLED=1 go build -o xtemplate
