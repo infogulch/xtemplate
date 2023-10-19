@@ -81,6 +81,26 @@ Accept-Encoding: gzip, br
 HTTP 200
 Content-Type: text/css; charset=utf-8
 Content-Encoding: br
+Etag: "sha384-5rcfZgbOPW7qvI7/bo9eNa8hclwmmmzNeyvDzZlqI6vAzNwzbmi7PTS4uA15+fJj"
+
+
+# CSS file
+GET http://localhost:8080/reset.css?hash=sha384-5rcfZgbOPW7qvI7/bo9eNa8hclwmmmzNeyvDzZlqI6vAzNwzbmi7PTS4uA15%2BfJj
+Accept-Encoding: gzip
+
+HTTP 200
+Content-Type: text/css; charset=utf-8
+Content-Encoding: gzip
+Etag: "sha384-5rcfZgbOPW7qvI7/bo9eNa8hclwmmmzNeyvDzZlqI6vAzNwzbmi7PTS4uA15+fJj"
+Cache-Control: public, max-age=31536000
+
+
+# CSS file
+GET http://localhost:8080/reset.css
+If-None-Match: "sha384-5rcfZgbOPW7qvI7/bo9eNa8hclwmmmzNeyvDzZlqI6vAzNwzbmi7PTS4uA15+fJj"
+
+HTTP 304
+Etag: "sha384-5rcfZgbOPW7qvI7/bo9eNa8hclwmmmzNeyvDzZlqI6vAzNwzbmi7PTS4uA15+fJj"
 
 
 # Hidden file should be omitted

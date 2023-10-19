@@ -1,3 +1,5 @@
 <!DOCTYPE html>
-<link rel="stylesheet" href="/reset.css?hash={{.SRI `/reset.css`}}" integrity="{{.SRI `/reset.css`}}">
+{{- with $hash := .StaticFileHash `/reset.css`}}
+<link rel="stylesheet" href="/reset.css?hash={{$hash}}" integrity="{{$hash}}">
+{{- end}}
 <p>Hello world!</p>

@@ -21,11 +21,19 @@ import (
 )
 
 func (x *xtemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	select {
+	case _, _ = <-x.ctx.Done():
+		x.log.Error("received request after xtemplate instance cancelled", slog.String("method", r.Method), slog.String("path", r.URL.Path))
+		http.Error(w, "server stopped", http.StatusInternalServerError)
+		return
+	default:
+	}
+
 	start := time.Now()
 
 	_, handler, params, _ := x.router.Find(r.Method, r.URL.Path)
 	if handler == nil {
-		x.log.Debug("no handler for request", "method", r.Method, "path", r.URL.Path)
+		x.log.Debug("no handler for request", slog.String("method", r.Method), slog.String("path", r.URL.Path))
 		http.NotFound(w, r)
 		return
 	}
@@ -169,7 +177,7 @@ var serveFileHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter,
 	fileinfo, ok := runtime.files[urlpath]
 	if !ok {
 		// should not happen; we only add handlers for existent files
-		log.Error("tried to serve a file that doesn't exist", slog.String("path", urlpath), slog.String("urlpath", r.URL.Path))
+		log.Warn("tried to serve a file that doesn't exist", slog.String("path", urlpath), slog.String("urlpath", r.URL.Path))
 		http.NotFound(w, r)
 		return
 	}
@@ -184,7 +192,7 @@ var serveFileHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter,
 	// negotiate encoding between the client's q value preference and fileinfo.encodings ordering (prefer earlier listed encodings first)
 	encoding, err := negiotiateEncoding(r.Header["Accept-Encoding"], fileinfo.encodings)
 	if err != nil {
-		log.Error("error selecting encoding to serve", slog.Any("error", err))
+		log.Warn("error selecting encoding to serve", slog.Any("error", err))
 	}
 	// we may have gotten an encoding even if there was an error; test separately
 	if encoding == nil {
@@ -195,7 +203,7 @@ var serveFileHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter,
 	log.Debug("serving file request", slog.String("path", urlpath), slog.String("encoding", encoding.encoding), slog.String("contenttype", fileinfo.contentType))
 	file, err := runtime.templateFS.Open(encoding.path)
 	if err != nil {
-		log.Debug("failed to open file", slog.Any("error", err), slog.String("encoding.path", encoding.path), slog.String("requestpath", r.URL.Path))
+		log.Error("failed to open file", slog.Any("error", err), slog.String("encoding.path", encoding.path), slog.String("requestpath", r.URL.Path))
 		http.Error(w, "internal server error", 500)
 		return
 	}
@@ -205,9 +213,9 @@ var serveFileHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter,
 	{
 		stat, err := file.Stat()
 		if err != nil {
-			log.Debug("error getting stat of file", slog.Any("error", err))
+			log.Error("error getting stat of file", slog.Any("error", err))
 		} else if modtime := stat.ModTime(); !modtime.Equal(encoding.modtime) {
-			log.Error("file maybe modified since loading", slog.Time("expected-modtime", encoding.modtime), slog.Time("actual-modtime", modtime))
+			log.Warn("file maybe modified since loading", slog.Time("expected-modtime", encoding.modtime), slog.Time("actual-modtime", modtime))
 		}
 	}
 

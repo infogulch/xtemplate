@@ -4,6 +4,7 @@ package xtemplate
 
 import (
 	"compress/gzip"
+	"context"
 	"crypto/sha512"
 	"database/sql"
 	"encoding/base64"
@@ -20,6 +21,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"text/template/parse"
 	"time"
 
@@ -28,9 +30,14 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
+type CancelHandler interface {
+	http.Handler
+	Cancel()
+}
+
 type xtemplate struct {
-	ldelim     string
-	rdelim     string
+	id int64
+
 	templateFS fs.FS
 	contextFS  fs.FS
 	config     map[string]string
@@ -39,23 +46,39 @@ type xtemplate struct {
 	templates  *template.Template
 	router     *pathmatcher.HttpMatcher[http.Handler]
 	files      map[string]fileInfo
-	log        *slog.Logger
+	ldelim     string
+	rdelim     string
+
+	log    *slog.Logger
+	ctx    context.Context
+	cancel func()
 }
 
-func (configs *config) Build() (http.Handler, error) {
+var _ = (CancelHandler)((*xtemplate)(nil))
+
+var instanceIdentity int64
+
+func (configs *config) Build() (CancelHandler, error) {
+	ctx, cancel := context.WithCancel(context.Background())
 	x := &xtemplate{
 		templateFS: os.DirFS("templates"),
 		ldelim:     "{{",
 		rdelim:     "}}",
 		log:        slog.Default().WithGroup("xtemplate"),
+		config:     make(map[string]string),
 		funcs:      make(template.FuncMap),
 		files:      make(map[string]fileInfo),
 		router:     pathmatcher.NewHttpMatcher[http.Handler](),
+		ctx:        ctx,
+		cancel:     cancel,
+		id:         atomic.AddInt64(&instanceIdentity, 1),
 	}
 
 	for _, c := range *configs {
 		c(x)
 	}
+
+	x.log = x.log.With(slog.Int64("instance", x.id))
 
 	log := x.log.WithGroup("build")
 
@@ -114,6 +137,11 @@ func (configs *config) Build() (http.Handler, error) {
 		}
 	}
 	return x, nil
+}
+
+func (x *xtemplate) Cancel() {
+	x.log.Info("xtemplate instance cancelled")
+	x.cancel()
 }
 
 type fileInfo struct {

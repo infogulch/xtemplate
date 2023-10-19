@@ -5,7 +5,6 @@ import (
 	"html/template"
 	"io/fs"
 	"log/slog"
-	"maps"
 
 	"github.com/Masterminds/sprig/v3"
 )
@@ -59,7 +58,9 @@ func (c *config) WithDelims(l, r string) *config {
 
 func (c *config) WithConfig(cfg map[string]string) *config {
 	*c = append(*c, func(r *xtemplate) {
-		r.config = maps.Clone(cfg)
+		for k, v := range cfg {
+			r.config[k] = v
+		}
 	})
 	return c
 }
@@ -70,3 +71,5 @@ func (c *config) WithLogger(log *slog.Logger) *config {
 	})
 	return c
 }
+
+// Call config.Build() to get an http.Handler that can handle http requests

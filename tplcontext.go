@@ -148,12 +148,12 @@ func (c *TemplateContext) FileExists(filename string) (bool, error) {
 	return false, nil
 }
 
-// ServeFile aborts execution of the template and instead responds to the request with the content of the contextfs file at urlpath
+// ServeFile aborts execution of the template and instead responds to the request with the content of the contextfs file at path_
 func (c *TemplateContext) ServeFile(path_ string) (string, error) {
 	return "", NewHandlerError("ServeFile", func(w http.ResponseWriter, r *http.Request) {
 		path_ = path.Clean(path_)
 
-		c.log.Debug("serving file request", slog.String("path", path_))
+		c.log.Debug("serving file response", slog.String("path", path_))
 
 		file, err := c.runtime.contextFS.Open(path_)
 		if err != nil {
@@ -172,7 +172,18 @@ func (c *TemplateContext) ServeFile(path_ string) (string, error) {
 	})
 }
 
-func (c *TemplateContext) SRI(urlpath string) (string, error) {
+// ServeContent aborts execution of the template and instead responds to the request with content
+func (c *TemplateContext) ServeContent(path_ string, modtime time.Time, content string) (string, error) {
+	return "", NewHandlerError("ServeFile", func(w http.ResponseWriter, r *http.Request) {
+		path_ = path.Clean(path_)
+
+		c.log.Debug("serving content response", slog.String("path", path_))
+
+		http.ServeContent(w, r, path_, modtime, strings.NewReader(content))
+	})
+}
+
+func (c *TemplateContext) StaticFileHash(urlpath string) (string, error) {
 	urlpath = path.Clean("/" + urlpath)
 	fileinfo, ok := c.runtime.files[urlpath]
 	if !ok {
