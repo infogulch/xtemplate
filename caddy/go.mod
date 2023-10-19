@@ -5,7 +5,7 @@ go 1.21.0
 require (
 	github.com/caddyserver/caddy/v2 v2.7.4
 	github.com/infogulch/watch v0.1.3
-	github.com/infogulch/xtemplate v0.1.3
+	github.com/infogulch/xtemplate v0.1.4
 	github.com/mattn/go-sqlite3 v1.14.17
 	go.uber.org/zap/exp v0.2.0
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
@@ -63,7 +63,7 @@ require (
 	github.com/jackc/pgtype v1.14.0 // indirect
 	github.com/jackc/pgx/v4 v4.18.0 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
-	github.com/klauspost/compress v1.16.7 // indirect
+	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/libdns/libdns v0.2.1 // indirect
 	github.com/manifoldco/promptui v0.9.0 // indirect
