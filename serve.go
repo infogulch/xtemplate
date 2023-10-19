@@ -20,17 +20,17 @@ import (
 	"github.com/segmentio/ksuid"
 )
 
-func (rt *runtime) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (x *xtemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
-	_, handler, params, _ := rt.router.Find(r.Method, r.URL.Path)
+	_, handler, params, _ := x.router.Find(r.Method, r.URL.Path)
 	if handler == nil {
-		rt.log.Debug("no handler for request", "method", r.Method, "path", r.URL.Path)
+		x.log.Debug("no handler for request", "method", r.Method, "path", r.URL.Path)
 		http.NotFound(w, r)
 		return
 	}
 
-	log := rt.log.With(slog.Group("serving",
+	log := x.log.With(slog.Group("serving",
 		slog.String("requestid", getRequestId(r.Context())),
 		slog.String("method", r.Method),
 		slog.String("path", r.URL.Path),
@@ -41,10 +41,10 @@ func (rt *runtime) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		slog.String("user-agent", r.Header.Get("User-Agent")),
 	)
 
-	ctx := context.WithValue(r.Context(), ctxKey{}, ctxValue{params: params, log: log, runtime: rt})
+	ctx := context.WithValue(r.Context(), ctxKey{}, ctxValue{params: params, log: log, runtime: x})
 	handler.ServeHTTP(w, r.WithContext(ctx))
 
-	log.Debug("served", slog.Duration("response-duration", time.Since(start)))
+	log.Debug("request served", slog.Duration("response-duration", time.Since(start)))
 }
 
 func getRequestId(ctx context.Context) string {
@@ -66,10 +66,10 @@ type ctxKey struct{}
 type ctxValue struct {
 	params  pathmatcher.Params
 	log     *slog.Logger
-	runtime *runtime
+	runtime *xtemplate
 }
 
-func getContext(ctx context.Context) (pathmatcher.Params, *slog.Logger, *runtime) {
+func getContext(ctx context.Context) (pathmatcher.Params, *slog.Logger, *xtemplate) {
 	val := ctx.Value(ctxKey{}).(ctxValue)
 	return val.params, val.log, val.runtime
 }

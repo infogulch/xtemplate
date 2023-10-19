@@ -2,13 +2,16 @@
 
 ### Features
 
-- [ ] Refactor router to return `http.Handler`, use custom handler for static files
+- [ ] Client side auto reload
+- [ ] Build a way to send live updates to a page by rendering a template to an SSE stream. Maybe backed by NATS.io?
 
 ### Documentation
 
+- [ ] Memes
 - [ ] Highlight file server feature
-- [ ] Add "Why?" section to readme.
 - [ ] Organize docs according to https://diataxis.fr/
+    - [ ] Add explanation
+- [ ] Document configuration
 
 ### Automation
 
@@ -25,15 +28,8 @@
 
 # BACKLOG
 
-- [ ] Client side auto reload
+- [ ] Switch to using Go 1.22's new servemux
 - [ ] Investigate integrating into another web framework (gox/gin etc)
-- [ ] Document how to use standalone
-- [ ] Demo how to use standalone
-- [ ] Build a way to send live updates to a page by rendering a template to an SSE stream. Maybe backed by NATS.io?
-- [ ] Consider using the functional options pattern for configuring XTemplate
-- [ ] Convert *runtime to an `atomic.Pointer[T]`
-- [ ] Allow .ServeFile to serve files from contextfs
-- [ ] Switch to using 1.22's new servemux
 
 
 # DONE
@@ -46,9 +42,13 @@
     - [x] Isolate caddy integration into one file
     - [x] Split into separate packages `xtemplate` and `xtemplate/caddy`, rename repo to `xtemplate`
     - [x] Write basic server based on net/http
+        - [x] Demo how to use standalone
     - [x] Update docs describe the separate packages
     - [x] Integrate a static file server
-        - [x] Change file server to actually negotiate accept-encoding
+        - [x] Negotiate accept-encoding
 - [x] Set up automation
     - [x] Build and upload binaries
     - [x] Set up hurl tests
+- [x] Refactor router to return `http.Handler`, use custom handler for static files
+- [x] Allow .ServeFile to serve files from contextfs
+- [x] Switch to functional options pattern for configuration

@@ -16,7 +16,6 @@ import (
 	"github.com/infogulch/watch"
 	"github.com/infogulch/xtemplate"
 	"go.uber.org/zap/exp/zapslog"
-	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 )
 
@@ -90,10 +89,8 @@ func (m *XTemplateModule) Validate() error {
 func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 	log := slog.New(zapslog.NewHandler(ctx.Logger().Core(), nil))
 
-	t := &xtemplate.XTemplate{
-		Config: maps.Clone(m.Config),
-		Log:    log.WithGroup("xtemplate"),
-	}
+	config := xtemplate.New()
+	config.WithConfig(m.Config).WithLogger(log.WithGroup("xtemplate"))
 
 	var watchDirs []string
 
@@ -103,7 +100,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 		if st, err := fs.Stat(cfs, "."); err != nil || !st.IsDir() {
 			return fmt.Errorf("context file path does not exist in filesystem: %v", err)
 		}
-		t.ContextFS = cfs
+		config.WithContextFS(cfs)
 		watchDirs = append(watchDirs, m.ContextRoot)
 	}
 
@@ -117,7 +114,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 		if st, err := fs.Stat(tfs, "."); err != nil || !st.IsDir() {
 			return fmt.Errorf("root file path does not exist in filesystem: %v", err)
 		}
-		t.TemplateFS = tfs
+		config.WithTemplateFS(tfs)
 		watchDirs = append(watchDirs, root)
 	}
 
@@ -127,7 +124,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 			mi, _ := caddy.GetModule("xtemplate.funcs." + m)
 			fm := mi.New().(FuncsProvider).Funcs()
 			log.Debug("got funcs from module", "module", "xtemplate.funcs."+m, "funcmap", fm)
-			t.ExtraFuncs = append(t.ExtraFuncs, fm)
+			config.WithExtraFuncs(fm)
 		}
 	}
 
@@ -136,20 +133,16 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 		if err != nil {
 			return err
 		}
-		t.DB = db
+		config.WithDB(db)
 		m.db = db
 	}
 
 	if len(m.Delimiters) != 0 {
-		t.Delims.L = m.Delimiters[0]
-		t.Delims.R = m.Delimiters[1]
-	} else {
-		t.Delims.L = "{{"
-		t.Delims.R = "}}"
+		config.WithDelims(m.Delimiters[0], m.Delimiters[1])
 	}
 
 	{
-		h, err := t.Build()
+		h, err := config.Build()
 		if err != nil {
 			return err
 		}
@@ -163,7 +156,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 		}
 		m.halt = halt
 		watch.React(changed, halt, func() (halt bool) {
-			newhandler, err := t.Build()
+			newhandler, err := config.Build()
 			if err != nil {
 				log.Info("failed to reload xtemplate", "error", err)
 			} else {

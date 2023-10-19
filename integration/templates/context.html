@@ -1,0 +1,6 @@
+<!DOCTYPE html>
+{{.ReadFile "foo.txt"}}
+
+{{define "GET /hello"}}
+{{.ServeFile "hello.txt"}}
+{{end}}

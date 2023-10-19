@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -53,37 +52,34 @@ func main() {
 	flags := parseflags()
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(flags.log_level)}))
 
-	var err error
-	var db *sql.DB
-	var contextfs fs.FS
-	var config map[string]string
+	configs := xtemplate.New()
+	configs.WithDelims(flags.l_delim, flags.r_delim)
+	configs.WithLogger(log.WithGroup("xtemplate"))
 
 	if flags.db_driver != "" {
-		db, err = sql.Open(flags.db_driver, flags.db_connstr)
+		db, err := sql.Open(flags.db_driver, flags.db_connstr)
 		if err != nil {
 			log.Error("failed to open db", "error", err)
 			os.Exit(1)
 		}
+		configs.WithDB(db)
 	}
 
 	if flags.context_root != "" {
-		contextfs = os.DirFS(flags.context_root)
+		configs.WithContextFS(os.DirFS(flags.context_root))
 	}
 
-	for _, kv := range flags.config {
-		config[kv.Key] = kv.Value
+	{
+		config := make(map[string]string)
+		for _, kv := range flags.config {
+			config[kv.Key] = kv.Value
+		}
+		if len(config) > 0 {
+			configs.WithConfig(config)
+		}
 	}
 
-	x := xtemplate.XTemplate{
-		TemplateFS: os.DirFS(flags.template_root),
-		ContextFS:  contextfs,
-		// ExtraFuncs
-		Config: config,
-		Delims: struct{ L, R string }{L: flags.l_delim, R: flags.r_delim},
-		DB:     db,
-		Log:    log.WithGroup("xtemplate"),
-	}
-	handler, err := x.Build()
+	handler, err := configs.Build()
 	if err != nil {
 		log.Error("failed to load xtemplate", "error", err)
 		os.Exit(2)
@@ -109,7 +105,7 @@ func main() {
 				os.Exit(4)
 			}
 			watch.React(changed, halt, func() (halt bool) {
-				newhandler, err := x.Build()
+				newhandler, err := configs.Build()
 				if err != nil {
 					log.Info("failed to reload xtemplate", "error", err)
 				} else {

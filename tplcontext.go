@@ -25,7 +25,7 @@ type TemplateContext struct {
 	Headers WrappedHeader
 
 	status     int
-	runtime    *runtime
+	runtime    *xtemplate
 	tx         *sql.Tx
 	log        *slog.Logger
 	queryTimes []time.Duration
