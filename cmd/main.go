@@ -83,7 +83,7 @@ func main() {
 		DB:     db,
 		Log:    log.WithGroup("xtemplate"),
 	}
-	err = x.Reload()
+	handler, err := x.Build()
 	if err != nil {
 		log.Error("failed to load xtemplate", "error", err)
 		os.Exit(2)
@@ -109,10 +109,11 @@ func main() {
 				os.Exit(4)
 			}
 			watch.React(changed, halt, func() (halt bool) {
-				err := x.Reload()
+				newhandler, err := x.Build()
 				if err != nil {
 					log.Info("failed to reload xtemplate", "error", err)
 				} else {
+					handler = newhandler
 					log.Info("reloaded templates after file changed")
 				}
 				return
@@ -121,7 +122,7 @@ func main() {
 	}
 
 	log.Info("serving", "address", flags.listen_addr)
-	fmt.Printf("server stopped: %v\n", http.ListenAndServe(flags.listen_addr, &x))
+	fmt.Printf("server stopped: %v\n", http.ListenAndServe(flags.listen_addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { handler.ServeHTTP(w, r) })))
 }
 
 type kv struct{ Key, Value string }

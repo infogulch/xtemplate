@@ -57,8 +57,9 @@ type XTemplateModule struct {
 
 	FuncsModules []string `json:"funcs_modules,omitempty"`
 
-	template *xtemplate.XTemplate
-	halt     chan<- struct{}
+	handler http.Handler
+	db      *sql.DB
+	halt    chan<- struct{}
 }
 
 type FuncsProvider interface {
@@ -136,6 +137,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 			return err
 		}
 		t.DB = db
+		m.db = db
 	}
 
 	if len(m.Delimiters) != 0 {
@@ -147,13 +149,12 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 	}
 
 	{
-		err := t.Reload()
+		h, err := t.Build()
 		if err != nil {
 			return err
 		}
+		m.handler = h
 	}
-
-	m.template = t
 
 	if len(watchDirs) > 0 {
 		changed, halt, err := watch.WatchDirs(watchDirs, 200*time.Millisecond)
@@ -162,10 +163,11 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 		}
 		m.halt = halt
 		watch.React(changed, halt, func() (halt bool) {
-			err := t.Reload()
+			newhandler, err := t.Build()
 			if err != nil {
 				log.Info("failed to reload xtemplate", "error", err)
 			} else {
+				m.handler = newhandler
 				log.Info("reloaded templates after file changed")
 			}
 			return
@@ -175,7 +177,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 }
 
 func (m *XTemplateModule) ServeHTTP(w http.ResponseWriter, r *http.Request, _ caddyhttp.Handler) error {
-	m.template.ServeHTTP(w, r)
+	m.handler.ServeHTTP(w, r)
 	return nil
 }
 
@@ -186,14 +188,10 @@ func (m *XTemplateModule) Cleanup() error {
 		close(m.halt)
 		m.halt = nil
 	}
-	if m.template != nil {
-		var dberr error
-		if m.template.DB != nil {
-			dberr = m.template.DB.Close()
-			m.template.DB = nil
-		}
-		m.template = nil
-		return dberr
+	if m.db != nil {
+		err := m.db.Close()
+		m.db = nil
+		return err
 	}
 	return nil
 }

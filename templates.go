@@ -46,9 +46,11 @@ type runtime struct {
 	contextFS  fs.FS
 	config     map[string]string
 	funcs      template.FuncMap
+	db         *sql.DB
 	templates  *template.Template
-	router     *pathmatcher.HttpMatcher[*template.Template]
+	router     *pathmatcher.HttpMatcher[http.Handler]
 	files      map[string]fileInfo
+	log        *slog.Logger
 }
 
 type fileInfo struct {
@@ -62,7 +64,7 @@ type encodingInfo struct {
 	modtime        time.Time
 }
 
-func (t *XTemplate) Reload() error {
+func (t *XTemplate) Build() (http.Handler, error) {
 	log := t.Log.WithGroup("reload")
 
 	r := &runtime{
@@ -70,9 +72,11 @@ func (t *XTemplate) Reload() error {
 		contextFS:  t.ContextFS,
 		config:     t.Config,
 		delims:     t.Delims,
+		db:         t.DB,
 		funcs:      make(template.FuncMap),
 		files:      make(map[string]fileInfo),
-		router:     pathmatcher.NewHttpMatcher[*template.Template](),
+		router:     pathmatcher.NewHttpMatcher[http.Handler](),
+		log:        t.Log,
 	}
 
 	// Init funcs
@@ -84,8 +88,6 @@ func (t *XTemplate) Reload() error {
 
 	// Define the template instance that will accumulate all template definitions.
 	r.templates = template.New(".").Delims(r.delims.L, r.delims.R).Funcs(r.funcs)
-
-	r.templates.AddParseTree("servefile", serveFileTemplate)
 
 	// scan all files from the templatefs root
 	if err := fs.WalkDir(r.templateFS, ".", func(path string, d fs.DirEntry, err error) error {
@@ -102,10 +104,8 @@ func (t *XTemplate) Reload() error {
 		}
 		return err
 	}); err != nil {
-		return fmt.Errorf("error scanning files: %v", err)
+		return nil, fmt.Errorf("error scanning files: %v", err)
 	}
-
-	log.Debug("router", slog.Any("router", r.router))
 
 	// Invoke all initilization templates, aka any template whose name starts with "INIT "
 	for _, tmpl := range r.templates.Templates() {
@@ -115,7 +115,7 @@ func (t *XTemplate) Reload() error {
 			if t.DB != nil {
 				tx, err = t.DB.Begin()
 				if err != nil {
-					return fmt.Errorf("failed to begin transaction for '%s': %w", tmpl.Name(), err)
+					return nil, fmt.Errorf("failed to begin transaction for '%s': %w", tmpl.Name(), err)
 				}
 			}
 			err = tmpl.Execute(io.Discard, &TemplateContext{
@@ -130,33 +130,30 @@ func (t *XTemplate) Reload() error {
 						err = errors.Join(err, txerr)
 					}
 				}
-				return fmt.Errorf("template initializer '%s' failed: %w", tmpl.Name(), err)
+				return nil, fmt.Errorf("template initializer '%s' failed: %w", tmpl.Name(), err)
 			}
 			if tx != nil {
 				err = tx.Commit()
 				if err != nil {
-					return fmt.Errorf("template initializer commit failed: %w", err)
+					return nil, fmt.Errorf("template initializer commit failed: %w", err)
 				}
 			}
 		}
 	}
 
-	// Set runtime in one pointer assignment, avoiding race conditions where the
-	// inner fields don't match.
-	t.runtime = r
-	return nil
+	return r, nil
 }
 
 func (r *runtime) handleStaticFile(path_, ext string, log *slog.Logger) error {
 	fsfile, err := r.templateFS.Open(path_)
 	if err != nil {
-		return fmt.Errorf("could not open raw file '%s': %w", path_, err)
+		return fmt.Errorf("failed to open static file '%s': %w", path_, err)
 	}
 	defer fsfile.Close()
 	seeker := fsfile.(io.ReadSeeker)
 	stat, err := fsfile.Stat()
 	if err != nil {
-		return fmt.Errorf("could not stat file '%s': %w", path_, err)
+		return fmt.Errorf("failed to stat file '%s': %w", path_, err)
 	}
 	size := stat.Size()
 
@@ -178,7 +175,7 @@ func (r *runtime) handleStaticFile(path_, ext string, log *slog.Logger) error {
 			encoding = "br"
 		}
 		if err != nil {
-			return fmt.Errorf("could not create decompressor for file `%s`: %w", path_, err)
+			return fmt.Errorf("failed to create decompressor for file `%s`: %w", path_, err)
 		}
 	} else {
 		basepath = path.Clean("/" + path_)
@@ -187,7 +184,7 @@ func (r *runtime) handleStaticFile(path_, ext string, log *slog.Logger) error {
 		hash := sha512.New384()
 		_, err = io.Copy(hash, reader)
 		if err != nil {
-			return fmt.Errorf("could not hash file %w", err)
+			return fmt.Errorf("failed to hash file %w", err)
 		}
 		sri = "sha384-" + base64.StdEncoding.EncodeToString(hash.Sum(nil))
 	}
@@ -206,9 +203,8 @@ func (r *runtime) handleStaticFile(path_, ext string, log *slog.Logger) error {
 			file.contentType = http.DetectContentType(content[:count])
 		}
 		file.encodings = []encodingInfo{{encoding: encoding, path: path_, size: size, modtime: stat.ModTime()}}
-		tmpl := r.templates.Lookup("servefile")
-		r.router.Add("GET", basepath, tmpl)
-		r.router.Add("HEAD", basepath, tmpl)
+		r.router.Add("GET", basepath, serveFileHandler)
+		r.router.Add("HEAD", basepath, serveFileHandler)
 		log.Debug("added static file handler", slog.String("path", basepath), slog.String("filepath", path_), slog.String("contenttype", file.contentType), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()), slog.String("hash", sri))
 	} else {
 		if file.hash != sri {
@@ -247,22 +243,15 @@ func (r *runtime) handleTemplateFile(path_, ext string, log *slog.Logger) error 
 			if path.Base(routePath) == "index" {
 				routePath = path.Dir(routePath)
 			}
-			r.router.Add("GET", routePath, tmpl)
+			r.router.Add("GET", routePath, serveTemplateHandler(tmpl))
 			log.Debug("added path template handler", "method", "GET", "path", routePath, "template_path", path_)
 		} else if matches := routeMatcher.FindStringSubmatch(name); len(matches) == 3 {
 			method, path_ := matches[1], matches[2]
-			r.router.Add(method, path_, tmpl)
+			r.router.Add(method, path_, serveTemplateHandler(tmpl))
 			log.Debug("added named template handler", "method", method, "path", path_, "template_name", name, "template_path", path_)
 		}
 	}
 	return nil
-}
-
-var serveFileTemplate *parse.Tree
-
-func init() {
-	serveFiles, _ := parse.Parse("servefile", "{{.ServeFile}}", "{{", "}}")
-	serveFileTemplate = serveFiles["servefile"]
 }
 
 var extensionContentTypes map[string]string = map[string]string{

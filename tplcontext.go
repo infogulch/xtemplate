@@ -8,11 +8,9 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
-	"math"
 	"net"
 	"net/http"
 	"path"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -137,7 +135,7 @@ func (c *TemplateContext) ListFiles(name string) ([]string, error) {
 	return names, nil
 }
 
-// funcFileExists returns true if filename can be opened successfully.
+// FileExists returns true if filename can be opened successfully.
 func (c *TemplateContext) FileExists(filename string) (bool, error) {
 	if c.runtime.contextFS == nil {
 		return false, fmt.Errorf("context file system is not configured")
@@ -150,6 +148,30 @@ func (c *TemplateContext) FileExists(filename string) (bool, error) {
 	return false, nil
 }
 
+// ServeFile aborts execution of the template and instead responds to the request with the content of the contextfs file at urlpath
+func (c *TemplateContext) ServeFile(path_ string) (string, error) {
+	return "", NewHandlerError("ServeFile", func(w http.ResponseWriter, r *http.Request) {
+		path_ = path.Clean(path_)
+
+		c.log.Debug("serving file request", slog.String("path", path_))
+
+		file, err := c.runtime.contextFS.Open(path_)
+		if err != nil {
+			c.log.Debug("failed to open file", slog.Any("error", err), slog.String("path", path_))
+			http.Error(w, "internal server error", 500)
+			return
+		}
+		defer file.Close()
+
+		stat, err := file.Stat()
+		if err != nil {
+			c.log.Debug("error getting stat of file", slog.Any("error", err), slog.String("path", path_))
+		}
+
+		http.ServeContent(w, r, path_, stat.ModTime(), file.(io.ReadSeeker))
+	})
+}
+
 func (c *TemplateContext) SRI(urlpath string) (string, error) {
 	urlpath = path.Clean("/" + urlpath)
 	fileinfo, ok := c.runtime.files[urlpath]
@@ -157,148 +179,6 @@ func (c *TemplateContext) SRI(urlpath string) (string, error) {
 		return "", fmt.Errorf("file does not exist: '%s'", urlpath)
 	}
 	return fileinfo.hash, nil
-}
-
-func (c *TemplateContext) ServeFile() (string, error) {
-	return "", NewHandlerError("ServeFile", func(w http.ResponseWriter, r *http.Request) {
-		// find file
-		urlpath := path.Clean(r.URL.Path)
-		fileinfo, ok := c.runtime.files[urlpath]
-		if !ok {
-			// should not happen; we only add handlers for existent files
-			c.log.Error("tried to serve a file that doesn't exist", slog.String("path", urlpath), slog.String("urlpath", r.URL.Path))
-			http.NotFound(w, r)
-			return
-		}
-
-		// if the request provides a hash, check that it matches. if not, we don't have that file
-		if queryhash := r.URL.Query().Get("hash"); queryhash != "" && queryhash != fileinfo.hash {
-			c.log.Debug("request for file with wrong hash query parameter", slog.String("expected", fileinfo.hash), slog.String("queryhash", queryhash))
-			http.NotFound(w, r)
-			return
-		}
-
-		// negotiate encoding between the client's q value preference and fileinfo.encodings ordering (prefer earlier listed encodings first)
-		encoding, err := negiotiateEncoding(r.Header["Accept-Encoding"], fileinfo.encodings)
-		if err != nil {
-			c.log.Error("error selecting encoding to serve", slog.Any("error", err))
-		}
-		// we may have gotten an encoding even if there was an error; test separately
-		if encoding == nil {
-			http.Error(w, "internal server error", 500)
-			return
-		}
-
-		c.log.Debug("serving file request", slog.String("path", urlpath), slog.String("encoding", encoding.encoding), slog.String("contenttype", fileinfo.contentType))
-		file, err := c.runtime.templateFS.Open(encoding.path)
-		if err != nil {
-			c.log.Debug("failed to open file", slog.Any("error", err), slog.String("encoding.path", encoding.path), slog.String("requestpath", r.URL.Path))
-			http.Error(w, "internal server error", 500)
-			return
-		}
-		defer file.Close()
-
-		// check if file was modified since loading it
-		{
-			stat, err := file.Stat()
-			if err != nil {
-				c.log.Debug("error getting stat of file", slog.Any("error", err))
-			} else if modtime := stat.ModTime(); !modtime.Equal(encoding.modtime) {
-				c.log.Error("file maybe modified since loading", slog.Time("expected-modtime", encoding.modtime), slog.Time("actual-modtime", modtime))
-			}
-		}
-
-		w.Header().Add("Etag", `"`+fileinfo.hash+`"`)
-		w.Header().Add("Content-Type", fileinfo.contentType)
-		w.Header().Add("Content-Encoding", encoding.encoding)
-		w.Header().Add("Vary", "Accept-Encoding")
-		// w.Header().Add("Access-Control-Allow-Origin", "*") // ???
-		if r.URL.Query().Get("hash") != "" {
-			// cache aggressively if the request is disambiguated by a valid hash
-			// should be `public` ???
-			w.Header().Set("Cache-Control", "public, max-age=31536000")
-		}
-		http.ServeContent(w, r, encoding.path, encoding.modtime, file.(io.ReadSeeker))
-	})
-}
-
-func negiotiateEncoding(acceptHeaders []string, encodings []encodingInfo) (*encodingInfo, error) {
-	var err error
-	// shortcuts
-	if len(encodings) == 0 {
-		return nil, fmt.Errorf("impossible condition, fileInfo contains no encodings")
-	}
-	if len(encodings) == 1 {
-		if encodings[0].encoding != "identity" {
-			// identity should always be present, but return whatever we got anyway
-			err = fmt.Errorf("identity encoding missing")
-		}
-		return &encodings[0], err
-	}
-
-	// default to identity encoding, q = 0.0
-	var maxq float64
-	var maxqIdx int = -1
-	for i, e := range encodings {
-		if e.encoding == "identity" {
-			maxqIdx = i
-			break
-		}
-	}
-	if maxqIdx == -1 {
-		err = fmt.Errorf("identity encoding missing")
-		maxqIdx = len(encodings) - 1
-	}
-
-	for _, header := range acceptHeaders {
-		header = strings.TrimSpace(header)
-		if header == "" {
-			continue
-		}
-		for _, requestedEncoding := range strings.Split(header, ",") {
-			requestedEncoding = strings.TrimSpace(requestedEncoding)
-			if requestedEncoding == "" {
-				continue
-			}
-
-			parts := strings.Split(requestedEncoding, ";")
-			encpart := strings.TrimSpace(parts[0])
-			requestedIdx := -1
-
-			// find out if we can provide that encoding
-			for i, e := range encodings {
-				if e.encoding == encpart {
-					requestedIdx = i
-					break
-				}
-			}
-			if requestedIdx == -1 {
-				continue // we don't support that encoding, try next
-			}
-
-			// determine q value
-			q := 1.0 // default 1.0
-			for _, part := range parts[1:] {
-				part = strings.TrimSpace(part)
-				if strings.HasPrefix(part, "q=") {
-					part = strings.TrimSpace(strings.TrimPrefix(part, "q="))
-					if parsed, err := strconv.ParseFloat(part, 64); err == nil {
-						q = parsed
-						break
-					}
-				}
-			}
-
-			// use this encoding over previously selected encoding if:
-			// 1. client has a strong preference for this encoding, OR
-			// 2. client's preference is small and this encoding is listed earlier
-			if q-maxq > 0.1 || (math.Abs(q-maxq) <= 0.1 && requestedIdx < maxqIdx) {
-				maxq = q
-				maxqIdx = requestedIdx
-			}
-		}
-	}
-	return &encodings[maxqIdx], err
 }
 
 func (c *TemplateContext) Exec(query string, params ...any) (result sql.Result, err error) {
