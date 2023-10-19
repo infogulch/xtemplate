@@ -33,6 +33,7 @@
 - [ ] Consider using the functional options pattern for configuring XTemplate
 - [ ] Convert *runtime to an `atomic.Pointer[T]`
 - [ ] Allow .ServeFile to serve files from contextfs
+- [ ] Switch to using 1.22's new servemux
 
 
 # DONE

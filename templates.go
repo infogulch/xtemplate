@@ -41,6 +41,7 @@ type XTemplate struct {
 }
 
 type runtime struct {
+	delims     struct{ L, R string }
 	templateFS fs.FS
 	contextFS  fs.FS
 	config     map[string]string
@@ -68,6 +69,7 @@ func (t *XTemplate) Reload() error {
 		templateFS: t.TemplateFS,
 		contextFS:  t.ContextFS,
 		config:     t.Config,
+		delims:     t.Delims,
 		funcs:      make(template.FuncMap),
 		files:      make(map[string]fileInfo),
 		router:     pathmatcher.NewHttpMatcher[*template.Template](),
@@ -81,138 +83,29 @@ func (t *XTemplate) Reload() error {
 	}
 
 	// Define the template instance that will accumulate all template definitions.
-	r.templates = template.New(".").Delims(t.Delims.L, t.Delims.R).Funcs(r.funcs)
+	r.templates = template.New(".").Delims(r.delims.L, r.delims.R).Funcs(r.funcs)
 
-	// Find all files and send the ones that match *.html into a channel. Will check walkErr later.
-	files := make(chan string)
-	var walkErr error
-	go func() {
-		walkErr = fs.WalkDir(t.TemplateFS, ".", func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() {
-				return nil
-			}
-			files <- path
-			return nil
-		})
-		close(files)
-	}()
+	r.templates.AddParseTree("servefile", serveFileTemplate)
 
-	// Ingest all templates; add GET handlers for template files that don't start with '_'
-	for path_ := range files {
-
-		if ext := filepath.Ext(path_); ext != ".html" {
-			fsfile, err := r.templateFS.Open(path_)
-			if err != nil {
-				return fmt.Errorf("could not open raw file '%s': %w", path_, err)
-			}
-			defer fsfile.Close()
-			seeker := fsfile.(io.ReadSeeker)
-			stat, err := fsfile.Stat()
-			if err != nil {
-				return fmt.Errorf("could not stat file '%s': %w", path_, err)
-			}
-			size := stat.Size()
-
-			basepath := strings.TrimSuffix(path.Clean("/"+path_), ext)
-			var sri string
-			var reader io.Reader = fsfile
-			var encoding string = "identity"
-			file, exists := r.files[basepath]
-			if exists {
-				switch ext {
-				case ".gz":
-					reader, err = gzip.NewReader(seeker)
-					encoding = "gzip"
-				case ".zst":
-					reader, err = zstd.NewReader(seeker)
-					encoding = "zstd"
-				case ".br":
-					reader = brotli.NewReader(seeker)
-					encoding = "br"
-				}
-				if err != nil {
-					return fmt.Errorf("could not create decompressor for file `%s`: %w", path_, err)
-				}
-			} else {
-				basepath = path.Clean("/" + path_)
-			}
-			{
-				hash := sha512.New384()
-				_, err = io.Copy(hash, reader)
-				if err != nil {
-					return fmt.Errorf("could not hash file %w", err)
-				}
-				sri = "sha384-" + base64.StdEncoding.EncodeToString(hash.Sum(nil))
-			}
-			if encoding == "identity" {
-				// note: identity file will always be found first because fs.WalkDir sorts files in lexical order
-				file.hash = sri
-				if ctype, ok := extensionContentTypes[ext]; ok {
-					file.contentType = ctype
-				} else {
-					content := make([]byte, 512)
-					seeker.Seek(0, io.SeekStart)
-					count, err := seeker.Read(content)
-					if err != nil && err != io.EOF {
-						return fmt.Errorf("failed to read file to guess content type '%s': %w", path_, err)
-					}
-					file.contentType = http.DetectContentType(content[:count])
-				}
-				file.encodings = []encodingInfo{{encoding: encoding, path: path_, size: size, modtime: stat.ModTime()}}
-				r.templates.AddParseTree("GET "+basepath, serveFileTemplate)
-				r.templates.AddParseTree("HEAD "+basepath, serveFileTemplate)
-				log.Debug("added new direct serve file handler", slog.String("requestpath", basepath), slog.String("filepath", path_), slog.String("contenttype", file.contentType), slog.String("hash", sri), slog.Int64("size", size))
-			} else {
-				if file.hash != sri {
-					return fmt.Errorf("encoded file contents did not match original file '%s': expected %s, got %s", path_, file.hash, sri)
-				}
-				file.encodings = append(file.encodings, encodingInfo{encoding: encoding, path: path_, size: size, modtime: stat.ModTime()})
-				sort.Slice(file.encodings, func(i, j int) bool { return file.encodings[i].size < file.encodings[j].size })
-				log.Debug("added new encoding to serve file", slog.String("requestpath", basepath), slog.String("filepath", path_), slog.String("encoding", encoding), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()))
-			}
-			r.files[basepath] = file
-			continue
+	// scan all files from the templatefs root
+	if err := fs.WalkDir(r.templateFS, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
 		}
-
-		content, err := fs.ReadFile(t.TemplateFS, path_)
+		if ext := filepath.Ext(path); ext != ".html" {
+			err = r.handleStaticFile(path, ext, log)
+		} else {
+			err = r.handleTemplateFile(path, ext, log)
+		}
 		if err != nil {
-			return fmt.Errorf("could not read template file '%s': %v", path_, err)
+			log.Debug("error configuring file handler", "error", err)
 		}
-		path_ = path.Clean("/" + path_)
-		// parse each template file manually to have more control over its final
-		// names in the template namespace.
-		newtemplates, err := parse.Parse(path_, string(content), t.Delims.L, t.Delims.R, r.funcs, buliltinsSkeleton)
-		if err != nil {
-			return fmt.Errorf("could not parse template file '%s': %v", path_, err)
-		}
-		// add all templates
-		for name, tree := range newtemplates {
-			_, err = r.templates.AddParseTree(name, tree)
-			if err != nil {
-				return fmt.Errorf("could not add template '%s' from '%s': %v", name, path_, err)
-			}
-		}
-		// add the route handler template
-		if !strings.HasPrefix(filepath.Base(path_), "_") {
-			routePath := strings.TrimSuffix(path_, filepath.Ext(path_))
-			if path.Base(routePath) == "index" {
-				routePath = path.Dir(routePath)
-			}
-			route := "GET " + routePath
-			log.Debug("adding filename route template", "route", route, "routePath", routePath, "path", path_)
-			_, err = r.templates.AddParseTree(route, newtemplates[path_])
-			if err != nil {
-				return fmt.Errorf("could not add parse tree from '%s': %v", path_, err)
-			}
-		}
+		return err
+	}); err != nil {
+		return fmt.Errorf("error scanning files: %v", err)
 	}
 
-	if walkErr != nil {
-		return fmt.Errorf("error scanning file tree: %v", walkErr)
-	}
+	log.Debug("router", slog.Any("router", r.router))
 
 	// Invoke all initilization templates, aka any template whose name starts with "INIT "
 	for _, tmpl := range r.templates.Templates() {
@@ -248,24 +141,120 @@ func (t *XTemplate) Reload() error {
 		}
 	}
 
-	// Add all routing templates to the internal router
-	matcher, _ := regexp.Compile("^(GET|POST|PUT|PATCH|DELETE) (.*)$")
-	count := 0
-	for _, tmpl := range r.templates.Templates() {
-		matches := matcher.FindStringSubmatch(tmpl.Name())
-		if len(matches) != 3 {
-			continue
-		}
-		method, path_ := matches[1], matches[2]
-		log.Debug("adding route handler", "method", method, "path", path_, "template_name", tmpl.Name())
-		tmpl := tmpl // create unique variable for closure
-		r.router.Add(method, path_, tmpl)
-		count += 1
-	}
-
 	// Set runtime in one pointer assignment, avoiding race conditions where the
 	// inner fields don't match.
 	t.runtime = r
+	return nil
+}
+
+func (r *runtime) handleStaticFile(path_, ext string, log *slog.Logger) error {
+	fsfile, err := r.templateFS.Open(path_)
+	if err != nil {
+		return fmt.Errorf("could not open raw file '%s': %w", path_, err)
+	}
+	defer fsfile.Close()
+	seeker := fsfile.(io.ReadSeeker)
+	stat, err := fsfile.Stat()
+	if err != nil {
+		return fmt.Errorf("could not stat file '%s': %w", path_, err)
+	}
+	size := stat.Size()
+
+	basepath := strings.TrimSuffix(path.Clean("/"+path_), ext)
+	var sri string
+	var reader io.Reader = fsfile
+	var encoding string = "identity"
+	file, exists := r.files[basepath]
+	if exists {
+		switch ext {
+		case ".gz":
+			reader, err = gzip.NewReader(seeker)
+			encoding = "gzip"
+		case ".zst":
+			reader, err = zstd.NewReader(seeker)
+			encoding = "zstd"
+		case ".br":
+			reader = brotli.NewReader(seeker)
+			encoding = "br"
+		}
+		if err != nil {
+			return fmt.Errorf("could not create decompressor for file `%s`: %w", path_, err)
+		}
+	} else {
+		basepath = path.Clean("/" + path_)
+	}
+	{
+		hash := sha512.New384()
+		_, err = io.Copy(hash, reader)
+		if err != nil {
+			return fmt.Errorf("could not hash file %w", err)
+		}
+		sri = "sha384-" + base64.StdEncoding.EncodeToString(hash.Sum(nil))
+	}
+	if encoding == "identity" {
+		// note: identity file will always be found first because fs.WalkDir sorts files in lexical order
+		file.hash = sri
+		if ctype, ok := extensionContentTypes[ext]; ok {
+			file.contentType = ctype
+		} else {
+			content := make([]byte, 512)
+			seeker.Seek(0, io.SeekStart)
+			count, err := seeker.Read(content)
+			if err != nil && err != io.EOF {
+				return fmt.Errorf("failed to read file to guess content type '%s': %w", path_, err)
+			}
+			file.contentType = http.DetectContentType(content[:count])
+		}
+		file.encodings = []encodingInfo{{encoding: encoding, path: path_, size: size, modtime: stat.ModTime()}}
+		tmpl := r.templates.Lookup("servefile")
+		r.router.Add("GET", basepath, tmpl)
+		r.router.Add("HEAD", basepath, tmpl)
+		log.Debug("added static file handler", slog.String("path", basepath), slog.String("filepath", path_), slog.String("contenttype", file.contentType), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()), slog.String("hash", sri))
+	} else {
+		if file.hash != sri {
+			return fmt.Errorf("encoded file contents did not match original file '%s': expected %s, got %s", path_, file.hash, sri)
+		}
+		file.encodings = append(file.encodings, encodingInfo{encoding: encoding, path: path_, size: size, modtime: stat.ModTime()})
+		sort.Slice(file.encodings, func(i, j int) bool { return file.encodings[i].size < file.encodings[j].size })
+		log.Debug("added static file encoding", slog.String("path", basepath), slog.String("filepath", path_), slog.String("encoding", encoding), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()))
+	}
+	r.files[basepath] = file
+	return nil
+}
+
+var routeMatcher *regexp.Regexp = regexp.MustCompile("^(GET|POST|PUT|PATCH|DELETE) (.*)$")
+
+func (r *runtime) handleTemplateFile(path_, ext string, log *slog.Logger) error {
+	content, err := fs.ReadFile(r.templateFS, path_)
+	if err != nil {
+		return fmt.Errorf("could not read template file '%s': %v", path_, err)
+	}
+	path_ = path.Clean("/" + path_)
+	// parse each template file manually to have more control over its final
+	// names in the template namespace.
+	newtemplates, err := parse.Parse(path_, string(content), r.delims.L, r.delims.R, r.funcs, buliltinsSkeleton)
+	if err != nil {
+		return fmt.Errorf("could not parse template file '%s': %v", path_, err)
+	}
+	// add all templates
+	for name, tree := range newtemplates {
+		tmpl, err := r.templates.AddParseTree(name, tree)
+		if err != nil {
+			return fmt.Errorf("could not add template '%s' from '%s': %v", name, path_, err)
+		}
+		if name == path_ && !strings.HasPrefix(filepath.Base(path_), "_") {
+			routePath := strings.TrimSuffix(path_, filepath.Ext(path_))
+			if path.Base(routePath) == "index" {
+				routePath = path.Dir(routePath)
+			}
+			r.router.Add("GET", routePath, tmpl)
+			log.Debug("added path template handler", "method", "GET", "path", routePath, "template_path", path_)
+		} else if matches := routeMatcher.FindStringSubmatch(name); len(matches) == 3 {
+			method, path_ := matches[1], matches[2]
+			r.router.Add(method, path_, tmpl)
+			log.Debug("added named template handler", "method", method, "path", path_, "template_name", name, "template_path", path_)
+		}
+	}
 	return nil
 }
 

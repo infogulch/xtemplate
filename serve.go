@@ -69,16 +69,6 @@ func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	log.Debug("executed template", slog.Any("template error", err), slog.Int("length", buf.Len()))
 
-	headers.Set("Content-Type", "text/html; charset=utf-8")
-	headers.Set("Content-Length", strconv.Itoa(buf.Len()))
-	headers.Del("Accept-Ranges") // we don't know ranges for dynamically-created content
-	headers.Del("Last-Modified") // useless for dynamic content since it's always changing
-
-	// we don't know a way to quickly generate etag for dynamic content,
-	// and weak etags still cause browsers to rely on it even after a
-	// refresh, so disable them until we find a better way to do this
-	headers.Del("Etag")
-
 	var returnErr ReturnError
 	if err != nil && !errors.As(err, &returnErr) {
 		var handlerErr HandlerError
@@ -114,6 +104,17 @@ func (t *XTemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			wheader.Add(name, value)
 		}
 	}
+
+	wheader.Set("Content-Type", "text/html; charset=utf-8")
+	wheader.Set("Content-Length", strconv.Itoa(buf.Len()))
+	wheader.Del("Accept-Ranges") // we don't know ranges for dynamically-created content
+	wheader.Del("Last-Modified") // useless for dynamic content since it's always changing
+
+	// we don't know a way to quickly generate etag for dynamic content,
+	// and weak etags still cause browsers to rely on it even after a
+	// refresh, so disable them until we find a better way to do this
+	wheader.Del("Etag")
+
 	w.WriteHeader(context.status)
 	w.Write(buf.Bytes())
 
@@ -153,15 +154,15 @@ type HandlerError interface {
 // interface guard
 var _ = (error)((HandlerError)(nil))
 
-type funcHandlerError struct {
-	name string
-	fn   func(w http.ResponseWriter, r *http.Request)
-}
-
 // NewHandlerError returns a new HandlerError based on a string and a function
 // that matches the ServeHTTP signature.
 func NewHandlerError(name string, fn func(w http.ResponseWriter, r *http.Request)) HandlerError {
 	return funcHandlerError{name, fn}
+}
+
+type funcHandlerError struct {
+	name string
+	fn   func(w http.ResponseWriter, r *http.Request)
 }
 
 func (fhe funcHandlerError) Error() string { return fhe.name }

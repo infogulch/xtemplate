@@ -18,4 +18,4 @@ done
 echo ""
 
 # Run tests
-hurl --continue-on-error --test --report-html report *.hurl
+hurl --continue-on-error --test --report-html report tests/*.hurl

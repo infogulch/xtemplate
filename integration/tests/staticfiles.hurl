@@ -105,3 +105,11 @@ GET http://localhost:8080/standalone.gz
 HTTP 200
 Content-Encoding: identity
 
+
+# index
+GET http://localhost:8080/
+
+HTTP 200
+[Asserts]
+xpath "string(//link[@rel='stylesheet']/@integrity)" startsWith "sha384-5rcfZ"
+xpath "string(//link[@rel='stylesheet']/@href)" contains "?hash=sha384-5rcfZ"
