@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<script src="https://unpkg.com/htmx.org@1.9.6/dist/htmx.js"></script>
+<script src="https://unpkg.com/htmx.org@1.9.6/dist/ext/sse.js"></script>
+
+<div hx-ext="sse" sse-connect="/events/100" sse-swap="message">
+	Contents of this box will be updated in real time
+	with every SSE message received from the event stream
+</div>
+
+{{- define "SSE /events/:count"}}
+{{- range .Params.ByName "count" | atoi | .Repeat }}
+data: {{.}}
+{{ $.Flush }}{{ $.Sleep 250 }}
+{{- end}}
+{{- end}}

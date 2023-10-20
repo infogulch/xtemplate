@@ -3,7 +3,6 @@ package xtemplate
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"html/template"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/infogulch/pathmatcher"
 	"github.com/segmentio/ksuid"
+	"golang.org/x/exp/maps"
 )
 
 func (x *xtemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -90,83 +90,113 @@ func serveTemplateHandler(tmpl *template.Template) http.Handler {
 		buf.Reset()
 		defer bufPool.Put(buf)
 
-		var tx *sql.Tx
-		var err error
-		if runtime.db != nil {
-			tx, err = runtime.db.Begin()
-			if err != nil {
-				log.Info("failed to begin database transaction", "error", err)
-				http.Error(w, "unable to connect to the database", http.StatusInternalServerError)
-				return
-			}
+		context := &struct {
+			baseContext
+			fsContext
+			requestContext
+			responseContext
+		}{
+			baseContext: baseContext{
+				log:    log,
+				server: runtime,
+			},
+			fsContext: fsContext{
+				fs: runtime.contextFS,
+			},
+			requestContext: requestContext{
+				Req:    r,
+				Params: params,
+			},
+			responseContext: responseContext{
+				status: 200,
+				Header: http.Header{},
+			},
 		}
 
-		var headers = http.Header{}
-		context := &TemplateContext{
-			Req:    r,
-			Params: params,
+		err := tmpl.Execute(buf, context)
 
-			Headers: WrappedHeader{headers},
-			status:  http.StatusOK,
-
-			log:     log,
-			tx:      tx,
-			runtime: runtime,
-		}
-
-		r.ParseForm()
-		err = tmpl.Execute(buf, context)
-
-		log.Debug("executed template", slog.Any("template error", err), slog.Int("length", buf.Len()))
-
-		var returnErr ReturnError
-		if err != nil && !errors.As(err, &returnErr) {
-			var handlerErr HandlerError
-			if errors.As(err, &handlerErr) {
-				if tx != nil {
-					if dberr := tx.Commit(); dberr != nil {
-						log.Info("failed to commit transaction", "error", dberr)
-					}
-				}
-				log.Debug("forwarding response handling", "handler", handlerErr)
-				handlerErr.ServeHTTP(w, r)
-				return
+		var handlerErr HandlerError
+		if errors.As(err, &handlerErr) {
+			if dberr := context.resolvePendingTx(nil); dberr != nil {
+				log.Info("failed to commit transaction", slog.Any("error", dberr))
 			}
-			log.Info("error executing template", "error", err)
-			if tx != nil {
-				if dberr := tx.Rollback(); dberr != nil {
-					log.Info("failed to roll back transaction", "error", dberr)
-				}
-			}
-			http.Error(w, "failed to render response", http.StatusInternalServerError)
+			log.Debug("forwarding response handling", slog.Any("handler", handlerErr))
+			handlerErr.ServeHTTP(w, r)
 			return
-		} else if tx != nil {
-			if dberr := tx.Commit(); dberr != nil {
-				log.Info("failed to commit transaction", "error", dberr)
-				http.Error(w, "failed to commit database transaction", http.StatusInternalServerError)
-				return
-			}
+		}
+		if errors.As(err, &ReturnError{}) {
+			err = nil
+		}
+		if err = context.resolvePendingTx(err); err != nil {
+			log.Info("error executing template", slog.Any("error", err))
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
 		}
 
-		wheader := w.Header()
-		for name, values := range headers {
-			for _, value := range values {
-				wheader.Add(name, value)
-			}
-		}
-
-		wheader.Set("Content-Type", "text/html; charset=utf-8")
-		wheader.Set("Content-Length", strconv.Itoa(buf.Len()))
-		wheader.Del("Accept-Ranges") // we don't know ranges for dynamically-created content
-		wheader.Del("Last-Modified") // useless for dynamic content since it's always changing
-
-		// we don't know a way to quickly generate etag for dynamic content,
-		// and weak etags still cause browsers to rely on it even after a
-		// refresh, so disable them until we find a better way to do this
-		wheader.Del("Etag")
-
+		maps.Copy(w.Header(), context.Header)
 		w.WriteHeader(context.status)
 		w.Write(buf.Bytes())
+	})
+}
+
+type ResponseFlusher interface {
+	http.ResponseWriter
+	http.Flusher
+}
+
+func sseTemplateHandler(tmpl *template.Template) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		params, log, runtime := getContext(r.Context())
+
+		w.Header().Set("Content-Type", "text/event-stream")
+
+		flush, ok := w.(ResponseFlusher)
+		if !ok {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		context := &struct {
+			flushContext
+			fsContext
+			requestContext
+		}{
+			flushContext: flushContext{
+				Flusher: flush,
+				baseContext: baseContext{
+					log:        log,
+					server:     runtime,
+					requestCtx: r.Context(),
+				},
+			},
+			fsContext: fsContext{
+				fs: runtime.contextFS,
+			},
+			requestContext: requestContext{
+				Req:    r,
+				Params: params,
+			},
+		}
+
+		err := tmpl.Execute(flush, context)
+
+		var handlerErr HandlerError
+		if errors.As(err, &handlerErr) {
+			if dberr := context.resolvePendingTx(nil); dberr != nil {
+				log.Info("failed to commit transaction", slog.Any("error", dberr))
+			}
+			log.Debug("forwarding response handling", slog.Any("handler", handlerErr))
+			handlerErr.ServeHTTP(w, r)
+			return
+		}
+		if errors.As(err, &ReturnError{}) {
+			err = nil
+		}
+		if err = context.resolvePendingTx(err); err != nil {
+			log.Info("error executing template", slog.Any("error", err))
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
 	})
 }
 

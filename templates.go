@@ -8,7 +8,6 @@ import (
 	"crypto/sha512"
 	"database/sql"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -60,6 +59,7 @@ var instanceIdentity int64
 
 func (configs *config) Build() (CancelHandler, error) {
 	ctx, cancel := context.WithCancel(context.Background())
+
 	x := &xtemplate{
 		templateFS: os.DirFS("templates"),
 		ldelim:     "{{",
@@ -95,9 +95,6 @@ func (configs *config) Build() (CancelHandler, error) {
 		} else {
 			err = x.addTemplateHandler(path, ext, log)
 		}
-		if err != nil {
-			log.Debug("error configuring file handler", "error", err)
-		}
 		return err
 	}); err != nil {
 		return nil, fmt.Errorf("error scanning files: %v", err)
@@ -106,33 +103,13 @@ func (configs *config) Build() (CancelHandler, error) {
 	// Invoke all initilization templates, aka any template whose name starts with "INIT "
 	for _, tmpl := range x.templates.Templates() {
 		if strings.HasPrefix(tmpl.Name(), "INIT ") {
-			var tx *sql.Tx
-			var err error
-			if x.db != nil {
-				tx, err = x.db.Begin()
-				if err != nil {
-					return nil, fmt.Errorf("failed to begin transaction for '%s': %w", tmpl.Name(), err)
-				}
+			context := &baseContext{
+				server: x,
+				log:    log,
 			}
-			err = tmpl.Execute(io.Discard, &TemplateContext{
-				runtime: x,
-				log:     log,
-				tx:      tx,
-			})
-			if err != nil {
-				if tx != nil {
-					txerr := tx.Rollback()
-					if txerr != nil {
-						err = errors.Join(err, txerr)
-					}
-				}
+			err := tmpl.Execute(io.Discard, context)
+			if err = context.resolvePendingTx(err); err != nil {
 				return nil, fmt.Errorf("template initializer '%s' failed: %w", tmpl.Name(), err)
-			}
-			if tx != nil {
-				err = tx.Commit()
-				if err != nil {
-					return nil, fmt.Errorf("template initializer commit failed: %w", err)
-				}
 			}
 		}
 	}
@@ -229,7 +206,7 @@ func (x *xtemplate) addStaticFileHandler(path_, ext string, log *slog.Logger) er
 	return nil
 }
 
-var routeMatcher *regexp.Regexp = regexp.MustCompile("^(GET|POST|PUT|PATCH|DELETE) (.*)$")
+var routeMatcher *regexp.Regexp = regexp.MustCompile("^(GET|POST|PUT|PATCH|DELETE|SSE) (.*)$")
 
 func (x *xtemplate) addTemplateHandler(path_, ext string, log *slog.Logger) error {
 	content, err := fs.ReadFile(x.templateFS, path_)
@@ -258,7 +235,11 @@ func (x *xtemplate) addTemplateHandler(path_, ext string, log *slog.Logger) erro
 			log.Debug("added path template handler", "method", "GET", "path", routePath, "template_path", path_)
 		} else if matches := routeMatcher.FindStringSubmatch(name); len(matches) == 3 {
 			method, path_ := matches[1], matches[2]
-			x.router.Add(method, path_, serveTemplateHandler(tmpl))
+			if method == "SSE" {
+				x.router.Add("GET", path_, sseTemplateHandler(tmpl))
+			} else {
+				x.router.Add(method, path_, serveTemplateHandler(tmpl))
+			}
 			log.Debug("added named template handler", "method", method, "path", path_, "template_name", name, "template_path", path_)
 		}
 	}

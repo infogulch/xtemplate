@@ -105,11 +105,12 @@ func main() {
 				os.Exit(4)
 			}
 			watch.React(changed, halt, func() (halt bool) {
-				newhandler, err := configs.Build()
+				temphandler, err := configs.Build()
 				if err != nil {
 					log.Info("failed to reload xtemplate", "error", err)
 				} else {
-					handler = newhandler
+					handler, temphandler = temphandler, handler
+					temphandler.Cancel()
 					log.Info("reloaded templates after file changed")
 				}
 				return

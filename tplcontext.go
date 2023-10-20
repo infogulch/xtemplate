@@ -2,12 +2,15 @@ package xtemplate
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
 	"io/fs"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"path"
@@ -18,68 +21,16 @@ import (
 	"github.com/infogulch/pathmatcher"
 )
 
-// TemplateContext is the TemplateContext with which HTTP templates are executed.
-type TemplateContext struct {
-	Req     *http.Request
-	Params  pathmatcher.Params
-	Headers WrappedHeader
-
-	status     int
-	runtime    *xtemplate
-	tx         *sql.Tx
-	log        *slog.Logger
-	queryTimes []time.Duration
-}
-
-func (c *TemplateContext) Config(key string) string {
-	return c.runtime.config[key]
-}
-
-func (c *TemplateContext) Status(status int) string {
-	c.status = status
-	return ""
-}
-
-// Cookie gets the value of a cookie with name name.
-func (c *TemplateContext) Cookie(name string) string {
-	cookies := c.Req.Cookies()
-	for _, cookie := range cookies {
-		if cookie.Name == name {
-			return cookie.Value
-		}
-	}
-	return ""
-}
-
-// RemoteIP gets the IP address of the client making the request.
-func (c *TemplateContext) RemoteIP() string {
-	ip, _, err := net.SplitHostPort(c.Req.RemoteAddr)
-	if err != nil {
-		return c.Req.RemoteAddr
-	}
-	return ip
-}
-
-// Host returns the hostname portion of the Host header
-// from the HTTP request.
-func (c *TemplateContext) Host() (string, error) {
-	host, _, err := net.SplitHostPort(c.Req.Host)
-	if err != nil {
-		if !strings.Contains(c.Req.Host, ":") {
-			// common with sites served on the default port 80
-			return c.Req.Host, nil
-		}
-		return "", err
-	}
-	return host, nil
+type fsContext struct {
+	fs fs.FS
 }
 
 // ReadFile returns the contents of a filename relative to the site root.
 // Note that included files are NOT escaped, so you should only include
 // trusted files. If it is not trusted, be sure to use escaping functions
 // in your template.
-func (c *TemplateContext) ReadFile(filename string) (string, error) {
-	if c.runtime.contextFS == nil {
+func (c *fsContext) ReadFile(filename string) (string, error) {
+	if c.fs == nil {
 		return "", fmt.Errorf("context file system is not configured")
 	}
 	buf := bufPool.Get().(*bytes.Buffer)
@@ -87,7 +38,7 @@ func (c *TemplateContext) ReadFile(filename string) (string, error) {
 	defer bufPool.Put(buf)
 
 	filename = path.Clean(filename)
-	file, err := c.runtime.contextFS.Open(filename)
+	file, err := c.fs.Open(filename)
 	if err != nil {
 		return "", err
 	}
@@ -102,12 +53,12 @@ func (c *TemplateContext) ReadFile(filename string) (string, error) {
 }
 
 // StatFile returns Stat of a filename
-func (c *TemplateContext) StatFile(filename string) (fs.FileInfo, error) {
-	if c.runtime.contextFS == nil {
+func (c *fsContext) StatFile(filename string) (fs.FileInfo, error) {
+	if c.fs == nil {
 		return nil, fmt.Errorf("context file system is not configured")
 	}
 	filename = path.Clean(filename)
-	file, err := c.runtime.contextFS.Open(filename)
+	file, err := c.fs.Open(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -118,11 +69,11 @@ func (c *TemplateContext) StatFile(filename string) (fs.FileInfo, error) {
 
 // ListFiles reads and returns a slice of names from the given
 // directory relative to the root of c.
-func (c *TemplateContext) ListFiles(name string) ([]string, error) {
-	if c.runtime.contextFS == nil {
+func (c *fsContext) ListFiles(name string) ([]string, error) {
+	if c.fs == nil {
 		return nil, fmt.Errorf("context file system is not configured")
 	}
-	entries, err := fs.ReadDir(c.runtime.contextFS, path.Clean(name))
+	entries, err := fs.ReadDir(c.fs, path.Clean(name))
 	if err != nil {
 		return nil, err
 	}
@@ -136,11 +87,11 @@ func (c *TemplateContext) ListFiles(name string) ([]string, error) {
 }
 
 // FileExists returns true if filename can be opened successfully.
-func (c *TemplateContext) FileExists(filename string) (bool, error) {
-	if c.runtime.contextFS == nil {
+func (c *fsContext) FileExists(filename string) (bool, error) {
+	if c.fs == nil {
 		return false, fmt.Errorf("context file system is not configured")
 	}
-	file, err := c.runtime.contextFS.Open(filename)
+	file, err := c.fs.Open(filename)
 	if err == nil {
 		file.Close()
 		return true, nil
@@ -148,16 +99,18 @@ func (c *TemplateContext) FileExists(filename string) (bool, error) {
 	return false, nil
 }
 
-// ServeFile aborts execution of the template and instead responds to the request with the content of the contextfs file at path_
-func (c *TemplateContext) ServeFile(path_ string) (string, error) {
+// ServeFile aborts execution of the template and instead responds to the
+// request with the content of the contextfs file at path_
+func (c *fsContext) ServeFile(path_ string) (string, error) {
 	return "", NewHandlerError("ServeFile", func(w http.ResponseWriter, r *http.Request) {
+		_, log, _ := getContext(r.Context())
 		path_ = path.Clean(path_)
 
-		c.log.Debug("serving file response", slog.String("path", path_))
+		log.Debug("serving file response", slog.String("path", path_))
 
-		file, err := c.runtime.contextFS.Open(path_)
+		file, err := c.fs.Open(path_)
 		if err != nil {
-			c.log.Debug("failed to open file", slog.Any("error", err), slog.String("path", path_))
+			log.Debug("failed to open file", slog.Any("error", err), slog.String("path", path_))
 			http.Error(w, "internal server error", 500)
 			return
 		}
@@ -165,15 +118,26 @@ func (c *TemplateContext) ServeFile(path_ string) (string, error) {
 
 		stat, err := file.Stat()
 		if err != nil {
-			c.log.Debug("error getting stat of file", slog.Any("error", err), slog.String("path", path_))
+			log.Debug("error getting stat of file", slog.Any("error", err), slog.String("path", path_))
 		}
 
 		http.ServeContent(w, r, path_, stat.ModTime(), file.(io.ReadSeeker))
 	})
 }
 
+type baseContext struct {
+	server     *xtemplate
+	log        *slog.Logger
+	pendingTx  *sql.Tx
+	requestCtx context.Context
+}
+
+func (c *baseContext) Config(key string) string {
+	return c.server.config[key]
+}
+
 // ServeContent aborts execution of the template and instead responds to the request with content
-func (c *TemplateContext) ServeContent(path_ string, modtime time.Time, content string) (string, error) {
+func (c *baseContext) ServeContent(path_ string, modtime time.Time, content string) (string, error) {
 	return "", NewHandlerError("ServeFile", func(w http.ResponseWriter, r *http.Request) {
 		path_ = path.Clean(path_)
 
@@ -183,39 +147,85 @@ func (c *TemplateContext) ServeContent(path_ string, modtime time.Time, content 
 	})
 }
 
-func (c *TemplateContext) StaticFileHash(urlpath string) (string, error) {
+func (c *baseContext) StaticFileHash(urlpath string) (string, error) {
 	urlpath = path.Clean("/" + urlpath)
-	fileinfo, ok := c.runtime.files[urlpath]
+	fileinfo, ok := c.server.files[urlpath]
 	if !ok {
 		return "", fmt.Errorf("file does not exist: '%s'", urlpath)
 	}
 	return fileinfo.hash, nil
 }
 
-func (c *TemplateContext) Exec(query string, params ...any) (result sql.Result, err error) {
-	if c.tx == nil {
+func (c *baseContext) Template(name string, context any) (string, error) {
+	buf := bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufPool.Put(buf)
+
+	t := c.server.templates.Lookup(name)
+	if t == nil {
+		return "", fmt.Errorf("template name does not exist: '%s'", name)
+	}
+	if err := t.Execute(buf, context); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+func (c *baseContext) Funcs() template.FuncMap {
+	return c.server.funcs
+}
+
+func (c *baseContext) Tx() (*SqlContext, error) {
+	if c.server.db == nil {
 		return nil, fmt.Errorf("database is not configured")
 	}
-	start := time.Now()
-	defer func() {
-		duration := time.Since(start)
-		c.queryTimes = append(c.queryTimes, duration)
-		c.log.Debug("Exec", "query", query, "params", params, "error", err)
-	}()
+	if c.pendingTx != nil {
+		if err := c.pendingTx.Commit(); err != nil {
+			return nil, fmt.Errorf("failed to commit pending tx: %w", err)
+		}
+		c.pendingTx = nil
+	}
+	tx, err := c.server.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction")
+	}
+	c.pendingTx = tx
+	return &SqlContext{tx: tx, log: c.log.WithGroup("tx")}, nil
+}
+
+func (c *baseContext) resolvePendingTx(err error) error {
+	if c.pendingTx == nil {
+		return err
+	}
+	if err == nil {
+		err = c.pendingTx.Commit()
+	} else {
+		dberr := c.pendingTx.Rollback()
+		if dberr != nil {
+			err = errors.Join(err, dberr)
+		}
+	}
+	c.pendingTx = nil
+	return err
+}
+
+type SqlContext struct {
+	tx  *sql.Tx
+	log *slog.Logger
+}
+
+func (c *SqlContext) Exec(query string, params ...any) (result sql.Result, err error) {
+	defer func(start time.Time) {
+		c.log.Debug("Exec", slog.String("query", query), slog.Any("params", params), slog.Any("error", err), slog.Duration("queryduration", time.Since(start)))
+	}(time.Now())
 
 	return c.tx.Exec(query, params...)
 }
 
-func (c *TemplateContext) QueryRows(query string, params ...any) (rows []map[string]any, err error) {
-	if c.tx == nil {
-		return nil, fmt.Errorf("database is not configured")
-	}
-	start := time.Now()
-	defer func() {
-		duration := time.Since(start)
-		c.queryTimes = append(c.queryTimes, duration)
-		c.log.Debug("QueryRows", "query", query, "params", params, "error", err)
-	}()
+func (c *SqlContext) QueryRows(query string, params ...any) (rows []map[string]any, err error) {
+	defer func(start time.Time) {
+		c.log.Debug("QueryRows", slog.String("query", query), slog.Any("params", params), slog.Any("error", err), slog.Duration("queryduration", time.Since(start)))
+	}(time.Now())
 
 	result, err := c.tx.Query(query, params...)
 	if err != nil {
@@ -250,7 +260,7 @@ func (c *TemplateContext) QueryRows(query string, params ...any) (rows []map[str
 	return rows, result.Err()
 }
 
-func (c *TemplateContext) QueryRow(query string, params ...any) (map[string]any, error) {
+func (c *SqlContext) QueryRow(query string, params ...any) (map[string]any, error) {
 	rows, err := c.QueryRows(query, params...)
 	if err != nil {
 		return nil, err
@@ -261,7 +271,7 @@ func (c *TemplateContext) QueryRow(query string, params ...any) (map[string]any,
 	return rows[0], nil
 }
 
-func (c *TemplateContext) QueryVal(query string, params ...any) (any, error) {
+func (c *SqlContext) QueryVal(query string, params ...any) (any, error) {
 	row, err := c.QueryRow(query, params...)
 	if err != nil {
 		return nil, err
@@ -275,63 +285,66 @@ func (c *TemplateContext) QueryVal(query string, params ...any) (any, error) {
 	panic("impossible condition")
 }
 
-func (c *TemplateContext) QueryStats() struct {
-	Count         int
-	TotalDuration time.Duration
-} {
-	var sum time.Duration
-	for _, v := range c.queryTimes {
-		sum += v
-	}
-	return struct {
-		Count         int
-		TotalDuration time.Duration
-	}{
-		Count:         len(c.queryTimes),
-		TotalDuration: sum,
-	}
+func (c *SqlContext) Commit() (string, error) {
+	err := c.tx.Commit()
+	c.log.Debug("Commit", slog.Any("error", err))
+	return "", err
 }
 
-func (c *TemplateContext) Template(name string, context any) (string, error) {
-	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
-	defer bufPool.Put(buf)
+func (c *SqlContext) Rollback() (string, error) {
+	err := c.tx.Rollback()
+	c.log.Debug("Rollback", slog.Any("error", err))
+	return "", err
+}
 
-	t := c.runtime.templates.Lookup(name)
-	if t == nil {
-		return "", fmt.Errorf("template name does not exist: '%s'", name)
+type requestContext struct {
+	Req    *http.Request
+	Params pathmatcher.Params
+}
+
+// Cookie gets the value of a cookie with name name.
+func (c *requestContext) Cookie(name string) string {
+	cookies := c.Req.Cookies()
+	for _, cookie := range cookies {
+		if cookie.Name == name {
+			return cookie.Value
+		}
 	}
-	if err := t.Execute(buf, context); err != nil {
+	return ""
+}
+
+// RemoteIP gets the IP address of the client making the request.
+func (c *requestContext) RemoteIP() string {
+	ip, _, err := net.SplitHostPort(c.Req.RemoteAddr)
+	if err != nil {
+		return c.Req.RemoteAddr
+	}
+	return ip
+}
+
+// Host returns the hostname portion of the Host header
+// from the HTTP request.
+func (c *requestContext) Host() (string, error) {
+	host, _, err := net.SplitHostPort(c.Req.Host)
+	if err != nil {
+		if !strings.Contains(c.Req.Host, ":") {
+			// common with sites served on the default port 80
+			return c.Req.Host, nil
+		}
 		return "", err
 	}
-	return buf.String(), nil
+	return host, nil
 }
 
-func (c *TemplateContext) Funcs() template.FuncMap {
-	return c.runtime.funcs
+type responseContext struct {
+	http.Header
+	status int
 }
-
-type TemplateContextVars struct {
-	*TemplateContext
-	Vars map[string]any
-}
-
-func (c *TemplateContext) WithVars(vars map[string]any) TemplateContextVars {
-	return TemplateContextVars{
-		TemplateContext: c,
-		Vars:            vars,
-	}
-}
-
-// WrappedHeader wraps niladic functions so that they
-// can be used in templates. (Template functions must
-// return a value.)
-type WrappedHeader struct{ http.Header }
 
 // Add adds a header field value, appending val to
 // existing values for that field. It returns an
 // empty string.
-func (h WrappedHeader) Add(field, val string) string {
+func (h responseContext) AddHeader(field, val string) string {
 	h.Header.Add(field, val)
 	return ""
 }
@@ -339,15 +352,68 @@ func (h WrappedHeader) Add(field, val string) string {
 // Set sets a header field value, overwriting any
 // other values for that field. It returns an
 // empty string.
-func (h WrappedHeader) Set(field, val string) string {
+func (h responseContext) SetHeader(field, val string) string {
 	h.Header.Set(field, val)
 	return ""
 }
 
 // Del deletes a header field. It returns an empty string.
-func (h WrappedHeader) Del(field string) string {
+func (h responseContext) DelHeader(field string) string {
 	h.Header.Del(field)
 	return ""
+}
+
+func (h responseContext) SetStatus(status int) string {
+	h.status = status
+	return ""
+}
+
+type flushContext struct {
+	http.Flusher
+	baseContext
+}
+
+func (f flushContext) Flush() string {
+	f.Flusher.Flush()
+	return ""
+}
+
+func (f flushContext) Sleep(ms int) (string, error) {
+	select {
+	case <-time.After(time.Duration(ms) * time.Millisecond):
+	case <-f.requestCtx.Done():
+		return "", ReturnError{}
+	case <-f.server.ctx.Done():
+		return "", ReturnError{}
+	}
+	return "", nil
+}
+
+func (f flushContext) Repeat(max_ ...int) <-chan int {
+	max := math.MaxInt64 // sorry you can only loop for 2^63-1 iterations max
+	if len(max_) > 0 {
+		max = max_[0]
+	}
+	c := make(chan int)
+	go func() {
+		i := 0
+	loop:
+		for {
+			select {
+			case c <- i:
+			case <-f.requestCtx.Done():
+				break loop
+			case <-f.server.ctx.Done():
+				break loop
+			}
+			if i >= max {
+				break
+			}
+			i++
+		}
+		close(c)
+	}()
+	return c
 }
 
 var bufPool = sync.Pool{
