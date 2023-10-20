@@ -5,6 +5,7 @@ HTTP 200
 body contains "sse-connect"
 
 GET http://localhost:8080/events/2
+Accept: text/event-stream
 
 HTTP 200
 [Asserts]
