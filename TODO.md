@@ -2,13 +2,12 @@
 
 ### Features
 
-- [ ] Client side auto reload
-- [ ] Build a way to send live updates to a page by rendering a template to an SSE stream. Maybe backed by NATS.io?
 
 ### Documentation
 
 - [ ] Memes
 - [ ] Highlight file server feature
+- [ ] Highlight sse feature
 - [ ] Organize docs according to https://diataxis.fr/
     - [ ] Add explanation
 - [ ] Document configuration
@@ -29,7 +28,10 @@
 # BACKLOG
 
 - [ ] Switch to using Go 1.22's new servemux
-- [ ] Investigate integrating into another web framework (gox/gin etc)
+    - [ ] Add PathValue method to .Req (future proofing)
+- Support SSE
+    - [ ] Integrate nats subscription
+- [ ] Split caddy integration into a separate repo. Trying to shoehorn two modules into one repo just isn't working.
 
 
 # DONE
@@ -52,3 +54,5 @@
 - [x] Refactor router to return `http.Handler`, use custom handler for static files
 - [x] Allow .ServeFile to serve files from contextfs
 - [x] Switch to functional options pattern for configuration
+- [x] Support SSE
+    - [x] Demo client side hot reload

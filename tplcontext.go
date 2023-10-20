@@ -369,24 +369,13 @@ func (h responseContext) SetStatus(status int) string {
 }
 
 type flushContext struct {
-	http.Flusher
+	flusher http.Flusher
 	baseContext
 }
 
 func (f flushContext) Flush() string {
-	f.Flusher.Flush()
+	f.flusher.Flush()
 	return ""
-}
-
-func (f flushContext) Sleep(ms int) (string, error) {
-	select {
-	case <-time.After(time.Duration(ms) * time.Millisecond):
-	case <-f.requestCtx.Done():
-		return "", ReturnError{}
-	case <-f.server.ctx.Done():
-		return "", ReturnError{}
-	}
-	return "", nil
 }
 
 func (f flushContext) Repeat(max_ ...int) <-chan int {
@@ -400,11 +389,11 @@ func (f flushContext) Repeat(max_ ...int) <-chan int {
 	loop:
 		for {
 			select {
-			case c <- i:
 			case <-f.requestCtx.Done():
 				break loop
 			case <-f.server.ctx.Done():
 				break loop
+			case c <- i:
 			}
 			if i >= max {
 				break
@@ -414,6 +403,29 @@ func (f flushContext) Repeat(max_ ...int) <-chan int {
 		close(c)
 	}()
 	return c
+}
+
+// Sleep sleeps for ms millisecionds.
+func (f flushContext) Sleep(ms int) (string, error) {
+	select {
+	case <-time.After(time.Duration(ms) * time.Millisecond):
+	case <-f.requestCtx.Done():
+		return "", ReturnError{}
+	case <-f.server.ctx.Done():
+		return "", ReturnError{}
+	}
+	return "", nil
+}
+
+// Block blocks execution until the request is canceled by the client or until
+// the server closes.
+func (f flushContext) Block() (string, error) {
+	select {
+	case <-f.requestCtx.Done():
+		return "", ReturnError{}
+	case <-f.server.ctx.Done():
+		return "", nil
+	}
 }
 
 var bufPool = sync.Pool{

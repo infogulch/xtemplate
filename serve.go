@@ -20,10 +20,10 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-func (x *xtemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (server *xtemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	select {
-	case _, _ = <-x.ctx.Done():
-		x.log.Error("received request after xtemplate instance cancelled", slog.String("method", r.Method), slog.String("path", r.URL.Path))
+	case _, _ = <-server.ctx.Done():
+		server.log.Error("received request after xtemplate instance cancelled", slog.String("method", r.Method), slog.String("path", r.URL.Path))
 		http.Error(w, "server stopped", http.StatusInternalServerError)
 		return
 	default:
@@ -31,14 +31,14 @@ func (x *xtemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	start := time.Now()
 
-	_, handler, params, _ := x.router.Find(r.Method, r.URL.Path)
+	_, handler, params, _ := server.router.Find(r.Method, r.URL.Path)
 	if handler == nil {
-		x.log.Debug("no handler for request", slog.String("method", r.Method), slog.String("path", r.URL.Path))
+		server.log.Debug("no handler for request", slog.String("method", r.Method), slog.String("path", r.URL.Path))
 		http.NotFound(w, r)
 		return
 	}
 
-	log := x.log.With(slog.Group("serving",
+	log := server.log.With(slog.Group("serving",
 		slog.String("requestid", getRequestId(r.Context())),
 		slog.String("method", r.Method),
 		slog.String("path", r.URL.Path),
@@ -49,7 +49,7 @@ func (x *xtemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		slog.String("user-agent", r.Header.Get("User-Agent")),
 	)
 
-	ctx := context.WithValue(r.Context(), ctxKey{}, ctxValue{params: params, log: log, runtime: x})
+	ctx := context.WithValue(r.Context(), ctxKey{}, ctxValue{params, log, server})
 	handler.ServeHTTP(w, r.WithContext(ctx))
 
 	log.Debug("request served", slog.Duration("response-duration", time.Since(start)))
@@ -72,19 +72,19 @@ func getRequestId(ctx context.Context) string {
 type ctxKey struct{}
 
 type ctxValue struct {
-	params  pathmatcher.Params
-	log     *slog.Logger
-	runtime *xtemplate
+	params pathmatcher.Params
+	log    *slog.Logger
+	server *xtemplate
 }
 
 func getContext(ctx context.Context) (pathmatcher.Params, *slog.Logger, *xtemplate) {
 	val := ctx.Value(ctxKey{}).(ctxValue)
-	return val.params, val.log, val.runtime
+	return val.params, val.log, val.server
 }
 
 func serveTemplateHandler(tmpl *template.Template) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		params, log, runtime := getContext(r.Context())
+		params, log, server := getContext(r.Context())
 
 		buf := bufPool.Get().(*bytes.Buffer)
 		buf.Reset()
@@ -96,18 +96,18 @@ func serveTemplateHandler(tmpl *template.Template) http.Handler {
 			requestContext
 			responseContext
 		}{
-			baseContext: baseContext{
+			baseContext{
 				log:    log,
-				server: runtime,
+				server: server,
 			},
-			fsContext: fsContext{
-				fs: runtime.contextFS,
+			fsContext{
+				fs: server.contextFS,
 			},
-			requestContext: requestContext{
+			requestContext{
 				Req:    r,
 				Params: params,
 			},
-			responseContext: responseContext{
+			responseContext{
 				status: 200,
 				Header: http.Header{},
 			},
@@ -139,46 +139,48 @@ func serveTemplateHandler(tmpl *template.Template) http.Handler {
 	})
 }
 
-type ResponseFlusher interface {
-	http.ResponseWriter
-	http.Flusher
-}
-
 func sseTemplateHandler(tmpl *template.Template) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		params, log, runtime := getContext(r.Context())
+		params, log, server := getContext(r.Context())
 
-		w.Header().Set("Content-Type", "text/event-stream")
+		if r.Header.Get("Accept") != "text/event-stream" {
+			http.Error(w, "SSE endpoint", http.StatusNotAcceptable)
+			return
+		}
 
-		flush, ok := w.(ResponseFlusher)
+		flusher, ok := w.(http.Flusher)
 		if !ok {
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
 
 		context := &struct {
 			flushContext
 			fsContext
 			requestContext
 		}{
-			flushContext: flushContext{
-				Flusher: flush,
-				baseContext: baseContext{
+			flushContext{
+				flusher,
+				baseContext{
 					log:        log,
-					server:     runtime,
+					server:     server,
 					requestCtx: r.Context(),
 				},
 			},
-			fsContext: fsContext{
-				fs: runtime.contextFS,
+			fsContext{
+				fs: server.contextFS,
 			},
-			requestContext: requestContext{
+			requestContext{
 				Req:    r,
 				Params: params,
 			},
 		}
 
-		err := tmpl.Execute(flush, context)
+		err := tmpl.Execute(w, context)
 
 		var handlerErr HandlerError
 		if errors.As(err, &handlerErr) {
@@ -201,10 +203,10 @@ func sseTemplateHandler(tmpl *template.Template) http.Handler {
 }
 
 var serveFileHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	_, log, runtime := getContext(r.Context())
+	_, log, server := getContext(r.Context())
 
 	urlpath := path.Clean(r.URL.Path)
-	fileinfo, ok := runtime.files[urlpath]
+	fileinfo, ok := server.files[urlpath]
 	if !ok {
 		// should not happen; we only add handlers for existent files
 		log.Warn("tried to serve a file that doesn't exist", slog.String("path", urlpath), slog.String("urlpath", r.URL.Path))
@@ -231,7 +233,7 @@ var serveFileHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter,
 	}
 
 	log.Debug("serving file request", slog.String("path", urlpath), slog.String("encoding", encoding.encoding), slog.String("contenttype", fileinfo.contentType))
-	file, err := runtime.templateFS.Open(encoding.path)
+	file, err := server.templateFS.Open(encoding.path)
 	if err != nil {
 		log.Error("failed to open file", slog.Any("error", err), slog.String("encoding.path", encoding.path), slog.String("requestpath", r.URL.Path))
 		http.Error(w, "internal server error", 500)
