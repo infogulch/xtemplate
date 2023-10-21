@@ -2,14 +2,15 @@
 <script src="https://unpkg.com/htmx.org@1.9.6/dist/htmx.js"></script>
 <script src="https://unpkg.com/htmx.org@1.9.6/dist/ext/sse.js"></script>
 
-<div hx-ext="sse" sse-connect="/events/100" sse-swap="message">
+<div hx-ext="sse" sse-connect="/events" sse-swap="message">
 	Contents of this box will be updated in real time
 	with every SSE message received from the event stream
 </div>
 
-{{- define "SSE /events/:count"}}
-{{- range .Params.ByName "count" | atoi | .Repeat }}
-data: {{.}}
-{{ $.Flush }}{{ $.Sleep 250 }}
+{{- define "SSE /events"}}
+{{- $count := .Req.URL.Query.Get `count` | default `100` | atoi}}
+{{- $delay := .Req.URL.Query.Get `delay` | default `100` | atoi}}
+{{- range .Repeat $count }}
+data: {{.}}{{printf "\n\n"}}{{ $.Flush }}{{ $.Sleep $delay }}
 {{- end}}
 {{- end}}

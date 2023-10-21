@@ -33,7 +33,10 @@ func (server *xtemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	_, handler, params, _ := server.router.Find(r.Method, r.URL.Path)
 	if handler == nil {
-		server.log.Debug("no handler for request", slog.String("method", r.Method), slog.String("path", r.URL.Path))
+		server.log.Debug("no handler for request",
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+			slog.String("user-agent", r.Header.Get("User-Agent")))
 		http.NotFound(w, r)
 		return
 	}
@@ -45,14 +48,14 @@ func (server *xtemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	))
 	log.DebugContext(r.Context(), "serving request",
 		slog.Any("params", params),
-		slog.Duration("handler-lookup-duration", time.Since(start)),
+		slog.Duration("lookup-time", time.Since(start)),
 		slog.String("user-agent", r.Header.Get("User-Agent")),
 	)
 
 	ctx := context.WithValue(r.Context(), ctxKey{}, ctxValue{params, log, server})
 	handler.ServeHTTP(w, r.WithContext(ctx))
 
-	log.Debug("request served", slog.Duration("response-duration", time.Since(start)))
+	log.Debug("request served", slog.Duration("response-time", time.Since(start)))
 }
 
 func getRequestId(ctx context.Context) string {

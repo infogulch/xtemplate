@@ -32,6 +32,7 @@
 - Support SSE
     - [ ] Integrate nats subscription
 - [ ] Split caddy integration into a separate repo. Trying to shoehorn two modules into one repo just isn't working.
+- [ ] Add a way to register additional routes dynamically during init
 
 
 # DONE

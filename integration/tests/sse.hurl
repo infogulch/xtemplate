@@ -4,9 +4,9 @@ HTTP 200
 [Asserts]
 body contains "sse-connect"
 
-GET http://localhost:8080/events/2
+GET http://localhost:8080/events?count=11&delay=10
 Accept: text/event-stream
 
 HTTP 200
 [Asserts]
-body contains "data: 1"
+body contains "data: 10"
