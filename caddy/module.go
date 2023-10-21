@@ -3,7 +3,6 @@ package xtemplate_caddy
 import (
 	"database/sql"
 	"fmt"
-	"html/template"
 	"io/fs"
 	"net/http"
 	"os"
@@ -61,10 +60,6 @@ type XTemplateModule struct {
 	halt    chan<- struct{}
 }
 
-type FuncsProvider interface {
-	Funcs() template.FuncMap
-}
-
 // Validate ensures t has a valid configuration. Implements caddy.Validator.
 func (m *XTemplateModule) Validate() error {
 	if len(m.Delimiters) != 0 && len(m.Delimiters) != 2 {
@@ -72,15 +67,6 @@ func (m *XTemplateModule) Validate() error {
 	}
 	if m.Database.Driver != "" && slices.Index(sql.Drivers(), m.Database.Driver) == -1 {
 		return fmt.Errorf("database driver '%s' does not exist", m.Database.Driver)
-	}
-	for _, m := range m.FuncsModules {
-		mi, err := caddy.GetModule("xtemplate.funcs." + m)
-		if err != nil {
-			return fmt.Errorf("failed to find module 'xtemplate.funcs.%s': %v", m, err)
-		}
-		if _, ok := mi.New().(FuncsProvider); !ok {
-			return fmt.Errorf("module 'xtemplate.funcs.%s' does not implement FuncsProvider", m)
-		}
 	}
 	return nil
 }
@@ -120,11 +106,9 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 
 	// ExtraFuncs
 	{
-		for _, m := range m.FuncsModules {
-			mi, _ := caddy.GetModule("xtemplate.funcs." + m)
-			fm := mi.New().(FuncsProvider).Funcs()
-			log.Debug("got funcs from module", "module", "xtemplate.funcs."+m, "funcmap", fm)
-			config.WithExtraFuncs(fm)
+		_, err := config.WithRegisteredFuncMaps(m.FuncsModules...)
+		if err != nil {
+			return err
 		}
 	}
 

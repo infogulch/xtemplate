@@ -2,17 +2,19 @@ package xtemplate
 
 import (
 	"database/sql"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log/slog"
 
 	"github.com/Masterminds/sprig/v3"
+	"github.com/infogulch/xtemplate/internal"
+	"golang.org/x/exp/maps"
 )
 
 func New() *config {
 	c := &config{}
-	c.WithExtraFuncs(xtemplateFuncs)
-	c.WithExtraFuncs(sprig.HtmlFuncMap())
+	c.WithFuncMaps(xtemplateFuncs, sprig.HtmlFuncMap())
 	return c
 }
 
@@ -25,6 +27,15 @@ func (c *config) WithTemplateFS(tfs fs.FS) *config {
 	return c
 }
 
+func (c *config) WithRegisteredTemplateFS(name string) (*config, error) {
+	cfs, ok := internal.RegisteredFS[name]
+	if !ok {
+		return c, fmt.Errorf("fs named '%s' not registered", name)
+	}
+	c.WithContextFS(cfs)
+	return c, nil
+}
+
 func (c *config) WithContextFS(cfs fs.FS) *config {
 	*c = append(*c, func(r *xtemplate) {
 		r.contextFS = cfs
@@ -32,12 +43,40 @@ func (c *config) WithContextFS(cfs fs.FS) *config {
 	return c
 }
 
-func (c *config) WithExtraFuncs(funcs template.FuncMap) *config {
-	*c = append(*c, func(r *xtemplate) {
-		for name, fn := range funcs {
-			r.funcs[name] = fn
+func (c *config) WithRegisteredContextFS(name string) (*config, error) {
+	cfs, ok := internal.RegisteredFS[name]
+	if !ok {
+		return c, fmt.Errorf("fs named '%s' not registered", name)
+	}
+	c.WithContextFS(cfs)
+	return c, nil
+}
+
+func (c *config) WithFuncMaps(funcmaps ...template.FuncMap) *config {
+	for _, funcs := range funcmaps {
+		*c = append(*c, func(r *xtemplate) {
+			for name, fn := range funcs {
+				r.funcs[name] = fn
+			}
+		})
+	}
+	return c
+}
+
+func (c *config) WithRegisteredFuncMaps(names ...string) (*config, error) {
+	for _, name := range names {
+		funcs, ok := internal.RegisteredFuncMaps[name]
+		if !ok {
+			return c, fmt.Errorf("funcmap named '%s' not registered", name)
 		}
-	})
+		c.WithFuncMaps(funcs)
+	}
+	return c, nil
+}
+
+func (c *config) WithAllRegisteredFuncMaps() *config {
+	funcmaps := maps.Values(internal.RegisteredFuncMaps)
+	c.WithFuncMaps(funcmaps...)
 	return c
 }
 
