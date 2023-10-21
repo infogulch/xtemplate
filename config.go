@@ -9,7 +9,6 @@ import (
 
 	"github.com/Masterminds/sprig/v3"
 	"github.com/infogulch/xtemplate/internal"
-	"golang.org/x/exp/maps"
 )
 
 func New() *config {
@@ -75,8 +74,9 @@ func (c *config) WithRegisteredFuncMaps(names ...string) (*config, error) {
 }
 
 func (c *config) WithAllRegisteredFuncMaps() *config {
-	funcmaps := maps.Values(internal.RegisteredFuncMaps)
-	c.WithFuncMaps(funcmaps...)
+	for _, m := range internal.RegisteredFuncMaps {
+		c.WithFuncMaps(m)
+	}
 	return c
 }
 
