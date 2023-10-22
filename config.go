@@ -53,6 +53,7 @@ func (c *config) WithRegisteredContextFS(name string) (*config, error) {
 
 func (c *config) WithFuncMaps(funcmaps ...template.FuncMap) *config {
 	for _, funcs := range funcmaps {
+		funcs := funcs
 		*c = append(*c, func(r *xtemplate) {
 			for name, fn := range funcs {
 				r.funcs[name] = fn
