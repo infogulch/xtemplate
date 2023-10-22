@@ -5,7 +5,7 @@ go 1.21.3
 require (
 	github.com/caddyserver/caddy/v2 v2.7.4
 	github.com/infogulch/watch v0.1.3
-	github.com/infogulch/xtemplate v0.1.4
+	github.com/infogulch/xtemplate v0.0.0-20231022015737-f43fbbb80269
 	go.uber.org/zap/exp v0.2.0
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
 )
@@ -52,6 +52,7 @@ require (
 	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/infogulch/pathmatcher v0.2.0 // indirect
+	github.com/infogulch/xtemplate/internal v0.0.0-20231021220306-8c9a73247809 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.14.0 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect

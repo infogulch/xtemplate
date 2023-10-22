@@ -362,8 +362,10 @@ github.com/infogulch/pathmatcher v0.2.0 h1:pi8/e2BQ8x1nB1WAEnnVOIw+EciKDDSUYqDZs
 github.com/infogulch/pathmatcher v0.2.0/go.mod h1:ywO4eSHD1ARQElpii9hjqkPYFZ+IZKJ+3qDo9IZyt78=
 github.com/infogulch/watch v0.1.3 h1:ONDgRwCs86R6Fpmhd8V8ucuyR7P4HlQMbO3vVpG2UCU=
 github.com/infogulch/watch v0.1.3/go.mod h1:i9OU29MppSWictJKM3LoipjLVw+6VHiOK/SrzfujJGc=
-github.com/infogulch/xtemplate v0.1.4 h1:f7gDAGaYvbPf51/43GClm1iPt9x7h/rrHGKQmPI694k=
-github.com/infogulch/xtemplate v0.1.4/go.mod h1:n2wWvUiJEolc72suvPS3wOnQFW7DhHseMs2ddPEiJQo=
+github.com/infogulch/xtemplate v0.0.0-20231022015737-f43fbbb80269 h1:YCRpQpFSarVQmh9UHkNpebZcBXECXpJHp2bUAZwssHE=
+github.com/infogulch/xtemplate v0.0.0-20231022015737-f43fbbb80269/go.mod h1:ML9AH5BQHLoatiWsvvYSJTyby4ME5ao2V5k1yCsAQe0=
+github.com/infogulch/xtemplate/internal v0.0.0-20231021220306-8c9a73247809 h1:e98taE77Tb1EffszJgN4MGoYWef6NzEq+BmAaMJetBw=
+github.com/infogulch/xtemplate/internal v0.0.0-20231021220306-8c9a73247809/go.mod h1:SGWMbwriX1ZcZDCuAsI5LccYqnw4GBiwqvrVjU16H3g=
 github.com/jackc/chunkreader v1.0.0/go.mod h1:RT6O25fNZIuasFJRyZ4R/Y2BbhasbmZXF9QQ7T3kePo=
 github.com/jackc/chunkreader/v2 v2.0.0/go.mod h1:odVSm741yZoC3dpHEUXIqA9tQRhFrgOHwnPIn9lDKlk=
 github.com/jackc/chunkreader/v2 v2.0.1 h1:i+RDz65UE+mmpjTfyz0MoVTnzeYxroil2G82ki7MGG8=
