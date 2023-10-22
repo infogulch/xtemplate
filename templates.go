@@ -103,9 +103,17 @@ func (configs *config) Build() (CancelHandler, error) {
 	// Invoke all initilization templates, aka any template whose name starts with "INIT "
 	for _, tmpl := range x.templates.Templates() {
 		if strings.HasPrefix(tmpl.Name(), "INIT ") {
-			context := &baseContext{
-				server: x,
-				log:    log,
+			context := &struct {
+				baseContext
+				fsContext
+			}{
+				baseContext{
+					server: x,
+					log:    log,
+				},
+				fsContext{
+					fs: x.contextFS,
+				},
 			}
 			err := tmpl.Execute(io.Discard, context)
 			if err = context.resolvePendingTx(err); err != nil {
