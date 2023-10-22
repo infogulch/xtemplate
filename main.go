@@ -40,7 +40,7 @@ func parseflags() (f flags) {
 	flag.StringVar(&f.db_connstr, "db-connstr", "", "Database connection string")
 	flag.IntVar(&f.log_level, "log", 0, "Log level, DEBUG=-4, INFO=0, WARN=4, ERROR=8")
 	flag.Var(&f.config, "c", "Config values, in the form `x=y`, can be specified multiple times")
-	flag.Var(&f.config, "funcs", "The name of a funcmap library registered to xtemplate/register, can be specified multiple times")
+	flag.Var(&f.funcs, "funcs", "The name of a funcmap library registered to xtemplate/register, can be specified multiple times")
 	flag.Parse()
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "xtemplate is a hypertext preprocessor and http templating web server.\nUsage of %s:\n", os.Args[0])
