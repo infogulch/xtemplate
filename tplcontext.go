@@ -21,6 +21,178 @@ import (
 	"github.com/infogulch/pathmatcher"
 )
 
+type baseContext struct {
+	server     *xtemplate
+	log        *slog.Logger
+	pendingTx  *sql.Tx
+	requestCtx context.Context
+}
+
+func (c *baseContext) Config(key string) string {
+	return c.server.config[key]
+}
+
+// ServeContent aborts execution of the template and instead responds to the request with content
+func (c *baseContext) ServeContent(path_ string, modtime time.Time, content string) (string, error) {
+	return "", NewHandlerError("ServeFile", func(w http.ResponseWriter, r *http.Request) {
+		path_ = path.Clean(path_)
+
+		c.log.Debug("serving content response", slog.String("path", path_))
+
+		http.ServeContent(w, r, path_, modtime, strings.NewReader(content))
+	})
+}
+
+func (c *baseContext) StaticFileHash(urlpath string) (string, error) {
+	urlpath = path.Clean("/" + urlpath)
+	fileinfo, ok := c.server.files[urlpath]
+	if !ok {
+		return "", fmt.Errorf("file does not exist: '%s'", urlpath)
+	}
+	return fileinfo.hash, nil
+}
+
+func (c *baseContext) Template(name string, context any) (string, error) {
+	buf := bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufPool.Put(buf)
+
+	t := c.server.templates.Lookup(name)
+	if t == nil {
+		return "", fmt.Errorf("template name does not exist: '%s'", name)
+	}
+	if err := t.Execute(buf, context); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+func (c *baseContext) Funcs() template.FuncMap {
+	return c.server.funcs
+}
+
+func (c *baseContext) Tx() (*sqlContext, error) {
+	if c.server.db == nil {
+		return nil, fmt.Errorf("database is not configured")
+	}
+	if c.pendingTx != nil {
+		if err := c.pendingTx.Commit(); err != nil {
+			return nil, fmt.Errorf("failed to commit pending tx: %w", err)
+		}
+		c.pendingTx = nil
+	}
+	tx, err := c.server.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction")
+	}
+	c.pendingTx = tx
+	return &sqlContext{tx: tx, log: c.log.WithGroup("tx")}, nil
+}
+
+func (c *baseContext) resolvePendingTx(err error) error {
+	if c.pendingTx == nil {
+		return err
+	}
+	if err == nil {
+		err = c.pendingTx.Commit()
+	} else {
+		dberr := c.pendingTx.Rollback()
+		if dberr != nil {
+			err = errors.Join(err, dberr)
+		}
+	}
+	c.pendingTx = nil
+	return err
+}
+
+type sqlContext struct {
+	tx  *sql.Tx
+	log *slog.Logger
+}
+
+func (c *sqlContext) Exec(query string, params ...any) (result sql.Result, err error) {
+	defer func(start time.Time) {
+		c.log.Debug("Exec", slog.String("query", query), slog.Any("params", params), slog.Any("error", err), slog.Duration("queryduration", time.Since(start)))
+	}(time.Now())
+
+	return c.tx.Exec(query, params...)
+}
+
+func (c *sqlContext) QueryRows(query string, params ...any) (rows []map[string]any, err error) {
+	defer func(start time.Time) {
+		c.log.Debug("QueryRows", slog.String("query", query), slog.Any("params", params), slog.Any("error", err), slog.Duration("queryduration", time.Since(start)))
+	}(time.Now())
+
+	result, err := c.tx.Query(query, params...)
+	if err != nil {
+		return nil, err
+	}
+	defer result.Close()
+
+	var columns []string
+
+	// prepare scan output array
+	columns, err = result.Columns()
+	if err != nil {
+		return nil, err
+	}
+	n := len(columns)
+	out := make([]any, n)
+	for i := range columns {
+		out[i] = new(any)
+	}
+
+	for result.Next() {
+		err = result.Scan(out...)
+		if err != nil {
+			return nil, err
+		}
+		row := make(map[string]any, n)
+		for i, c := range columns {
+			row[c] = *out[i].(*any)
+		}
+		rows = append(rows, row)
+	}
+	return rows, result.Err()
+}
+
+func (c *sqlContext) QueryRow(query string, params ...any) (map[string]any, error) {
+	rows, err := c.QueryRows(query, params...)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) != 1 {
+		return nil, fmt.Errorf("query returned %d rows, expected exactly 1 row", len(rows))
+	}
+	return rows[0], nil
+}
+
+func (c *sqlContext) QueryVal(query string, params ...any) (any, error) {
+	row, err := c.QueryRow(query, params...)
+	if err != nil {
+		return nil, err
+	}
+	if len(row) != 1 {
+		return nil, fmt.Errorf("query returned %d columns, expected 1", len(row))
+	}
+	for _, v := range row {
+		return v, nil
+	}
+	panic("impossible condition")
+}
+
+func (c *sqlContext) Commit() (string, error) {
+	err := c.tx.Commit()
+	c.log.Debug("Commit", slog.Any("error", err))
+	return "", err
+}
+
+func (c *sqlContext) Rollback() (string, error) {
+	err := c.tx.Rollback()
+	c.log.Debug("Rollback", slog.Any("error", err))
+	return "", err
+}
+
 type fsContext struct {
 	fs fs.FS
 }
@@ -123,178 +295,6 @@ func (c *fsContext) ServeFile(path_ string) (string, error) {
 
 		http.ServeContent(w, r, path_, stat.ModTime(), file.(io.ReadSeeker))
 	})
-}
-
-type baseContext struct {
-	server     *xtemplate
-	log        *slog.Logger
-	pendingTx  *sql.Tx
-	requestCtx context.Context
-}
-
-func (c *baseContext) Config(key string) string {
-	return c.server.config[key]
-}
-
-// ServeContent aborts execution of the template and instead responds to the request with content
-func (c *baseContext) ServeContent(path_ string, modtime time.Time, content string) (string, error) {
-	return "", NewHandlerError("ServeFile", func(w http.ResponseWriter, r *http.Request) {
-		path_ = path.Clean(path_)
-
-		c.log.Debug("serving content response", slog.String("path", path_))
-
-		http.ServeContent(w, r, path_, modtime, strings.NewReader(content))
-	})
-}
-
-func (c *baseContext) StaticFileHash(urlpath string) (string, error) {
-	urlpath = path.Clean("/" + urlpath)
-	fileinfo, ok := c.server.files[urlpath]
-	if !ok {
-		return "", fmt.Errorf("file does not exist: '%s'", urlpath)
-	}
-	return fileinfo.hash, nil
-}
-
-func (c *baseContext) Template(name string, context any) (string, error) {
-	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
-	defer bufPool.Put(buf)
-
-	t := c.server.templates.Lookup(name)
-	if t == nil {
-		return "", fmt.Errorf("template name does not exist: '%s'", name)
-	}
-	if err := t.Execute(buf, context); err != nil {
-		return "", err
-	}
-	return buf.String(), nil
-}
-
-func (c *baseContext) Funcs() template.FuncMap {
-	return c.server.funcs
-}
-
-func (c *baseContext) Tx() (*SqlContext, error) {
-	if c.server.db == nil {
-		return nil, fmt.Errorf("database is not configured")
-	}
-	if c.pendingTx != nil {
-		if err := c.pendingTx.Commit(); err != nil {
-			return nil, fmt.Errorf("failed to commit pending tx: %w", err)
-		}
-		c.pendingTx = nil
-	}
-	tx, err := c.server.db.Begin()
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction")
-	}
-	c.pendingTx = tx
-	return &SqlContext{tx: tx, log: c.log.WithGroup("tx")}, nil
-}
-
-func (c *baseContext) resolvePendingTx(err error) error {
-	if c.pendingTx == nil {
-		return err
-	}
-	if err == nil {
-		err = c.pendingTx.Commit()
-	} else {
-		dberr := c.pendingTx.Rollback()
-		if dberr != nil {
-			err = errors.Join(err, dberr)
-		}
-	}
-	c.pendingTx = nil
-	return err
-}
-
-type SqlContext struct {
-	tx  *sql.Tx
-	log *slog.Logger
-}
-
-func (c *SqlContext) Exec(query string, params ...any) (result sql.Result, err error) {
-	defer func(start time.Time) {
-		c.log.Debug("Exec", slog.String("query", query), slog.Any("params", params), slog.Any("error", err), slog.Duration("queryduration", time.Since(start)))
-	}(time.Now())
-
-	return c.tx.Exec(query, params...)
-}
-
-func (c *SqlContext) QueryRows(query string, params ...any) (rows []map[string]any, err error) {
-	defer func(start time.Time) {
-		c.log.Debug("QueryRows", slog.String("query", query), slog.Any("params", params), slog.Any("error", err), slog.Duration("queryduration", time.Since(start)))
-	}(time.Now())
-
-	result, err := c.tx.Query(query, params...)
-	if err != nil {
-		return nil, err
-	}
-	defer result.Close()
-
-	var columns []string
-
-	// prepare scan output array
-	columns, err = result.Columns()
-	if err != nil {
-		return nil, err
-	}
-	n := len(columns)
-	out := make([]any, n)
-	for i := range columns {
-		out[i] = new(any)
-	}
-
-	for result.Next() {
-		err = result.Scan(out...)
-		if err != nil {
-			return nil, err
-		}
-		row := make(map[string]any, n)
-		for i, c := range columns {
-			row[c] = *out[i].(*any)
-		}
-		rows = append(rows, row)
-	}
-	return rows, result.Err()
-}
-
-func (c *SqlContext) QueryRow(query string, params ...any) (map[string]any, error) {
-	rows, err := c.QueryRows(query, params...)
-	if err != nil {
-		return nil, err
-	}
-	if len(rows) != 1 {
-		return nil, fmt.Errorf("query returned %d rows, expected exactly 1 row", len(rows))
-	}
-	return rows[0], nil
-}
-
-func (c *SqlContext) QueryVal(query string, params ...any) (any, error) {
-	row, err := c.QueryRow(query, params...)
-	if err != nil {
-		return nil, err
-	}
-	if len(row) != 1 {
-		return nil, fmt.Errorf("query returned %d columns, expected 1", len(row))
-	}
-	for _, v := range row {
-		return v, nil
-	}
-	panic("impossible condition")
-}
-
-func (c *SqlContext) Commit() (string, error) {
-	err := c.tx.Commit()
-	c.log.Debug("Commit", slog.Any("error", err))
-	return "", err
-}
-
-func (c *SqlContext) Rollback() (string, error) {
-	err := c.tx.Rollback()
-	c.log.Debug("Rollback", slog.Any("error", err))
-	return "", err
 }
 
 type requestContext struct {
