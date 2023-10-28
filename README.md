@@ -29,7 +29,7 @@ measured in microseconds.
 
 *Click a feature to expand and show details:*
 
-<details><summary><h3>📜 Execute database queries directly within a template</h3></summary>
+<details open><summary><strong>📜 Execute database queries directly within a template</strong></summary>
 
 > ```html
 > <ul>
@@ -44,7 +44,7 @@ measured in microseconds.
 > trust, it's easy to inject if you intend to.
 </details>
 
-<details><summary><h3>🗺️ Default file-based routing</h3></summary>
+<details><summary><strong>🗺️ Default file-based routing</strong></summary>
 
 > `GET` requests for a path with a matching template file will invoke the
 > template file at that path.
@@ -63,7 +63,7 @@ measured in microseconds.
 > ```
 </details>
 
-<details><summary><h3>⤵️ Define and invoke templates anywhere</h3></summary>
+<details><summary><strong>⤵️ Define and invoke templates anywhere</strong></summary>
 
 > All html files under the template root directory are available to invoke by
 > their full path relative to the template root dir starting with `/`.
@@ -85,7 +85,7 @@ measured in microseconds.
 > ```
 </details>
 
-<details><summary><h3>🧭🚦 Custom routes can handle any method</h3></summary>
+<details><summary><strong>🚦 Custom routes can handle any method</strong></summary>
 
 > Create custom route handlers for any http method and parametrized path by
 > defining a template whose name matches the pattern `<method> <path>`. Uses
@@ -111,7 +111,7 @@ measured in microseconds.
 > ```
 </details>
 
-<details><summary><h3>➰ Automatic reload</h3></summary>
+<details open><summary><strong>➰ Automatic reload</strong></summary>
 
 > By default templates are reloaded and validated automatically as soon as they
 > are modified, no need to restart the server. If an error occurs during load it
@@ -126,7 +126,7 @@ measured in microseconds.
 > ```
 </details>
 
-<details><summary><h3>🗄️ Ideal static file serving</h3></summary>
+<details open><summary><strong>🗄️ Ideal static file serving</strong></summary>
 
 > All non-.html files in the templates directory are considered static files and
 > are served directly from disk with valid handling and 304 responses based on
@@ -138,15 +138,15 @@ measured in microseconds.
 > `Content-Encoding`.
 >
 > Templates can efficiently access the static file's precalculated content hash
-> to build a `<script>` or `<link>` integrity attribute to enable clients check
-> the integrity of the content if they are served through a CDN. See:
+> to build a `<script>` or `<link>` integrity attribute, instructing clients to
+> check the integrity of the content if they are served through a CDN. See:
 > [Subresource Integrity](https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity)
 >
 > Add the content hash as a query parameter and responses will automatically add
-> a 1 year long Cache-Control header. This is causes clients to cache as long as
-> possible, and if the file changes its hash will change so its query parameter
-> will change so the client will immediately request a new version, completely
-> eliminating stale cache issues.
+> a 1 year long `Cache-Control` header. This is causes clients to cache as long
+> as possible, and if the file changes its hash will change so its query
+> parameter will change so the client will immediately request a new version,
+> seamlessly sidestepping stale cache issues.
 >
 > ```html
 > {{- with $hash := .StaticFileHash `/reset.css`}}
@@ -154,15 +154,14 @@ measured in microseconds.
 > {{- end}}
 > ```
 
-[sri]:
 </details>
 
-<details><summary><h3>📩 Live updates with Server Sent Events (SSE)</h3></summary>
+<details><summary><strong>📩 Live updates with Server Sent Events (SSE)</strong></summary>
 
-> abc
+> TODO
 </details>
 
-<details><summary><h3>🐜 Small footprint, easy to deploy</h3></summary>
+<details><summary><strong>🐜 Small footprint, easy to deploy</strong></summary>
 
 > Compiles to a small ~30MB binary. Easily add your own custom functions and
 > choice of database driver on top. Deploy next to your templates and static
