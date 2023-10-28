@@ -13,14 +13,12 @@ measured in microseconds.
 
 - 🎇 [Features](#features)
 - 📦 [How to use](#how-to-use)
-- 🏆 [Showcase](#showcase)
-- 📐 [Template syntax](#template-syntax)
+- 🧰 [Template Semantics](#template-semantics)
   - [Context values](#context-values)
   - [Functions](#functions)
-    - [Stdlib Functions](#go-stdlib-template-functions)
-    - [Sprig Functions](#sprig-library-template-functions)
-    - [xtemplate Functions](#xtemplate-functions)
+- 🏆 [Showcase](#showcase)
 - 🛠️ [Development](#development)
+  - ➕ [Extending](#extending-xtemplate)
 - ✅ [License](#project-history-and-license)
 
 > This project is still in development.
@@ -171,83 +169,108 @@ measured in microseconds.
 
 # How to use
 
-> TODO: This section is a work in progress, but here is a basic overview:
+> TODO: This section is a work in progress.
 
-* XTemplate is flexible and can be used in several different modes:
-  * As a library: call `New()`, use functional options to configure it, then call `.Build()` to get an `http.Handler`; do whatever you like with it. See `config.go`.
-  * As a standalone binary, run `go build ./cmd`
-  * As a custom binary, see `main.go:Main()` and `./cmd/main.go` as an example. Do this if you want to use a custom db driver, custom functions, or embed your templates for single binary deployment.
-  * As an [http middlware plugin](https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate%2Fcaddy) for [Caddy Server](https://caddyserver.com/)
-* Configuration
-  * Template files and static files are loaded from the template root directory, configured by `--template-root` (default "templates")
-  * If you want the templates to have access to the local file system, configure it with a `--context-root` directory path (default disabled)
-  * If you want database access, configure it with `--db-driver` and `--db-connstr`
-  * See other configuration options in `config.go` and flags in `main.go`
-* Usage
-  * Unlike the html/template default, all template files are recursively loaded into the same templates instance. They can be invoked from another template by full path name rooted at template root.
-  * .html template files are automatically invoked upon request to their path minus extension
-  * Templates are invoked with a consistent root context which includes request data, local file access (if configured), and db access (if configured). (See the next section for details.) When the template finishes the result is sent to the client.
-  * Other files are served as static files
-  * Create extra handlers besides file-based routes by defining template names that match an http method and path with path wildcards or methods other than GET
-  * Define SSE handler with SSE prefix
-* For detailed documentation about available functions and context, see the next section: [Template sytax](#template-syntax).
+### Deployment modes
 
-# Template syntax
+XTemplate is designed to be used in several different contexts:
+
+* As a library: call `New()`, use functional options to configure it, then call `.Build()` to get an `http.Handler`; do whatever you like with it. See `config.go`.
+* As a standalone binary: run `go build ./cmd`
+* As a custom binary: see `main.go:Main()` and `./cmd/main.go` as an example. Do this if you want to use a custom db driver, custom functions, or embed your templates for single binary deployment.
+* As an [http middlware plugin](https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate%2Fcaddy) for [Caddy Server](https://caddyserver.com/)
+
+### Configuration
+
+Configuration is exposed as functional options, cli flags, or caddy JSON or
+Caddyfile config, depending on your choice of deployment mode. All configuration
+is available to all modes.
+
+* Template files and static files are loaded from the template root directory, configured by `--template-root` (default "templates")
+* If you want the templates to have access to the local file system, configure it with a `--context-root` directory path (default disabled)
+* If you want database access, configure it with `--db-driver` and `--db-connstr`
+* See other configuration options in `config.go` and flags in `main.go`
+
+###
+
+* Unlike the html/template default, all template files are recursively loaded into the same templates instance. They can be invoked from another template by full path name rooted at template root.
+* .html template files are automatically invoked upon request to their path minus extension
+* Templates are invoked with a consistent root context which includes request data, local file access (if configured), and db access (if configured). (See the next section for details.) When the template finishes the result is sent to the client.
+* Other files are served as static files
+* Create extra handlers besides file-based routes by defining template names that match an http method and path with path wildcards or methods other than GET
+* Define SSE handler with SSE prefix
+* Define templates that run during build by creating any number of templates that start with `INIT `.
+
+# Template Semantics
 
 Templates are loaded using Go's [`html/template`](https://pkg.go.dev/html/template)
 module, which is extended with additional functions and a specific context.
 
-### Context values
+### Context
 
-The dot context `{{.}}` set on the main template handler provides
-request-specific data and stateful actions. See [tplcontext.go](tpl.context.go)
-for details.
+The dot context `{{.}}` set on each template invocation facilitates access to
+request-specific data and provides stateful actions.
 
-- Request and response related fields and fields
-  - `.Req` is the current HTTP request struct, [http.Request](https://pkg.go.dev/net/http#Request), which has various fields, including:
-    - `.Method` - the method
-    - `.URL` - the URL, which in turn has component fields (Scheme, Host,
-      Path, etc.)
-    - `.Header` - the header fields
-    - `.Host` - the Host or :authority header of the request
-  - `.Params` is a list of path parameters extracted from the url based on the
-    current route, see [custom routes](#file-based-routing--custom-routes). `{{.Params.ByName "id"}}`
-  - `.RemoteIP` is the client's IP address. `{{.RemoteIP}}`
-  - `.Host` is the hostname portion (no port) of the Host header of the HTTP request.
-  - `.Cookie` Gets the value of a cookie by name. `{{.Cookie "cookiename"}}`
-  - `.Placeholder` gets a caddy "placeholder variable". The braces (`{}`)
-    have to be omitted.
-  - `.SetStatus` Set the status code of the current response. `{{.RespStatus 201}}`
-  - `.AddHeader` Adds a header field to the HTTP response. `{{.RespHeader.Add "Field-Name" "val"}}`
-  - `.SetHeader` Sets a header field on the HTTP response, replacing any existing value.
-  - `.DelHeader` Deletes a header field on the HTTP response.
-- File related funcs. File operations are rooted at the directory specified by the `context_root` config option.
-  - `.ReadFile $file` reads and returns the contents of a file, as-is. Note that the contents are NOT escaped, so you should only read trusted files.
-  - `.ListFiles` returns a list of the files in the given directory.
-  - `.FileExists` returns true if filename can be opened successfully.
-  - `.StatFile` returns Stat of a filename.
-  - `.ServeFile` discards any template content rendered so far and responds to the request with the contents of the file at
-- Database related funcs. All funcs accept a query string and any number of parameters. Prefer using parameters over building the query string dynamically.
-  - `.Exec` executes a statment
-  - `.QueryRows` executes a query and returns all rows in a big `[]map[string]any`.
-  - `.QueryRow` executes a query, which must return one row, and returns the `map[string]any`.
-  - `.QueryVal` executes a query, which must return one row and one column, and returns the value of the column.
-- Other
-  - `.Template` evaluate the template name with the given context and return the result as a string.
-  - `.Funcs` returns a list of all the custom FuncMap funcs that are available to call. Useful in combination with the `try` func.
-  - `.Config` is a map of config strings set in the Caddyfile. See [Config](#config).
+ See [tplcontext.go](tpl.context.go) for details.
+
+#### Request data and response control
+
+- `.Req` is the current HTTP request struct, [http.Request](https://pkg.go.dev/net/http#Request), which has various fields, including:
+  - `.Method` - the method
+  - `.URL` - the URL, which in turn has component fields (Scheme, Host,
+    Path, etc.)
+  - `.Header` - the header fields
+  - `.Host` - the Host or :authority header of the request
+- `.Params` is a list of path parameters extracted from the url based on the
+  current route.
+- `.RemoteIP` is the client's IP address.
+- `.Host` is the hostname portion (no port) of the Host header of the HTTP request.
+- `.Cookie "cookiename"` Gets the value of a cookie by name.
+
+- `.SetStatus 201` Set the status code of the current response if no error occurs during template rendering.
+- `.AddHeader "Header-Name" $val` Adds a header field to the HTTP response
+- `.SetHeader "Header-Name" $val` Sets a header field on the HTTP response, replacing any existing value
+- `.DelHeader "Header-Name"` Deletes a header field on the HTTP response
+
+#### File operations
+
+File operations are rooted at the directory specified by the `context_root`
+config option. If a context root is not configured these functions produce an
+error.
+
+- `.ReadFile $file` reads and returns the contents of a file, as-is.
+- `.ListFiles $file` returns a list of the files in the given directory.
+- `.FileExists $file` returns true if filename can be opened successfully.
+- `.StatFile $file` returns Stat of a filename.
+- `.ServeFile $file` discards any template content rendered so far and responds to the request with the contents of the file at `$file`
+
+#### Database functions
+
+All funcs accept a query string and any number of parameters. Prefer using parameters over building the query string dynamically.
+
+- `.Exec` executes a statment
+- `.QueryRows` executes a query and returns all rows in a big `[]map[string]any`.
+- `.QueryRow` executes a query, which must return one row, and returns the `map[string]any`.
+- `.QueryVal` executes a query, which must return one row and one column, and returns the value of the column.
+
+#### Other
+
+- `.Template` evaluate the template name with the given context and return the result as a string.
+- `.Funcs` returns a list of all the custom FuncMap funcs that are available to call. Useful in combination with the `try` func.
+- `.Config` is a map of config strings set in the Caddyfile. See [Config](#config).
+- `.ServeContent $path $modtime $content`, like `.ServeFile`, discards any template content rendered so far, and responds to the request with the raw string `$content`. Intended to serve rendered documents by responding with 304 Not Modified by coordinating with the client on `$modtime`.
 
 ### Functions
 
 These are built-in functions that are available to all invocations and don't
 depend on request context or mutate state. There are three sets by default:
 functions that come by default in the go template library, functions from the
-sprig func library, and extra functions added by xtemplate.
+sprig library, and custom functions added by xtemplate.
 
 You can also add your own custom FuncMap by calling the
-`config.WithFuncMaps(myfuncmap)` while constructing `XTemplate`.
+`config.WithFuncMaps(myfuncmap)` while constructing an `XTemplate` instance.
 
-<details><summary><h4>Go stdlib template functions</h4></summary>
+<details><summary><strong>Go stdlib template functions</strong></summary>
 
 See [text/template#Functions](https://pkg.go.dev/text/template#hdr-Functions).
 
@@ -308,7 +331,7 @@ See [text/template#Functions](https://pkg.go.dev/text/template#hdr-Functions).
 
 </details>
 
-<details><summary><h4>Sprig library template functions</h4></summary>
+<details><summary><strong>Sprig library template functions</strong></summary>
 
 See the Sprig documentation for details: [Sprig Function Documentation](https://masterminds.github.io/sprig/).
 
@@ -340,7 +363,7 @@ See the Sprig documentation for details: [Sprig Function Documentation](https://
 
 </details>
 
-<details><summary><h4>XTemplate functions</h4></summary>
+<details><summary><strong>XTemplate functions</strong></summary>
 
 See [funcs.go](/funcs.go) for details.
 
@@ -374,9 +397,17 @@ XTemplate is three Go packages in this repository:
 * `github.com/infogulch/xtemplate/cmd`, a simple binary that configures `XTemplate` with CLI args and serves http requests with it. Build it yourself or download the binary from github releases.
 * `github.com/infogulch/xtemplate/caddy`, a caddy module that integrates xtemplate into the caddy web server.
 
-You can register custom functions for use in the default cli by registering using the `./register` module. This module scheme prevents polluting your custom function module with dozens of xtemplate-specific dependencies.
-
 XTemplate is tested by running `./integration/run.sh` which loads the test templates and context directory, and runs hurl tests from the tests directory.
+
+### Extending xtemplate
+
+XTemplate has two built-in extension points, adding a custom funcmap of
+functions that will be made available in the template, and registering a `fs.FS`
+which can be used as either the template root or context root.
+
+See the `./register` module for details. This module scheme may look strange but
+it is designed to minimize the number of extra dependencies added to your module
+by depending on xtemplate.
 
 ## Project history and license
 
