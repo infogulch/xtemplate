@@ -1,137 +1,202 @@
 # XTemplate
 
-`xtemplate` is a hypertext preprocessor that extends Go's
-[`html/template` library][html-template] to be capable enough to host an entire
-server-side web application using just template definitions. Designed with the
-[htmx.org][htmx] js library in mind, which makes server side rendered sites feel
-as interactive as a Single Page Apps.
+`xtemplate` is an html/http server that simplifies server side web development,
+building on Go's `html/template` library to streamline construction of a
+hypermedia-exchange-oriented web server using just template definitions.
+Entirely eschew defining and naming handlers, param structs, query row structs,
+and template context structs. Completely circumvent manual management of route
+tables, discovering and loading template files, and serving static files. Do all
+of this with a development loop measured in milliseconds and response times
+measured in microseconds.
 
-[html-template]: https://pkg.go.dev/html/template
-[htmx]: https://htmx.org/
+### Table of contents
 
-> ⚠️ This project is still in development. ⚠️
+- 🎇 [Features](#features)
+- 📦 [How to use](#how-to-use)
+- 🏆 [Showcase](#showcase)
+- 📐 [Template syntax](#template-syntax)
+  - [Context values](#context-values)
+  - [Functions](#functions)
+    - [Stdlib Functions](#go-stdlib-template-functions)
+    - [Sprig Functions](#sprig-library-template-functions)
+    - [xtemplate Functions](#xtemplate-functions)
+- 🛠️ [Development](#development)
+- ✅ [License](#project-history-and-license)
 
-> ---
->
-> ### Table of contents
->
-> - ✨ [Features](#features)
->   - [Query the database directly within template definitions](#query-the-database-directly-within-template-definitions)
->   - [Define templates and import content from other files](#define-templates-and-import-content-from-other-files)
->   - [File-based routing](#file-based-routing)
->   - [Custom routes](#custom-routes)
->   - [Automatic reload](#automatic-reload)
-> - 🏆 [Showcase](#showcase)
-> - 📦 [How to use](#how-to-use)
-> - 📐 [Template syntax](#template-syntax)
->   - [Context values](#context-values)
->   - [Functions](#functions)
->     - [Stdlib Functions](#go-stdlib-template-functions)
->     - [Sprig Functions](#sprig-library-template-functions)
->     - [xtemplate Functions](#xtemplate-functions)
-> - 🛠️ [Development](#development)
-> - ✅ [License](#project-history-and-license)
->
-> ---
+> This project is still in development.
 
 ## Features
 
-### Query the database directly within template definitions
+*Click a feature to expand and show details:*
 
-```html
-<ul>
-  {{range .Query `SELECT id,name FROM contacts`}}
-  <li><a href="/contact/{{.id}}">{{.name}}</a></li>
-  {{end}}
-</ul>
-```
+<details><summary><h3>📜 Execute database queries directly within a template</h3></summary>
 
-> Note: The html/template library automatically sanitizes inputs, so you can
-> rest easy from basic XSS attacks. Note: if you generate some html that you do
+> ```html
+> <ul>
+>   {{range .Query `SELECT id,name FROM contacts`}}
+>   <li><a href="/contact/{{.id}}">{{.name}}</a></li>
+>   {{end}}
+> </ul>
+> ```
+>
+> The html/template library automatically sanitizes inputs, so you can
+> rest easy from basic XSS attacks. But if you generate some html that you do
 > trust, it's easy to inject if you intend to.
+</details>
 
-### Define templates and import content from other files
+<details><summary><h3>🗺️ Default file-based routing</h3></summary>
 
-```html
-<html>
-  <title>Home</title>
-  <!-- import the contents of another file -->
-  {{template "/shared/_head.html" .}}
+> `GET` requests for a path with a matching template file will invoke the
+> template file at that path.
+>
+> Except files starting with `_` are not routed. This allows defining templates
+> that only other templates can invoke. (See the next feature)
+>
+> ```
+> .
+> ├── index.html          GET /
+> ├── todos.html          GET /todos
+> ├── admin
+> │   └── settings.html   GET /admin/settings
+> └── shared
+>     └── _head.html      (not routed because it starts with '_')
+> ```
+</details>
 
-  <body>
-    <!-- invoke a custom template defined anywhere -->
-    {{template "navbar" .}}
-    ...
-  </body>
-</html>
-```
+<details><summary><h3>⤵️ Define and invoke templates anywhere</h3></summary>
 
-### File-based routing
+> All html files under the template root directory are available to invoke by
+> their full path relative to the template root dir starting with `/`.
+>
+>
+>
+> ```html
+> <html>
+>   <title>Home</title>
+>   <!-- import the contents of another file -->
+>   {{template "/shared/_head.html" .}}
+>
+>   <body>
+>     <!-- invoke a custom template defined anywhere -->
+>     {{template "navbar" .}}
+>     ...
+>   </body>
+> </html>
+> ```
+</details>
 
-`GET` requests for a path with a matching template file will invoke the template
-file at that path, with the exception that files starting with `_` are not
-routed. This allows defining templates that only other templates can invoke.
+<details><summary><h3>🧭🚦 Custom routes can handle any method</h3></summary>
 
-```
-.
-├── index.html          GET /
-├── todos.html          GET /todos
-├── admin
-│   └── settings.html   GET /admin/settings
-└── shared
-    └── _head.html      (not routed)
-```
+> Create custom route handlers for any http method and parametrized path by
+> defining a template whose name matches the pattern `<method> <path>`. Uses
+> [httprouter](https://github.com/julienschmidt/httprouter) syntax for path
+> parameters and wildcards, which are made available in the template as values
+> in the `.Param` key while serving a request.
+>
+> ```html
+> <!-- match on path parameters -->
+> {{define "GET /contact/:id"}}
+> {{$contact := .QueryRow `SELECT name,phone FROM contacts WHERE id=?` (.Params.ByName "id")}}
+> <div>
+>   <span>Name: {{$contact.name}}</span>
+>   <span>Phone: {{$contact.phone}}</span>
+> </div>
+> {{end}}
+>
+> <!-- match on any http method -->
+> {{define "DELETE /contact/:id"}}
+> {{$_ := .Exec `DELETE from contacts WHERE id=?` (.Params.ByName "id")}}
+> {{.RespStatus 204}}
+> {{end}}
+> ```
+</details>
 
-### Custom routes
+<details><summary><h3>➰ Automatic reload</h3></summary>
 
-Create custom route handlers for any http method and parametrized path by
-defining a template whose name matches the pattern `<method> <path>`. Uses
-[httprouter](https://github.com/julienschmidt/httprouter) syntax for path
-parameters and wildcards, which are made available in the template as values in
-the `.Param` key while serving a request.
+> By default templates are reloaded and validated automatically as soon as they
+> are modified, no need to restart the server. If an error occurs during load it
+> continues to serve the old version and outputs the error in the log.
+>
+> With this two line template you can configure your page to automatically reload
+> when the server reloads. (Great for development, maybe not great for prod.)
+>
+> ```html
+> <script>new EventSource("/reload").onmessage = () => location.reload()</script>
+> {{- define "SSE /reload"}}{{.Block}}data: reload{{printf "\n\n"}}{{end}}
+> ```
+</details>
 
-```html
-<!-- match on path parameters -->
-{{define "GET /contact/:id"}}
-{{$contact := .QueryRow `SELECT name,phone FROM contacts WHERE id=?` (.Params.ByName "id")}}
-<div>
-  <span>Name: {{$contact.name}}</span>
-  <span>Phone: {{$contact.phone}}</span>
-</div>
-{{end}}
+<details><summary><h3>🗄️ Ideal static file serving</h3></summary>
 
-<!-- match on any http method -->
-{{define "DELETE /contact/:id"}}
-{{$_ := .Exec `DELETE from contacts WHERE id=?` (.Params.ByName "id")}}
-{{.RespStatus 204}}
-{{end}}
-```
+> All non-.html files in the templates directory are considered static files and
+> are served directly from disk with valid handling and 304 responses based on
+> ETag/If-Match/If-None-Match and Modified/If-Modified-Since headers.
+>
+> If a static file also has .gz, .br, .zip, or .zst copies they are decoded and
+> hashed for consistency on startup and are automatically served directly from
+> disk to the client with a negotiated `Accept-Encoding` and appropriate
+> `Content-Encoding`.
+>
+> Templates can efficiently access the static file's precalculated content hash
+> to build a `<script>` or `<link>` integrity attribute to enable clients check
+> the integrity of the content if they are served through a CDN. See:
+> [Subresource Integrity](https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity)
+>
+> Add the content hash as a query parameter and responses will automatically add
+> a 1 year long Cache-Control header. This is causes clients to cache as long as
+> possible, and if the file changes its hash will change so its query parameter
+> will change so the client will immediately request a new version, completely
+> eliminating stale cache issues.
+>
+> ```html
+> {{- with $hash := .StaticFileHash `/reset.css`}}
+> <link rel="stylesheet" href="/reset.css?hash={{$hash}}" integrity="{{$hash}}">
+> {{- end}}
+> ```
 
-### Automatic reload
+[sri]:
+</details>
 
-Templates are reloaded and validated automatically as soon as they are modified,
-no need to restart the server. If there's a syntax error it continues to serve
-the old version and prints the loading error out in the logs.
+<details><summary><h3>📩 Live updates with Server Sent Events (SSE)</h3></summary>
 
-> Ctrl+S > Alt+Tab > F5
+> abc
+</details>
 
-# Showcase
+<details><summary><h3>🐜 Small footprint, easy to deploy</h3></summary>
 
-* [infogulch/xrss](https://github.com/infogulch/xrss), an rss feed reader built with htmx and inline css.
-* [infogulch/todos](https://github.com/infogulch/todos), a demo todomvc application.
+> Compiles to a small ~30MB binary. Easily add your own custom functions and
+> choice of database driver on top. Deploy next to your templates and static
+> files or [embed](https://pkg.go.dev/embed) them into the binary for single
+> binary deployments.
+</details>
 
 # How to use
 
-XTemplate is three Go packages in this repository:
+> TODO: This section is a work in progress, but here is a basic overview:
 
-* `github.com/infogulch/xtemplate`, a library that loads template files and implements `http.Handler`, routing requests to templates. Use it in your own Go application by depending on it as a library and using the [`XTemplate` struct](templates.go) struct.
-* `github.com/infogulch/xtemplate/bin`, a simple binary that configures `XTemplate` with CLI args and serves http requests with it. Build it yourself or download the binary from github releases.
-* `github.com/infogulch/xtemplate/caddy`, a caddy module that integrates xtemplate into the caddy web server.
+* XTemplate is flexible and can be used in several different modes:
+  * As a library: call `New()`, use functional options to configure it, then call `.Build()` to get an `http.Handler`; do whatever you like with it. See `config.go`.
+  * As a standalone binary, run `go build ./cmd`
+  * As a custom binary, see `main.go:Main()` and `./cmd/main.go` as an example. Do this if you want to use a custom db driver, custom functions, or embed your templates for single binary deployment.
+  * As an [http middlware plugin](https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate%2Fcaddy) for [Caddy Server](https://caddyserver.com/)
+* Configuration
+  * Template files and static files are loaded from the template root directory, configured by `--template-root` (default "templates")
+  * If you want the templates to have access to the local file system, configure it with a `--context-root` directory path (default disabled)
+  * If you want database access, configure it with `--db-driver` and `--db-connstr`
+  * See other configuration options in `config.go` and flags in `main.go`
+* Usage
+  * Unlike the html/template default, all template files are recursively loaded into the same templates instance. They can be invoked from another template by full path name rooted at template root.
+  * .html template files are automatically invoked upon request to their path minus extension
+  * Templates are invoked with a consistent root context which includes request data, local file access (if configured), and db access (if configured). (See the next section for details.) When the template finishes the result is sent to the client.
+  * Other files are served as static files
+  * Create extra handlers besides file-based routes by defining template names that match an http method and path with path wildcards or methods other than GET
+  * Define SSE handler with SSE prefix
+* For detailed documentation about available functions and context, see the next section: [Template sytax](#template-syntax).
 
 # Template syntax
 
-Template syntax uses Go's [`html/template`](https://pkg.go.dev/html/template)
-module, and extends it with custom functions and useful context.
+Templates are loaded using Go's [`html/template`](https://pkg.go.dev/html/template)
+module, which is extended with additional functions and a specific context.
 
 ### Context values
 
@@ -146,8 +211,6 @@ for details.
       Path, etc.)
     - `.Header` - the header fields
     - `.Host` - the Host or :authority header of the request
-  - `.OriginalReq` is the original, unmodified, un-rewritten request as it
-    originally came in over the wire. Has the same fields as `.Req`.
   - `.Params` is a list of path parameters extracted from the url based on the
     current route, see [custom routes](#file-based-routing--custom-routes). `{{.Params.ByName "id"}}`
   - `.RemoteIP` is the client's IP address. `{{.RemoteIP}}`
@@ -155,15 +218,16 @@ for details.
   - `.Cookie` Gets the value of a cookie by name. `{{.Cookie "cookiename"}}`
   - `.Placeholder` gets a caddy "placeholder variable". The braces (`{}`)
     have to be omitted.
-  - `.RespStatus` Set the status code of the current response. `{{.RespStatus 201}}`
-  - `.RespHeader.Add` Adds a header field to the HTTP response. `{{.RespHeader.Add "Field-Name" "val"}}`
-  - `.RespHeader.Set` Sets a header field on the HTTP response, replacing any existing value.
-  - `.RespHeader.Del` Deletes a header field on the HTTP response.
+  - `.SetStatus` Set the status code of the current response. `{{.RespStatus 201}}`
+  - `.AddHeader` Adds a header field to the HTTP response. `{{.RespHeader.Add "Field-Name" "val"}}`
+  - `.SetHeader` Sets a header field on the HTTP response, replacing any existing value.
+  - `.DelHeader` Deletes a header field on the HTTP response.
 - File related funcs. File operations are rooted at the directory specified by the `context_root` config option.
-  - `.ReadFile` reads and returns the contents of a file, as-is. Note that the contents are NOT escaped, so you should only read trusted files.
+  - `.ReadFile $file` reads and returns the contents of a file, as-is. Note that the contents are NOT escaped, so you should only read trusted files.
   - `.ListFiles` returns a list of the files in the given directory.
   - `.FileExists` returns true if filename can be opened successfully.
   - `.StatFile` returns Stat of a filename.
+  - `.ServeFile` discards any template content rendered so far and responds to the request with the contents of the file at
 - Database related funcs. All funcs accept a query string and any number of parameters. Prefer using parameters over building the query string dynamically.
   - `.Exec` executes a statment
   - `.QueryRows` executes a query and returns all rows in a big `[]map[string]any`.
@@ -176,17 +240,17 @@ for details.
 
 ### Functions
 
-There are built-in functions that perform actions that are unrelated to a
-specific request. See [funcs.go](funcs.go) for details.
+These are built-in functions that are available to all invocations and don't
+depend on request context or mutate state. There are three sets by default:
+functions that come by default in the go template library, functions from the
+sprig func library, and extra functions added by xtemplate.
 
-#### Go stdlib template functions
+You can also add your own custom FuncMap by calling the
+`config.WithFuncMaps(myfuncmap)` while constructing `XTemplate`.
+
+<details><summary><h4>Go stdlib template functions</h4></summary>
 
 See [text/template#Functions](https://pkg.go.dev/text/template#hdr-Functions).
-
-<details>
-<summary>
-Expand for a stdlib funcs documentation.
-</summary>
 
 - `and`
   Returns the boolean AND of its arguments by returning the
@@ -245,14 +309,9 @@ Expand for a stdlib funcs documentation.
 
 </details>
 
-#### Sprig library template functions
+<details><summary><h4>Sprig library template functions</h4></summary>
 
 See the Sprig documentation for details: [Sprig Function Documentation](https://masterminds.github.io/sprig/).
-
-<details>
-<summary>
-Expand for a listing of Sprig funcs.
-</summary>
 
 - [String Functions](https://masterminds.github.io/sprig/strings.html):
   - `trim`, `trimAll`, `trimSuffix`, `trimPrefix`, `repeat`, `substr`, `replace`, `shuffle`, `nospace`, `trunc`, `abbrev`, `abbrevboth`, `wrap`, `wrapWith`, `quote`, `squote`, `cat`, `indent`, `nindent`
@@ -282,7 +341,9 @@ Expand for a listing of Sprig funcs.
 
 </details>
 
-#### xtemplate functions
+<details><summary><h4>XTemplate functions</h4></summary>
+
+See [funcs.go](/funcs.go) for details.
 
 - `markdown` Renders the given Markdown text as HTML and returns it. This uses the [Goldmark](https://github.com/yuin/goldmark) library, which is CommonMark compliant. It also has these extensions enabled: Github Flavored Markdown, Footnote, and syntax highlighting provided by [Chroma](https://github.com/alecthomas/chroma).
 - `splitFrontMatter` Splits front matter out from the body. Front matter is metadata that appears at the very beginning of a file or string. Front matter can be in YAML, TOML, or JSON formats.
@@ -298,6 +359,25 @@ Expand for a listing of Sprig funcs.
 - `ksuid` returns a 'K-Sortable Globally Unique ID' using [segmentio/ksuid](https://github.com/segmentio/ksuid)
 - `idx` gets an item from a list, similar to the built-in `index`, but with reversed args: index first, then array. This is useful to use index in a pipeline, for example: `{{generate-list | idx 5}}`
 - `try` takes a function that returns an error in the first argument and calls it with the values from the remaining arguments, and returns the result including any error as struct fields. This enables template authors to handle funcs that return errors within the template definition. Example: `{{ $result := try .QueryVal "SELECT 'oops' WHERE 1=0" }}{{if $result.OK}}{{$result.Value}}{{else}}QueryVal requires exactly one row. Error: {{$result.Error}}{{end}}`
+
+</details>
+
+# Showcase
+
+* [infogulch/xrss](https://github.com/infogulch/xrss), an rss feed reader built with htmx and inline css.
+* [infogulch/todos](https://github.com/infogulch/todos), a demo todomvc application.
+
+## Development
+
+XTemplate is three Go packages in this repository:
+
+* `github.com/infogulch/xtemplate`, a library that loads template files and implements `http.Handler`, routing requests to templates and serving static files. Use it in your own Go application by depending on it as a library and using the [`New` func](config.go) and functional options.
+* `github.com/infogulch/xtemplate/cmd`, a simple binary that configures `XTemplate` with CLI args and serves http requests with it. Build it yourself or download the binary from github releases.
+* `github.com/infogulch/xtemplate/caddy`, a caddy module that integrates xtemplate into the caddy web server.
+
+You can register custom functions for use in the default cli by registering using the `./register` module. This module scheme prevents polluting your custom function module with dozens of xtemplate-specific dependencies.
+
+XTemplate is tested by running `./integration/run.sh` which loads the test templates and context directory, and runs hurl tests from the tests directory.
 
 ## Project history and license
 
