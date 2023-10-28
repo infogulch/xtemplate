@@ -1,6 +1,5 @@
 <!DOCTYPE html>
-<script src="https://unpkg.com/htmx.org@1.9.6/dist/htmx.js"></script>
-<script src="https://unpkg.com/htmx.org@1.9.6/dist/ext/sse.js"></script>
+<script>new EventSource("/reload").onmessage = () => location.reload()</script>
+{{- define "SSE /reload"}}{{.Block}}data: reload{{printf "\n\n"}}{{end}}
 
-<div hx-ext="sse" sse-connect="/reload" sse-swap="message">Waiting...</div>
-{{- define "SSE /reload"}}{{.Block}}data: <div hx-on::load="location.reload()"></div>{{printf "\n\n"}}{{end}}
+{{now}}
