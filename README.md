@@ -9,7 +9,8 @@ tables, discovering and loading template files, and serving static files. Do all
 of this with a development loop measured in milliseconds and response times
 measured in microseconds.
 
-### Table of contents
+> [!IMPORTANT]
+> xtemplate is beta
 
 - 🎇 [Features](#features)
 - 📦 [How to use](#how-to-use)
@@ -21,13 +22,11 @@ measured in microseconds.
   - ➕ [Extending](#extending-xtemplate)
 - ✅ [License](#project-history-and-license)
 
-> This project is still in development.
-
 ## Features
 
 *Click a feature to expand and show details:*
 
-<details open><summary><strong>📜 Execute database queries directly within a template</strong></summary>
+<details open><summary><strong>💽 Execute database queries directly within a template</strong></summary>
 
 > ```html
 > <ul>
@@ -42,7 +41,7 @@ measured in microseconds.
 > trust, it's easy to inject if you intend to.
 </details>
 
-<details><summary><strong>🗺️ Default file-based routing</strong></summary>
+<details><summary><strong>🗃️ Default file-based routing</strong></summary>
 
 > `GET` requests for a path with a matching template file will invoke the
 > template file at that path.
@@ -61,7 +60,7 @@ measured in microseconds.
 > ```
 </details>
 
-<details><summary><strong>⤵️ Define and invoke templates anywhere</strong></summary>
+<details><summary><strong>👨‍💻 Define and invoke templates anywhere</strong></summary>
 
 > All html files under the template root directory are available to invoke by
 > their full path relative to the template root dir starting with `/`.
@@ -83,7 +82,7 @@ measured in microseconds.
 > ```
 </details>
 
-<details><summary><strong>🚦 Custom routes can handle any method</strong></summary>
+<details><summary><strong>🔱 Custom routes can handle any method</strong></summary>
 
 > Create custom route handlers for any http method and parametrized path by
 > defining a template whose name matches the pattern `<method> <path>`. Uses
@@ -109,14 +108,15 @@ measured in microseconds.
 > ```
 </details>
 
-<details open><summary><strong>➰ Automatic reload</strong></summary>
+<details open><summary><strong>🔄 Automatic reload</strong></summary>
 
 > By default templates are reloaded and validated automatically as soon as they
 > are modified, no need to restart the server. If an error occurs during load it
 > continues to serve the old version and outputs the error in the log.
 >
-> With this two line template you can configure your page to automatically reload
-> when the server reloads. (Great for development, maybe not great for prod.)
+> With this two line template you can configure your page to automatically
+> reload when the server reloads. (Great for development, maybe not great for
+> prod.)
 >
 > ```html
 > <script>new EventSource("/reload").onmessage = () => location.reload()</script>
@@ -124,7 +124,7 @@ measured in microseconds.
 > ```
 </details>
 
-<details open><summary><strong>🗄️ Ideal static file serving</strong></summary>
+<details open><summary><strong>📤 Ideal static file serving</strong></summary>
 
 > All non-.html files in the templates directory are considered static files and
 > are served directly from disk with valid handling and 304 responses based on
@@ -151,15 +151,17 @@ measured in microseconds.
 > <link rel="stylesheet" href="/reset.css?hash={{$hash}}" integrity="{{$hash}}">
 > {{- end}}
 > ```
-
 </details>
 
-<details><summary><strong>📩 Live updates with Server Sent Events (SSE)</strong></summary>
+<details><summary><strong>📬 Live updates with Server Sent Events (SSE)</strong></summary>
 
-> TODO
+> Define a template with a name that starts with SSE, like `SSE /url/path`, and
+> SSE requests will be handled by invoking the template. Individual messages can
+> be sent by using `.Flush`, and the template can be paused to wait on messages
+> sent over Go channels or can block on server shutdown.
 </details>
 
-<details><summary><strong>🐜 Small footprint, easy to deploy</strong></summary>
+<details><summary><strong>🐜 Small footprint, easy and flexible deployment</strong></summary>
 
 > Compiles to a small ~30MB binary. Easily add your own custom functions and
 > choice of database driver on top. Deploy next to your templates and static
@@ -169,42 +171,72 @@ measured in microseconds.
 
 # How to use
 
-> TODO: This section is a work in progress.
-
 ### Deployment modes
 
-XTemplate is designed to be used in several different contexts:
+XTemplate is designed to be used in various contexts:
 
-* As a library: call `New()`, use functional options to configure it, then call `.Build()` to get an `http.Handler`; do whatever you like with it. See `config.go`.
-* As a standalone binary: run `go build ./cmd`
-* As a custom binary: see `main.go:Main()` and `./cmd/main.go` as an example. Do this if you want to use a custom db driver, custom functions, or embed your templates for single binary deployment.
+* As a standalone binary: download from the [Releases page](https://github.com/infogulch/xtemplate/releases) or see [cmd build docs](./cmd/README.md#build) to build locally.
+  * Local builds can add custom db drivers, custom template functions, or embedded templates for true single binary deployments.
+  * See [`main.go:Main()`](./main.go) and [`./cmd/main.go`](./cmd/main.go) for example usage.
+* As a Go library: call `New()`, use functional options to configure it, then call `.Build()` to get an `http.Handler`; do whatever you like with it. See [`config.go`](./config.go).
 * As an [http middlware plugin](https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate%2Fcaddy) for [Caddy Server](https://caddyserver.com/)
 
 ### Configuration
 
-Configuration is exposed as functional options, cli flags, or caddy JSON or
+Configuration is exposed as functional options, cli flags, caddy JSON, or
 Caddyfile config, depending on your choice of deployment mode. All configuration
 is available to all modes.
 
 * Template files and static files are loaded from the template root directory, configured by `--template-root` (default "templates")
 * If you want the templates to have access to the local file system, configure it with a `--context-root` directory path (default disabled)
 * If you want database access, configure it with `--db-driver` and `--db-connstr`
-* See other configuration options in `config.go` and flags in `main.go`
+* Library configuration options are listed in [`config.go`](./config.go)
+* <details><summary><strong>🎏 CLI flags listing</strong></summary>
 
-###
+  ```
+  Usage of ./xtemplate:
+    -c x=y
+          Config values, in the form x=y, can be specified multiple times
+    -context-root string
+          Context root directory
+    -db-connstr string
+          Database connection string
+    -db-driver string
+          Database driver name
+    -ldelim string
+          Left template delimiter (default "{{")
+    -listen string
+          Listen address (default "0.0.0.0:8080")
+    -log int
+          Log level, DEBUG=-4, INFO=0, WARN=4, ERROR=8
+    -rdelim string
+          Right template delimiter (default "}}")
+    -template-root string
+          Template root directory (default "templates")
+    -watch-context
+          Watch the context directory and reload if changed
+    -watch-template
+          Watch the template directory and reload if changed (default true)
+  ```
 
-* Unlike the html/template default, all template files are recursively loaded into the same templates instance. They can be invoked from another template by full path name rooted at template root.
-* .html template files are automatically invoked upon request to their path minus extension
-* Templates are invoked with a consistent root context which includes request data, local file access (if configured), and db access (if configured). (See the next section for details.) When the template finishes the result is sent to the client.
-* Other files are served as static files
-* Create extra handlers besides file-based routes by defining template names that match an http method and path with path wildcards or methods other than GET
-* Define SSE handler with SSE prefix
-* Define templates that run during build by creating any number of templates that start with `INIT `.
+  </details>
+
 
 # Template Semantics
 
 Templates are loaded using Go's [`html/template`](https://pkg.go.dev/html/template)
 module, which is extended with additional functions and a specific context.
+
+Unlike the html/template default, all template files are recursively loaded into
+the same persistent templates instance. Requests are served by invoking the
+matching template name that matches the request route and path. Templates can
+also be invoked from another template by full path name rooted at template root,
+or by explicitly defined templates by any name.
+
+Route handling templates are invoked with a uniform root context `{{$}}` which
+includes request data, local file access (if configured), and db access (if
+configured). (See the next section for details.) When the template finishes the
+result is sent to the client.
 
 ### Context
 
@@ -238,7 +270,7 @@ File operations are rooted at the directory specified by the `context_root`
 config option. If a context root is not configured these functions produce an
 error.
 
-- `.ReadFile $file` reads and returns the contents of a file, as-is.
+- `.ReadFile $file` reads and returns the contents of a file, as a string.
 - `.ListFiles $file` returns a list of the files in the given directory.
 - `.FileExists $file` returns true if filename can be opened successfully.
 - `.StatFile $file` returns Stat of a filename.
@@ -389,7 +421,7 @@ See [funcs.go](/funcs.go) for details.
 * [infogulch/xrss](https://github.com/infogulch/xrss), an rss feed reader built with htmx and inline css.
 * [infogulch/todos](https://github.com/infogulch/todos), a demo todomvc application.
 
-## Development
+# Development
 
 XTemplate is three Go packages in this repository:
 

@@ -153,6 +153,7 @@ func sseTemplateHandler(tmpl *template.Template) http.Handler {
 
 		flusher, ok := w.(http.Flusher)
 		if !ok {
+			log.Debug("response writer could not cast to http.Flusher")
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}

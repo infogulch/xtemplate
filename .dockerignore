@@ -1,0 +1,5 @@
+go.work*
+xtemplate*
+caddy
+Dockerfile
+.dockerignore
