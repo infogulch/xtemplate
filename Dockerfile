@@ -22,4 +22,6 @@ COPY --from=build /build/xtemplate /app/xtemplate
 VOLUME /app/data
 EXPOSE 80
 
-ENTRYPOINT ["/app/xtemplate", '-template-root', '/app/templates', '-log', '0']
+ENTRYPOINT ["/app/xtemplate"]
+
+CMD ["-template-root", "/app/templates", "-watch-template", "false", "-log", "0"]

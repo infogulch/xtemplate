@@ -3,3 +3,4 @@ xtemplate*
 caddy
 Dockerfile
 .dockerignore
+.gitignore

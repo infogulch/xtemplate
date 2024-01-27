@@ -41,7 +41,7 @@ func (server *xtemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log := server.log.With(slog.Group("serving",
+	log := server.log.With(slog.Group("serve",
 		slog.String("requestid", getRequestId(r.Context())),
 		slog.String("method", r.Method),
 		slog.String("path", r.URL.Path),
@@ -219,7 +219,8 @@ var serveFileHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter,
 	}
 
 	// if the request provides a hash, check that it matches. if not, we don't have that file
-	if queryhash := r.URL.Query().Get("hash"); queryhash != "" && queryhash != fileinfo.hash {
+	queryhash := r.URL.Query().Get("hash")
+	if queryhash != "" && queryhash != fileinfo.hash {
 		log.Debug("request for file with wrong hash query parameter", slog.String("expected", fileinfo.hash), slog.String("queryhash", queryhash))
 		http.NotFound(w, r)
 		return
@@ -260,7 +261,7 @@ var serveFileHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter,
 	w.Header().Add("Content-Encoding", encoding.encoding)
 	w.Header().Add("Vary", "Accept-Encoding")
 	// w.Header().Add("Access-Control-Allow-Origin", "*") // ???
-	if r.URL.Query().Get("hash") != "" {
+	if queryhash != "" {
 		// cache aggressively if the request is disambiguated by a valid hash
 		// should be `public` ???
 		w.Header().Set("Cache-Control", "public, max-age=31536000")

@@ -60,6 +60,7 @@ var instanceIdentity int64
 func (configs *config) Build() (CancelHandler, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// start with default xtemplate struct
 	x := &xtemplate{
 		templateFS: os.DirFS("templates"),
 		ldelim:     "{{",
@@ -74,6 +75,7 @@ func (configs *config) Build() (CancelHandler, error) {
 		id:         atomic.AddInt64(&instanceIdentity, 1),
 	}
 
+	// apply all configs, which are funcs that mutate the xtemplate struct
 	for _, c := range *configs {
 		c(x)
 	}
@@ -121,6 +123,8 @@ func (configs *config) Build() (CancelHandler, error) {
 			}
 		}
 	}
+
+	log.Debug("xtemplate instance initialized", slog.Any("xtemplate", x))
 	return x, nil
 }
 
