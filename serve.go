@@ -15,47 +15,42 @@ import (
 	"strings"
 	"time"
 
-	"github.com/infogulch/pathmatcher"
 	"github.com/segmentio/ksuid"
 	"golang.org/x/exp/maps"
 )
 
 func (server *xtemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	select {
-	case _, _ = <-server.ctx.Done():
-		server.log.Error("received request after xtemplate instance cancelled", slog.String("method", r.Method), slog.String("path", r.URL.Path))
-		http.Error(w, "server stopped", http.StatusInternalServerError)
-		return
-	default:
-	}
+	server.router.ServeHTTP(w, r)
+}
 
-	start := time.Now()
+type Handler func(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xtemplate)
 
-	_, handler, params, _ := server.router.Find(r.Method, r.URL.Path)
-	if handler == nil {
-		server.log.Debug("no handler for request",
+func (server *xtemplate) handle(handlerPath string, handler Handler) {
+	server.router.HandleFunc(handlerPath, func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case _, _ = <-server.ctx.Done():
+			server.log.Error("received request after xtemplate instance cancelled", slog.String("method", r.Method), slog.String("path", r.URL.Path))
+			http.Error(w, "server stopped", http.StatusInternalServerError)
+			return
+		default:
+		}
+
+		start := time.Now()
+
+		log := server.log.With(slog.Group("serve",
+			slog.String("requestid", getRequestId(r.Context())),
 			slog.String("method", r.Method),
-			slog.String("path", r.URL.Path),
-			slog.String("user-agent", r.Header.Get("User-Agent")))
-		http.NotFound(w, r)
-		return
-	}
+			slog.String("requestPath", r.URL.Path),
+			slog.String("handlerPath", handlerPath),
+		))
+		log.DebugContext(r.Context(), "serving request",
+			slog.String("user-agent", r.Header.Get("User-Agent")),
+		)
 
-	log := server.log.With(slog.Group("serve",
-		slog.String("requestid", getRequestId(r.Context())),
-		slog.String("method", r.Method),
-		slog.String("path", r.URL.Path),
-	))
-	log.DebugContext(r.Context(), "serving request",
-		slog.Any("params", params),
-		slog.Duration("lookup-time", time.Since(start)),
-		slog.String("user-agent", r.Header.Get("User-Agent")),
-	)
+		handler(w, r, log, server)
 
-	ctx := context.WithValue(r.Context(), ctxKey{}, ctxValue{params, log, server})
-	handler.ServeHTTP(w, r.WithContext(ctx))
-
-	log.Debug("request served", slog.Duration("response-time", time.Since(start)))
+		log.Debug("request served", slog.Duration("response-time", time.Since(start)))
+	})
 }
 
 func getRequestId(ctx context.Context) string {
@@ -72,23 +67,8 @@ func getRequestId(ctx context.Context) string {
 	return ksuid.New().String()
 }
 
-type ctxKey struct{}
-
-type ctxValue struct {
-	params pathmatcher.Params
-	log    *slog.Logger
-	server *xtemplate
-}
-
-func getContext(ctx context.Context) (pathmatcher.Params, *slog.Logger, *xtemplate) {
-	val := ctx.Value(ctxKey{}).(ctxValue)
-	return val.params, val.log, val.server
-}
-
-func serveTemplateHandler(tmpl *template.Template) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		params, log, server := getContext(r.Context())
-
+func serveTemplateHandler(tmpl *template.Template) Handler {
+	return func(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xtemplate) {
 		buf := bufPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bufPool.Put(buf)
@@ -104,11 +84,11 @@ func serveTemplateHandler(tmpl *template.Template) http.Handler {
 				server: server,
 			},
 			fsContext{
-				fs: server.contextFS,
+				fs:  server.contextFS,
+				log: log,
 			},
 			requestContext{
-				Req:    r,
-				Params: params,
+				Req: r,
 			},
 			responseContext{
 				status: 200,
@@ -139,13 +119,11 @@ func serveTemplateHandler(tmpl *template.Template) http.Handler {
 		maps.Copy(w.Header(), context.Header)
 		w.WriteHeader(context.status)
 		w.Write(buf.Bytes())
-	})
+	}
 }
 
-func sseTemplateHandler(tmpl *template.Template) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		params, log, server := getContext(r.Context())
-
+func sseTemplateHandler(tmpl *template.Template) Handler {
+	return func(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xtemplate) {
 		if r.Header.Get("Accept") != "text/event-stream" {
 			http.Error(w, "SSE endpoint", http.StatusNotAcceptable)
 			return
@@ -176,11 +154,11 @@ func sseTemplateHandler(tmpl *template.Template) http.Handler {
 				},
 			},
 			fsContext{
-				fs: server.contextFS,
+				fs:  server.contextFS,
+				log: log,
 			},
 			requestContext{
-				Req:    r,
-				Params: params,
+				Req: r,
 			},
 		}
 
@@ -203,12 +181,10 @@ func sseTemplateHandler(tmpl *template.Template) http.Handler {
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
-	})
+	}
 }
 
-var serveFileHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	_, log, server := getContext(r.Context())
-
+func serveFileHandler(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xtemplate) {
 	urlpath := path.Clean(r.URL.Path)
 	fileinfo, ok := server.files[urlpath]
 	if !ok {
@@ -267,7 +243,7 @@ var serveFileHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter,
 		w.Header().Set("Cache-Control", "public, max-age=31536000")
 	}
 	http.ServeContent(w, r, encoding.path, encoding.modtime, file.(io.ReadSeeker))
-})
+}
 
 func negiotiateEncoding(acceptHeaders []string, encodings []encodingInfo) (*encodingInfo, error) {
 	var err error

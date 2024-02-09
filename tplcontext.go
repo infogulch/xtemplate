@@ -17,8 +17,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/infogulch/pathmatcher"
 )
 
 type baseContext struct {
@@ -194,7 +192,8 @@ func (c *sqlContext) Rollback() (string, error) {
 }
 
 type fsContext struct {
-	fs fs.FS
+	fs  fs.FS
+	log *slog.Logger
 }
 
 // ReadFile returns the contents of a filename relative to the site root.
@@ -275,14 +274,13 @@ func (c *fsContext) FileExists(filename string) (bool, error) {
 // request with the content of the contextfs file at path_
 func (c *fsContext) ServeFile(path_ string) (string, error) {
 	return "", NewHandlerError("ServeFile", func(w http.ResponseWriter, r *http.Request) {
-		_, log, _ := getContext(r.Context())
 		path_ = path.Clean(path_)
 
-		log.Debug("serving file response", slog.String("path", path_))
+		c.log.Debug("serving file response", slog.String("path", path_))
 
 		file, err := c.fs.Open(path_)
 		if err != nil {
-			log.Debug("failed to open file", slog.Any("error", err), slog.String("path", path_))
+			c.log.Debug("failed to open file", slog.Any("error", err), slog.String("path", path_))
 			http.Error(w, "internal server error", 500)
 			return
 		}
@@ -290,7 +288,7 @@ func (c *fsContext) ServeFile(path_ string) (string, error) {
 
 		stat, err := file.Stat()
 		if err != nil {
-			log.Debug("error getting stat of file", slog.Any("error", err), slog.String("path", path_))
+			c.log.Debug("error getting stat of file", slog.Any("error", err), slog.String("path", path_))
 		}
 
 		http.ServeContent(w, r, path_, stat.ModTime(), file.(io.ReadSeeker))
@@ -298,8 +296,7 @@ func (c *fsContext) ServeFile(path_ string) (string, error) {
 }
 
 type requestContext struct {
-	Req    *http.Request
-	Params pathmatcher.Params
+	Req *http.Request
 }
 
 // Cookie gets the value of a cookie with name name.

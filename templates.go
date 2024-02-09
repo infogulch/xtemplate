@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/andybalholm/brotli"
-	"github.com/infogulch/pathmatcher"
 	"github.com/klauspost/compress/zstd"
 )
 
@@ -43,7 +42,7 @@ type xtemplate struct {
 	funcs      template.FuncMap
 	db         *sql.DB
 	templates  *template.Template
-	router     *pathmatcher.HttpMatcher[http.Handler]
+	router     *http.ServeMux
 	files      map[string]fileInfo
 	ldelim     string
 	rdelim     string
@@ -69,7 +68,7 @@ func (configs *config) Build() (CancelHandler, error) {
 		config:     make(map[string]string),
 		funcs:      make(template.FuncMap),
 		files:      make(map[string]fileInfo),
-		router:     pathmatcher.NewHttpMatcher[http.Handler](),
+		router:     http.NewServeMux(),
 		ctx:        ctx,
 		cancel:     cancel,
 		id:         atomic.AddInt64(&instanceIdentity, 1),
@@ -203,8 +202,7 @@ func (x *xtemplate) addStaticFileHandler(path_, ext string, log *slog.Logger) er
 			file.contentType = http.DetectContentType(content[:count])
 		}
 		file.encodings = []encodingInfo{{encoding: encoding, path: path_, size: size, modtime: stat.ModTime()}}
-		x.router.Add("GET", basepath, serveFileHandler)
-		x.router.Add("HEAD", basepath, serveFileHandler)
+		x.handle("GET "+basepath, serveFileHandler)
 		log.Debug("added static file handler", slog.String("path", basepath), slog.String("filepath", path_), slog.String("contenttype", file.contentType), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()), slog.String("hash", sri))
 	} else {
 		if file.hash != sri {
@@ -243,14 +241,17 @@ func (x *xtemplate) addTemplateHandler(path_, ext string, log *slog.Logger) erro
 			if path.Base(routePath) == "index" {
 				routePath = path.Dir(routePath)
 			}
-			x.router.Add("GET", routePath, serveTemplateHandler(tmpl))
+			if strings.HasSuffix(routePath, "/") {
+				routePath += "{$}"
+			}
+			x.handle("GET "+routePath, serveTemplateHandler(tmpl))
 			log.Debug("added path template handler", "method", "GET", "path", routePath, "template_path", path_)
 		} else if matches := routeMatcher.FindStringSubmatch(name); len(matches) == 3 {
 			method, path_ := matches[1], matches[2]
 			if method == "SSE" {
-				x.router.Add("GET", path_, sseTemplateHandler(tmpl))
+				x.handle("GET "+path_, sseTemplateHandler(tmpl))
 			} else {
-				x.router.Add(method, path_, serveTemplateHandler(tmpl))
+				x.handle(method+" "+path_, serveTemplateHandler(tmpl))
 			}
 			log.Debug("added named template handler", "method", method, "path", path_, "template_name", name, "template_path", path_)
 		}

@@ -1,6 +1,6 @@
 module github.com/infogulch/xtemplate/caddy
 
-go 1.21.3
+go 1.22
 
 require (
 	github.com/caddyserver/caddy/v2 v2.7.4
