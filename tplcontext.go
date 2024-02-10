@@ -360,7 +360,7 @@ func (h responseContext) DelHeader(field string) string {
 	return ""
 }
 
-func (h responseContext) SetStatus(status int) string {
+func (h *responseContext) SetStatus(status int) string {
 	h.status = status
 	return ""
 }

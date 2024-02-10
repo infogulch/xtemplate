@@ -9,7 +9,6 @@ require (
 	github.com/andybalholm/brotli v1.1.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/infogulch/watch v0.1.3
-	github.com/infogulch/xtemplate/internal v0.0.0-20240127215724-36b2cbb4457f
 	github.com/klauspost/compress v1.17.6
 	github.com/microcosm-cc/bluemonday v1.0.26
 	github.com/segmentio/ksuid v1.0.4

@@ -104,14 +104,6 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 		watchDirs = append(watchDirs, root)
 	}
 
-	// ExtraFuncs
-	{
-		_, err := config.WithRegisteredFuncMaps(m.FuncsModules...)
-		if err != nil {
-			return err
-		}
-	}
-
 	if m.Database.Driver != "" {
 		db, err := sql.Open(m.Database.Driver, m.Database.Connstr)
 		if err != nil {

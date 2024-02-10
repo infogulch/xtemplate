@@ -19,14 +19,8 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-func (server *xtemplate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	server.router.ServeHTTP(w, r)
-}
-
-type Handler func(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xtemplate)
-
-func (server *xtemplate) handle(handlerPath string, handler Handler) {
-	server.router.HandleFunc(handlerPath, func(w http.ResponseWriter, r *http.Request) {
+func (server *xtemplate) mainHandler(handlerPath string, handler Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		select {
 		case _, _ = <-server.ctx.Done():
 			server.log.Error("received request after xtemplate instance cancelled", slog.String("method", r.Method), slog.String("path", r.URL.Path))
@@ -50,7 +44,7 @@ func (server *xtemplate) handle(handlerPath string, handler Handler) {
 		handler(w, r, log, server)
 
 		log.Debug("request served", slog.Duration("response-time", time.Since(start)))
-	})
+	}
 }
 
 func getRequestId(ctx context.Context) string {
@@ -67,7 +61,7 @@ func getRequestId(ctx context.Context) string {
 	return ksuid.New().String()
 }
 
-func serveTemplateHandler(tmpl *template.Template) Handler {
+func bufferedTemplateHandler(tmpl *template.Template) Handler {
 	return func(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xtemplate) {
 		buf := bufPool.Get().(*bytes.Buffer)
 		buf.Reset()
@@ -195,8 +189,9 @@ func serveFileHandler(w http.ResponseWriter, r *http.Request, log *slog.Logger, 
 	}
 
 	// if the request provides a hash, check that it matches. if not, we don't have that file
+	// consider it a match if its a prefix of the full hash at least 40 bytes long.
 	queryhash := r.URL.Query().Get("hash")
-	if queryhash != "" && queryhash != fileinfo.hash {
+	if queryhash != "" && len(strings.TrimPrefix(fileinfo.hash, queryhash)) > 31 {
 		log.Debug("request for file with wrong hash query parameter", slog.String("expected", fileinfo.hash), slog.String("queryhash", queryhash))
 		http.NotFound(w, r)
 		return

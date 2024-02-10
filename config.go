@@ -2,13 +2,11 @@ package xtemplate
 
 import (
 	"database/sql"
-	"fmt"
 	"html/template"
 	"io/fs"
 	"log/slog"
 
 	"github.com/Masterminds/sprig/v3"
-	"github.com/infogulch/xtemplate/internal"
 )
 
 func New() *config {
@@ -26,29 +24,11 @@ func (c *config) WithTemplateFS(tfs fs.FS) *config {
 	return c
 }
 
-func (c *config) WithRegisteredTemplateFS(name string) (*config, error) {
-	cfs, ok := internal.RegisteredFS[name]
-	if !ok {
-		return c, fmt.Errorf("fs named '%s' not registered", name)
-	}
-	c.WithContextFS(cfs)
-	return c, nil
-}
-
 func (c *config) WithContextFS(cfs fs.FS) *config {
 	*c = append(*c, func(r *xtemplate) {
 		r.contextFS = cfs
 	})
 	return c
-}
-
-func (c *config) WithRegisteredContextFS(name string) (*config, error) {
-	cfs, ok := internal.RegisteredFS[name]
-	if !ok {
-		return c, fmt.Errorf("fs named '%s' not registered", name)
-	}
-	c.WithContextFS(cfs)
-	return c, nil
 }
 
 func (c *config) WithFuncMaps(funcmaps ...template.FuncMap) *config {
@@ -59,24 +39,6 @@ func (c *config) WithFuncMaps(funcmaps ...template.FuncMap) *config {
 				r.funcs[name] = fn
 			}
 		})
-	}
-	return c
-}
-
-func (c *config) WithRegisteredFuncMaps(names ...string) (*config, error) {
-	for _, name := range names {
-		funcs, ok := internal.RegisteredFuncMaps[name]
-		if !ok {
-			return c, fmt.Errorf("funcmap named '%s' not registered", name)
-		}
-		c.WithFuncMaps(funcs)
-	}
-	return c, nil
-}
-
-func (c *config) WithAllRegisteredFuncMaps() *config {
-	for _, m := range internal.RegisteredFuncMaps {
-		c.WithFuncMaps(m)
 	}
 	return c
 }

@@ -1,12 +1,9 @@
-// xtemplate extends Go's html/template to be capable enough to define an entire
-// server-side application with just templates.
 package xtemplate
 
 import (
 	"compress/gzip"
 	"context"
 	"crypto/sha512"
-	"database/sql"
 	"encoding/base64"
 	"fmt"
 	"html/template"
@@ -28,31 +25,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
-type CancelHandler interface {
-	http.Handler
-	Cancel()
-}
-
-type xtemplate struct {
-	id int64
-
-	templateFS fs.FS
-	contextFS  fs.FS
-	config     map[string]string
-	funcs      template.FuncMap
-	db         *sql.DB
-	templates  *template.Template
-	router     *http.ServeMux
-	files      map[string]fileInfo
-	ldelim     string
-	rdelim     string
-
-	log    *slog.Logger
-	ctx    context.Context
-	cancel func()
-}
-
-var _ = (CancelHandler)((*xtemplate)(nil))
+type Handler func(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xtemplate)
 
 var instanceIdentity int64
 
@@ -127,9 +100,8 @@ func (configs *config) Build() (CancelHandler, error) {
 	return x, nil
 }
 
-func (x *xtemplate) Cancel() {
-	x.log.Info("xtemplate instance cancelled")
-	x.cancel()
+func (server *xtemplate) addHandler(handlerPath string, handler Handler) {
+	server.router.HandleFunc(handlerPath, server.mainHandler(handlerPath, handler))
 }
 
 type fileInfo struct {
@@ -144,6 +116,7 @@ type encodingInfo struct {
 }
 
 func (x *xtemplate) addStaticFileHandler(path_, ext string, log *slog.Logger) error {
+	// Open and stat the file
 	fsfile, err := x.templateFS.Open(path_)
 	if err != nil {
 		return fmt.Errorf("failed to open static file '%s': %w", path_, err)
@@ -156,6 +129,8 @@ func (x *xtemplate) addStaticFileHandler(path_, ext string, log *slog.Logger) er
 	}
 	size := stat.Size()
 
+	// Calculate the file hash. If there's a compressed file with the same
+	// prefix, calculate the hash of the contents and check that they match.
 	basepath := strings.TrimSuffix(path.Clean("/"+path_), ext)
 	var sri string
 	var reader io.Reader = fsfile
@@ -185,8 +160,11 @@ func (x *xtemplate) addStaticFileHandler(path_, ext string, log *slog.Logger) er
 		if err != nil {
 			return fmt.Errorf("failed to hash file %w", err)
 		}
-		sri = "sha384-" + base64.StdEncoding.EncodeToString(hash.Sum(nil))
+		sri = "sha384-" + base64.URLEncoding.EncodeToString(hash.Sum(nil))
 	}
+
+	// Save precalculated file size, modtime, hash, content type, and encoding
+	// info to enable efficient content negotiation at request time.
 	if encoding == "identity" {
 		// note: identity file will always be found first because fs.WalkDir sorts files in lexical order
 		file.hash = sri
@@ -202,7 +180,7 @@ func (x *xtemplate) addStaticFileHandler(path_, ext string, log *slog.Logger) er
 			file.contentType = http.DetectContentType(content[:count])
 		}
 		file.encodings = []encodingInfo{{encoding: encoding, path: path_, size: size, modtime: stat.ModTime()}}
-		x.handle("GET "+basepath, serveFileHandler)
+		x.addHandler("GET "+basepath, serveFileHandler)
 		log.Debug("added static file handler", slog.String("path", basepath), slog.String("filepath", path_), slog.String("contenttype", file.contentType), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()), slog.String("hash", sri))
 	} else {
 		if file.hash != sri {
@@ -244,14 +222,14 @@ func (x *xtemplate) addTemplateHandler(path_, ext string, log *slog.Logger) erro
 			if strings.HasSuffix(routePath, "/") {
 				routePath += "{$}"
 			}
-			x.handle("GET "+routePath, serveTemplateHandler(tmpl))
+			x.addHandler("GET "+routePath, bufferedTemplateHandler(tmpl))
 			log.Debug("added path template handler", "method", "GET", "path", routePath, "template_path", path_)
 		} else if matches := routeMatcher.FindStringSubmatch(name); len(matches) == 3 {
 			method, path_ := matches[1], matches[2]
 			if method == "SSE" {
-				x.handle("GET "+path_, sseTemplateHandler(tmpl))
+				x.addHandler("GET "+path_, sseTemplateHandler(tmpl))
 			} else {
-				x.handle(method+" "+path_, serveTemplateHandler(tmpl))
+				x.addHandler(method+" "+path_, bufferedTemplateHandler(tmpl))
 			}
 			log.Debug("added named template handler", "method", method, "path", path_, "template_name", name, "template_path", path_)
 		}

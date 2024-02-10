@@ -25,7 +25,6 @@ type flags struct {
 	db_connstr     string
 	log_level      int
 	config         kvflags
-	funcs          stringflags
 }
 
 func parseflags() (f flags) {
@@ -40,7 +39,6 @@ func parseflags() (f flags) {
 	flag.StringVar(&f.db_connstr, "db-connstr", "", "Database connection string")
 	flag.IntVar(&f.log_level, "log", 0, "Log level, DEBUG=-4, INFO=0, WARN=4, ERROR=8")
 	flag.Var(&f.config, "c", "Config values, in the form `x=y`, can be specified multiple times")
-	flag.Var(&f.funcs, "funcs", "The name of a funcmap library registered to xtemplate/register, can be specified multiple times")
 	flag.Parse()
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "xtemplate is a hypertext preprocessor and http templating web server.\nUsage of %s:\n", os.Args[0])
@@ -51,7 +49,8 @@ func parseflags() (f flags) {
 
 // Main can be called from your func main() if you want your program to act like
 // the default xtemplate cli, or use it as a reference for making your own.
-func Main() {
+// Provide configs to override the defaults like: `xtemplate.Main(xtemplate.New().WithFooConfig())`
+func Main(userConfig ...*config) {
 	flags := parseflags()
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(flags.log_level)}))
 
@@ -72,10 +71,6 @@ func Main() {
 		configs.WithContextFS(os.DirFS(flags.context_root))
 	}
 
-	if len(flags.funcs) > 0 {
-		configs.WithRegisteredFuncMaps(flags.funcs...)
-	}
-
 	{
 		config := make(map[string]string)
 		for _, kv := range flags.config {
@@ -84,6 +79,10 @@ func Main() {
 		if len(config) > 0 {
 			configs.WithConfig(config)
 		}
+	}
+
+	for _, c := range userConfig {
+		*configs = append(*configs, *c...)
 	}
 
 	handler, err := configs.Build()
@@ -162,20 +161,5 @@ func (s *kvflags) Set(arg string) error {
 		return err
 	}
 	*s = append(*s, entry)
-	return nil
-}
-
-type stringflags []string
-
-func (s *stringflags) String() string {
-	if s == nil {
-		return ""
-	}
-	r := fmt.Sprint(*s)
-	return r[1 : len(r)-1]
-}
-
-func (s *stringflags) Set(arg string) error {
-	*s = append(*s, arg)
 	return nil
 }
