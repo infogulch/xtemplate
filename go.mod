@@ -1,6 +1,6 @@
 module github.com/infogulch/xtemplate
 
-go 1.22
+go 1.22.0
 
 require (
 	github.com/BurntSushi/toml v1.3.2
