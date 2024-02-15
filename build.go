@@ -66,9 +66,9 @@ func (configs *config) Build() (CancelHandler, error) {
 			return err
 		}
 		if ext := filepath.Ext(path); ext == x.templateExtension {
-			err = x.addStaticFileHandler(path, log)
-		} else {
 			err = x.addTemplateHandler(path, log)
+			} else {
+			err = x.addStaticFileHandler(path, log)
 		}
 		return err
 	}); err != nil {
@@ -229,7 +229,10 @@ func (x *xtemplate) addTemplateHandler(path_ string, log *slog.Logger) error {
 			routePath := strings.TrimSuffix(path_, x.templateExtension)
 			// files named 'index' handle requests to the directory
 			if path.Base(routePath) == "index" {
-				routePath = path.Dir(routePath) + "{$}"
+				routePath = path.Dir(routePath)
+			}
+			if strings.HasSuffix(routePath, "/") {
+				routePath += "{$}"
 			}
 			x.addHandler("GET "+routePath, bufferedTemplateHandler(tmpl))
 			log.Debug("added path template handler", "method", "GET", "path", routePath, "template_path", path_)

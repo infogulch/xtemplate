@@ -44,11 +44,11 @@ measured in microseconds.
 <details><summary><strong>🗃️ Default file-based routing</strong></summary>
 
 > `GET` requests for a path with a matching template file will invoke the
-> template file at that path.
+> template file at that path, except hidden files where the filename starts with
+> `.` are not routed. Hidden files are still loaded and can be invoked from
+> other templates. (See the next feature)
 >
-> Except files starting with `_` are not routed. This allows defining templates
-> that only other templates can invoke. (See the next feature)
->
+> Example:
 > ```
 > .
 > ├── index.html          GET /
@@ -56,7 +56,7 @@ measured in microseconds.
 > ├── admin
 > │   └── settings.html   GET /admin/settings
 > └── shared
->     └── _head.html      (not routed because it starts with '_')
+>     └── .head.html      (not routed because it starts with '.')
 > ```
 </details>
 
@@ -71,7 +71,7 @@ measured in microseconds.
 > <html>
 >   <title>Home</title>
 >   <!-- import the contents of another file -->
->   {{template "/shared/_head.html" .}}
+>   {{template "/shared/.head.html" .}}
 >
 >   <body>
 >     <!-- invoke a custom template defined anywhere -->

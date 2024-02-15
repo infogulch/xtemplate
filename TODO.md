@@ -1,5 +1,6 @@
 # TODO
 
+
 ### Features
 
 
@@ -36,12 +37,14 @@
 
 ## v0.2 - Feb 2024
 
-- [x] Don't register hidden files that start with a '.', not a '_'. We don't need to reinvent hidden files.
-- [x] Allow searching for custom file extension to identify template files
-- [x] Allow truncated hash to positively identify file; switch to url-encoded hash value
 - [x] Highlight file server feature
 - [x] Switch to using Go 1.22's new servemux
     - [x] Add PathValue method to .Req
+- [x] Allow truncated hash to positively identify file; switch to url-encoded hash value
+- [x] Allow searching for custom file extension to identify template files
+- [x] Don't route hidden files that start with a '.', not a '_'. We don't need to reinvent hidden files.
+- [x] Fix docs, tests after `_` -> `.` change.
+
 
 ## v0.1 - Oct 2023
 

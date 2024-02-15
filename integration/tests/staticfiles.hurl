@@ -108,8 +108,18 @@ GET http://localhost:8080/_hidden.html
 
 HTTP 404
 
-# Hidden file should be omitted
+
 GET http://localhost:8080/_hidden
+
+HTTP 404
+
+
+GET http://localhost:8080/.hidden.html
+
+HTTP 404
+
+
+GET http://localhost:8080/.hidden
 
 HTTP 404
 
