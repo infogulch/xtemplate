@@ -6,7 +6,6 @@
 ### Documentation
 
 - [ ] Memes
-- [ ] Highlight file server feature
 - [ ] Highlight sse feature
 - [ ] Organize docs according to https://diataxis.fr/
     - [ ] Add explanation
@@ -27,8 +26,6 @@
 
 # BACKLOG
 
-- [ ] Switch to using Go 1.22's new servemux
-    - [ ] Add PathValue method to .Req (future proofing)
 - Support SSE
     - [ ] Integrate nats subscription
 - [ ] Split caddy integration into a separate repo. Trying to shoehorn two modules into one repo just isn't working.
@@ -37,7 +34,16 @@
 
 # DONE
 
-## v0.1
+## v0.2 - Feb 2024
+
+- [x] Don't register hidden files that start with a '.', not a '_'. We don't need to reinvent hidden files.
+- [x] Allow searching for custom file extension to identify template files
+- [x] Allow truncated hash to positively identify file; switch to url-encoded hash value
+- [x] Highlight file server feature
+- [x] Switch to using Go 1.22's new servemux
+    - [x] Add PathValue method to .Req
+
+## v0.1 - Oct 2023
 
 - [x] Make extrafuncs an array
 - [x] Split xtemplate from caddy so it can be used standalone

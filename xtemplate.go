@@ -16,16 +16,17 @@ import (
 type xtemplate struct {
 	id int64
 
-	templateFS fs.FS
-	contextFS  fs.FS
-	config     map[string]string
-	funcs      template.FuncMap
-	db         *sql.DB
-	templates  *template.Template
-	router     *http.ServeMux
-	files      map[string]fileInfo
-	ldelim     string
-	rdelim     string
+	templateFS      fs.FS
+	contextFS       fs.FS
+	config          map[string]string
+	funcs           template.FuncMap
+	db              *sql.DB
+	templates       *template.Template
+	router          *http.ServeMux
+	files           map[string]fileInfo
+	ldelim          string
+	rdelim          string
+	templateExtension string
 
 	log    *slog.Logger
 	ctx    context.Context

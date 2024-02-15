@@ -21,6 +21,7 @@ type flags struct {
 	watch_context  bool
 	l_delim        string
 	r_delim        string
+	extension      string
 	db_driver      string
 	db_connstr     string
 	log_level      int
@@ -35,6 +36,7 @@ func parseflags() (f flags) {
 	flag.BoolVar(&f.watch_context, "watch-context", false, "Watch the context directory and reload if changed")
 	flag.StringVar(&f.l_delim, "ldelim", "{{", "Left template delimiter")
 	flag.StringVar(&f.r_delim, "rdelim", "}}", "Right template delimiter")
+	flag.StringVar(&f.extension, "template-extension", ".html", "File extension to look for to identify template files")
 	flag.StringVar(&f.db_driver, "db-driver", "", "Database driver name")
 	flag.StringVar(&f.db_connstr, "db-connstr", "", "Database connection string")
 	flag.IntVar(&f.log_level, "log", 0, "Log level, DEBUG=-4, INFO=0, WARN=4, ERROR=8")
@@ -70,6 +72,8 @@ func Main(userConfig ...*config) {
 	if flags.context_root != "" {
 		configs.WithContextFS(os.DirFS(flags.context_root))
 	}
+
+	configs.WithTemplateExtension(flags.extension)
 
 	{
 		config := make(map[string]string)

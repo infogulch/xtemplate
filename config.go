@@ -74,4 +74,11 @@ func (c *config) WithLogger(log *slog.Logger) *config {
 	return c
 }
 
+func (c *config) WithTemplateExtension(ext string) *config {
+	*c = append(*c, func(r *xtemplate) {
+		r.templateExtension = ext
+	})
+	return c
+}
+
 // Call config.Build() to get an http.Handler that can handle http requests

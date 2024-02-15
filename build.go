@@ -34,17 +34,18 @@ func (configs *config) Build() (CancelHandler, error) {
 
 	// start with default xtemplate struct
 	x := &xtemplate{
-		templateFS: os.DirFS("templates"),
-		ldelim:     "{{",
-		rdelim:     "}}",
-		log:        slog.Default().WithGroup("xtemplate"),
-		config:     make(map[string]string),
-		funcs:      make(template.FuncMap),
-		files:      make(map[string]fileInfo),
-		router:     http.NewServeMux(),
-		ctx:        ctx,
-		cancel:     cancel,
-		id:         atomic.AddInt64(&instanceIdentity, 1),
+		templateFS:        os.DirFS("templates"),
+		ldelim:            "{{",
+		rdelim:            "}}",
+		templateExtension: ".html",
+		log:               slog.Default().WithGroup("xtemplate"),
+		config:            make(map[string]string),
+		funcs:             make(template.FuncMap),
+		files:             make(map[string]fileInfo),
+		router:            http.NewServeMux(),
+		ctx:               ctx,
+		cancel:            cancel,
+		id:                atomic.AddInt64(&instanceIdentity, 1),
 	}
 
 	// apply all configs, which are funcs that mutate the xtemplate struct
@@ -64,10 +65,10 @@ func (configs *config) Build() (CancelHandler, error) {
 		if err != nil || d.IsDir() {
 			return err
 		}
-		if ext := filepath.Ext(path); ext != ".html" {
-			err = x.addStaticFileHandler(path, ext, log)
+		if ext := filepath.Ext(path); ext == x.templateExtension {
+			err = x.addStaticFileHandler(path, log)
 		} else {
-			err = x.addTemplateHandler(path, ext, log)
+			err = x.addTemplateHandler(path, log)
 		}
 		return err
 	}); err != nil {
@@ -115,7 +116,7 @@ type encodingInfo struct {
 	modtime        time.Time
 }
 
-func (x *xtemplate) addStaticFileHandler(path_, ext string, log *slog.Logger) error {
+func (x *xtemplate) addStaticFileHandler(path_ string, log *slog.Logger) error {
 	// Open and stat the file
 	fsfile, err := x.templateFS.Open(path_)
 	if err != nil {
@@ -131,6 +132,7 @@ func (x *xtemplate) addStaticFileHandler(path_, ext string, log *slog.Logger) er
 
 	// Calculate the file hash. If there's a compressed file with the same
 	// prefix, calculate the hash of the contents and check that they match.
+	ext := filepath.Ext(path_)
 	basepath := strings.TrimSuffix(path.Clean("/"+path_), ext)
 	var sri string
 	var reader io.Reader = fsfile
@@ -196,7 +198,7 @@ func (x *xtemplate) addStaticFileHandler(path_, ext string, log *slog.Logger) er
 
 var routeMatcher *regexp.Regexp = regexp.MustCompile("^(GET|POST|PUT|PATCH|DELETE|SSE) (.*)$")
 
-func (x *xtemplate) addTemplateHandler(path_, ext string, log *slog.Logger) error {
+func (x *xtemplate) addTemplateHandler(path_ string, log *slog.Logger) error {
 	content, err := fs.ReadFile(x.templateFS, path_)
 	if err != nil {
 		return fmt.Errorf("could not read template file '%s': %v", path_, err)
@@ -210,17 +212,24 @@ func (x *xtemplate) addTemplateHandler(path_, ext string, log *slog.Logger) erro
 	}
 	// add all templates
 	for name, tree := range newtemplates {
+		if x.templates.Lookup(name) != nil {
+			log.Debug("overriding named template '%s' with definition from file: %s", name, path_)
+		}
 		tmpl, err := x.templates.AddParseTree(name, tree)
 		if err != nil {
 			return fmt.Errorf("could not add template '%s' from '%s': %v", name, path_, err)
 		}
-		if name == path_ && !strings.HasPrefix(filepath.Base(path_), "_") {
-			routePath := strings.TrimSuffix(path_, filepath.Ext(path_))
-			if path.Base(routePath) == "index" {
-				routePath = path.Dir(routePath)
+		if name == path_ {
+			// don't register routes to hidden files
+			_, file := filepath.Split(path_)
+			if len(file) > 0 && file[0] == '.' {
+				continue
 			}
-			if strings.HasSuffix(routePath, "/") {
-				routePath += "{$}"
+			// strip the extension from the handled path
+			routePath := strings.TrimSuffix(path_, x.templateExtension)
+			// files named 'index' handle requests to the directory
+			if path.Base(routePath) == "index" {
+				routePath = path.Dir(routePath) + "{$}"
 			}
 			x.addHandler("GET "+routePath, bufferedTemplateHandler(tmpl))
 			log.Debug("added path template handler", "method", "GET", "path", routePath, "template_path", path_)
