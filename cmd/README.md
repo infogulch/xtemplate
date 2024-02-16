@@ -1,7 +1,7 @@
-This package wraps `xtemplate` into a basic web server binary with CLI options.
-
-This is meant to serve as a starting point and demonstration for how to
-integrate the XTemplate library into a web server.
+This package simply calls [`xtemplate.Main()`](../main.go) in `func main()`
+which exposes xtemplate's Go API into a CLI app. If you want a custom version of
+the xtemplate cli with a specific database driver, custom template funcs, or
+more control over application startup, this is a good place to start looking.
 
 ### Build
 
@@ -40,6 +40,8 @@ xtemplate is a hypertext preprocessor and http templating web server
         Right template delimiter (default "{{")
   -template-root string
         Template root directory (default "templates")
+  -template-extension
+        File extension to look for to identify template files (default ".html")
   -watch-context
         Watch the context directory and reload if changed
   -watch-template

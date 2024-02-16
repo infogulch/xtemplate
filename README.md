@@ -85,15 +85,16 @@ measured in microseconds.
 <details><summary><strong>🔱 Custom routes can handle any method</strong></summary>
 
 > Create custom route handlers for any http method and parametrized path by
-> defining a template whose name matches the pattern `<method> <path>`. Uses
-> [httprouter](https://github.com/julienschmidt/httprouter) syntax for path
-> parameters and wildcards, which are made available in the template as values
-> in the `.Param` key while serving a request.
+> defining a template whose name matches the pattern `<method> <path>`. Provides
+> advanced routing patterns based on the [Go 1.22
+> ServeMux](https://tip.golang.org/doc/go1.22#enhanced_routing_patterns) syntax
+> for path matching parameters and wildcards, which are made available in the
+> template as values in the `.Req.PathValue` key while serving a request.
 >
 > ```html
 > <!-- match on path parameters -->
-> {{define "GET /contact/:id"}}
-> {{$contact := .QueryRow `SELECT name,phone FROM contacts WHERE id=?` (.Params.ByName "id")}}
+> {{define "GET /contact/{id}"}}
+> {{$contact := .QueryRow `SELECT name,phone FROM contacts WHERE id=?` (.Req.PathValue "id")}}
 > <div>
 >   <span>Name: {{$contact.name}}</span>
 >   <span>Phone: {{$contact.phone}}</span>
@@ -101,8 +102,8 @@ measured in microseconds.
 > {{end}}
 >
 > <!-- match on any http method -->
-> {{define "DELETE /contact/:id"}}
-> {{$_ := .Exec `DELETE from contacts WHERE id=?` (.Params.ByName "id")}}
+> {{define "DELETE /contact/{id}"}}
+> {{$_ := .Exec `DELETE from contacts WHERE id=?` (.Req.PathValue "id")}}
 > {{.RespStatus 204}}
 > {{end}}
 > ```
