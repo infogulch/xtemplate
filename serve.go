@@ -22,7 +22,7 @@ import (
 func (server *xtemplate) mainHandler(handlerPath string, handler Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		select {
-		case _, _ = <-server.ctx.Done():
+		case <-server.ctx.Done():
 			server.log.Error("received request after xtemplate instance cancelled", slog.String("method", r.Method), slog.String("path", r.URL.Path))
 			http.Error(w, "server stopped", http.StatusInternalServerError)
 			return
