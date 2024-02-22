@@ -184,9 +184,8 @@ XTemplate is designed to be used in various contexts:
 
 ### Configuration
 
-Configuration is exposed as functional options, cli flags, caddy JSON, or
-Caddyfile config, depending on your choice of deployment mode. All configuration
-is available to all modes.
+Configuration is exposed as the Config struct, cli flags, caddy JSON, or
+Caddyfile config, depending on your choice of deployment mode.
 
 * Template files and static files are loaded from the template root directory, configured by `--template-root` (default "templates")
 * If you want the templates to have access to the local file system, configure it with a `--context-root` directory path (default disabled)
@@ -195,29 +194,40 @@ is available to all modes.
 * <details><summary><strong>🎏 CLI flags listing</strong></summary>
 
   ```
-  Usage of ./xtemplate:
-    -c x=y
-          Config values, in the form x=y, can be specified multiple times
-    -context-root string
-          Context root directory
-    -db-connstr string
-          Database connection string
-    -db-driver string
-          Database driver name
-    -ldelim string
-          Left template delimiter (default "{{")
+  $ ./xtemplate --help
+  xtemplate is a hypertext preprocessor and http templating web server
+
     -listen string
           Listen address (default "0.0.0.0:8080")
-    -log int
-          Log level, DEBUG=-4, INFO=0, WARN=4, ERROR=8
-    -rdelim string
-          Right template delimiter (default "}}")
-    -template-root string
-          Template root directory (default "templates")
-    -watch-context
-          Watch the context directory and reload if changed
+
+    -template-path string
+          Directory where templates are loaded from (default "templates")
     -watch-template
           Watch the template directory and reload if changed (default true)
+    -template-extension
+          File extension to look for to identify templates (default ".html")
+    -ldelim string
+          Left template delimiter (default "{{")
+    -rdelim string
+          Right template delimiter (default "}}")
+
+    -context-path string
+          Directory that template definitions are given direct access to. No access is given if empty   (default "")
+    -watch-context
+          Watch the context directory and reload if changed (default false)
+
+    -db-driver string
+          Name of the database driver registered as a Go `sql.Driver`. Not available if empty. (default   "")
+    -db-connstr string
+          Database connection string
+
+    -c string
+          Config values, in the form `x=y`. This arg can be specified multiple times
+
+    -log int
+          Log level, DEBUG=-4, INFO=0, WARN=4, ERROR=8
+    -help
+          Display help
   ```
 
   </details>
@@ -428,19 +438,8 @@ XTemplate is three Go packages in this repository:
 
 * `github.com/infogulch/xtemplate`, a library that loads template files and implements `http.Handler`, routing requests to templates and serving static files. Use it in your own Go application by depending on it as a library and using the [`New` func](config.go) and functional options.
 * `github.com/infogulch/xtemplate/cmd`, a simple binary that configures `XTemplate` with CLI args and serves http requests with it. Build it yourself or download the binary from github releases.
-* `github.com/infogulch/xtemplate/caddy`, a caddy module that integrates xtemplate into the caddy web server.
 
-XTemplate is tested by running `./integration/run.sh` which loads the test templates and context directory, and runs hurl tests from the tests directory.
-
-### Extending xtemplate
-
-XTemplate has two built-in extension points, adding a custom funcmap of
-functions that will be made available in the template, and registering a `fs.FS`
-which can be used as either the template root or context root.
-
-See the `./register` module for details. This module scheme may look strange but
-it is designed to minimize the number of extra dependencies added to your module
-by depending on xtemplate.
+XTemplate is tested by running `./test/exec.sh` which loads using the `test/templates` and `test/context` directories, and runs hurl files from the `test/tests` directory.
 
 ## Project history and license
 
