@@ -2,3 +2,4 @@ go.work*
 xtemplate
 xtemplate.exe
 caddy
+dist
