@@ -358,16 +358,13 @@ request-specific data and provides stateful actions.
 
 - `.Req` is the current HTTP request struct, [http.Request](https://pkg.go.dev/net/http#Request), which has various fields, including:
   - `.Method` - the method
-  - `.URL` - the URL, which in turn has component fields (Scheme, Host,
-    Path, etc.)
+  - `.URL` - the URL, which in turn has component fields (Scheme, Host, Path, etc.)
   - `.Header` - the header fields
   - `.Host` - the Host or :authority header of the request
-- `.Params` is a list of path parameters extracted from the url based on the
-  current route.
+- `.Params` is a list of path parameters extracted from the url based on the current route.
 - `.RemoteIP` is the client's IP address.
 - `.Host` is the hostname portion (no port) of the Host header of the HTTP request.
 - `.Cookie "cookiename"` Gets the value of a cookie by name.
-
 - `.SetStatus 201` Set the status code of the current response if no error occurs during template rendering.
 - `.AddHeader "Header-Name" $val` Adds a header field to the HTTP response
 - `.SetHeader "Header-Name" $val` Sets a header field on the HTTP response, replacing any existing value
