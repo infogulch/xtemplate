@@ -30,8 +30,6 @@ jobs:
 
     - run: go build -o xtemplate ./cmd
 
-    - run: xcaddy build --with github.com/infogulch/xtemplate/caddy=./caddy
-
     - uses: actions/upload-artifact@v3
       with:
         name: xtemplate
