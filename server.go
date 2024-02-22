@@ -19,11 +19,47 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-func (server *xtemplate) mainHandler(handlerPath string, handler Handler) http.HandlerFunc {
+type xserver struct {
+	Config
+	id        int64
+	funcs     template.FuncMap
+	files     map[string]fileInfo
+	router    *http.ServeMux
+	ctx       context.Context
+	cancel    func()
+	templates *template.Template
+}
+
+func (x *xserver) Cancel() {
+	x.Logger.Info("xtemplate instance cancelled")
+	x.cancel()
+}
+
+func (x *xserver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	x.router.ServeHTTP(w, r)
+}
+
+type CancelHandler interface {
+	http.Handler
+	Cancel()
+}
+
+var _ = (CancelHandler)((*xserver)(nil))
+
+var (
+	LevelDebug  slog.Level = slog.LevelDebug
+	LevelDebug1 slog.Level = slog.LevelDebug + 1
+	LevelDebug2 slog.Level = slog.LevelDebug + 2
+	LevelDebug3 slog.Level = slog.LevelDebug + 3
+)
+
+type Handler func(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xserver)
+
+func (server *xserver) mainHandler(handlerPath string, handler Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-server.ctx.Done():
-			server.log.Error("received request after xtemplate instance cancelled", slog.String("method", r.Method), slog.String("path", r.URL.Path))
+			server.Logger.Error("received request after xtemplate instance cancelled", slog.String("method", r.Method), slog.String("path", r.URL.Path))
 			http.Error(w, "server stopped", http.StatusInternalServerError)
 			return
 		default:
@@ -31,7 +67,7 @@ func (server *xtemplate) mainHandler(handlerPath string, handler Handler) http.H
 
 		start := time.Now()
 
-		log := server.log.With(slog.Group("serve",
+		log := server.Logger.With(slog.Group("serve",
 			slog.String("requestid", getRequestId(r.Context())),
 			slog.String("method", r.Method),
 			slog.String("requestPath", r.URL.Path),
@@ -43,7 +79,7 @@ func (server *xtemplate) mainHandler(handlerPath string, handler Handler) http.H
 
 		handler(w, r, log, server)
 
-		log.Debug("request served", slog.Duration("response-time", time.Since(start)))
+		log.Log(r.Context(), LevelDebug2, "request served", slog.Duration("response-time", time.Since(start)))
 	}
 }
 
@@ -62,7 +98,7 @@ func getRequestId(ctx context.Context) string {
 }
 
 func bufferedTemplateHandler(tmpl *template.Template) Handler {
-	return func(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xtemplate) {
+	return func(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xserver) {
 		buf := bufPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bufPool.Put(buf)
@@ -78,7 +114,7 @@ func bufferedTemplateHandler(tmpl *template.Template) Handler {
 				server: server,
 			},
 			fsContext{
-				fs:  server.contextFS,
+				fs:  server.Context.FS,
 				log: log,
 			},
 			requestContext{
@@ -117,7 +153,7 @@ func bufferedTemplateHandler(tmpl *template.Template) Handler {
 }
 
 func sseTemplateHandler(tmpl *template.Template) Handler {
-	return func(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xtemplate) {
+	return func(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xserver) {
 		if r.Header.Get("Accept") != "text/event-stream" {
 			http.Error(w, "SSE endpoint", http.StatusNotAcceptable)
 			return
@@ -148,7 +184,7 @@ func sseTemplateHandler(tmpl *template.Template) Handler {
 				},
 			},
 			fsContext{
-				fs:  server.contextFS,
+				fs:  server.Context.FS,
 				log: log,
 			},
 			requestContext{
@@ -178,7 +214,7 @@ func sseTemplateHandler(tmpl *template.Template) Handler {
 	}
 }
 
-func serveFileHandler(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xtemplate) {
+func serveFileHandler(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xserver) {
 	urlpath := path.Clean(r.URL.Path)
 	fileinfo, ok := server.files[urlpath]
 	if !ok {
@@ -209,7 +245,7 @@ func serveFileHandler(w http.ResponseWriter, r *http.Request, log *slog.Logger, 
 	}
 
 	log.Debug("serving file request", slog.String("path", urlpath), slog.String("encoding", encoding.encoding), slog.String("contenttype", fileinfo.contentType))
-	file, err := server.templateFS.Open(encoding.path)
+	file, err := server.Template.FS.Open(encoding.path)
 	if err != nil {
 		log.Error("failed to open file", slog.Any("error", err), slog.String("encoding.path", encoding.path), slog.String("requestpath", r.URL.Path))
 		http.Error(w, "internal server error", 500)

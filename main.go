@@ -14,82 +14,49 @@ import (
 )
 
 type flags struct {
-	listen_addr    string
-	template_root  string
-	context_root   string
-	watch_template bool
-	watch_context  bool
-	l_delim        string
-	r_delim        string
-	extension      string
-	db_driver      string
-	db_connstr     string
-	log_level      int
-	config         kvflags
+	config              Config
+	listen_addr         string
+	watch_template_path bool
+	watch_context_path  bool
 }
 
 func parseflags() (f flags) {
 	flag.StringVar(&f.listen_addr, "listen", "0.0.0.0:8080", "Listen address")
-	flag.StringVar(&f.template_root, "template-root", "templates", "Template root directory")
-	flag.StringVar(&f.context_root, "context-root", "", "Context root directory")
-	flag.BoolVar(&f.watch_template, "watch-template", true, "Watch the template directory and reload if changed")
-	flag.BoolVar(&f.watch_context, "watch-context", false, "Watch the context directory and reload if changed")
-	flag.StringVar(&f.l_delim, "ldelim", "{{", "Left template delimiter")
-	flag.StringVar(&f.r_delim, "rdelim", "}}", "Right template delimiter")
-	flag.StringVar(&f.extension, "template-extension", ".html", "File extension to look for to identify template files")
-	flag.StringVar(&f.db_driver, "db-driver", "", "Database driver name")
-	flag.StringVar(&f.db_connstr, "db-connstr", "", "Database connection string")
-	flag.IntVar(&f.log_level, "log", 0, "Log level, DEBUG=-4, INFO=0, WARN=4, ERROR=8")
-	flag.Var(&f.config, "c", "Config values, in the form `x=y`, can be specified multiple times")
+	flag.StringVar(&f.config.Template.Path, "template-path", "templates", "Directory where templates are loaded from")
+	flag.BoolVar(&f.watch_template_path, "watch-template", true, "Watch the template directory and reload if changed")
+	flag.StringVar(&f.config.Template.TemplateExtension, "template-extension", ".html", "File extension to look for to identify templates")
+	flag.StringVar(&f.config.Template.Delimiters.Left, "ldelim", "{{", "Left template delimiter")
+	flag.StringVar(&f.config.Template.Delimiters.Right, "rdelim", "}}", "Right template delimiter")
+
+	flag.StringVar(&f.config.Context.Path, "context-path", "", "Directory that template definitions are given direct access to. No access is given if empty (default \"\")")
+	flag.BoolVar(&f.watch_context_path, "watch-context", false, "Watch the context directory and reload if changed (default false)")
+
+	flag.StringVar(&f.config.Database.Driver, "db-driver", "", "Name of the database driver registered as a Go `sql.Driver`. Not available if empty. (default \"\")")
+	flag.StringVar(&f.config.Database.Connstr, "db-connstr", "", "Database connection string")
+
+	flag.Var(&f.config.UserConfig, "c", "Config values, in the form `x=y`, can be specified multiple times")
+
+	flag.IntVar(&f.config.LogLevel, "log", 0, "Log level, DEBUG=-4, INFO=0, WARN=4, ERROR=8")
 	flag.Parse()
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "xtemplate is a hypertext preprocessor and http templating web server.\nUsage of %s:\n", os.Args[0])
 		flag.PrintDefaults()
 	}
+	sql.Drivers()
 	return
 }
 
 // Main can be called from your func main() if you want your program to act like
 // the default xtemplate cli, or use it as a reference for making your own.
-// Provide configs to override the defaults like: `xtemplate.Main(xtemplate.New().WithFooConfig())`
-func Main(userConfig ...*config) {
+// Provide configs to override the defaults like: `xtemplate.Main(xtemplate.WithFooConfig())`
+func Main(overrides ...override) {
 	flags := parseflags()
-	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(flags.log_level)}))
-
-	configs := New()
-	configs.WithDelims(flags.l_delim, flags.r_delim)
-	configs.WithLogger(log.WithGroup("xtemplate"))
-
-	if flags.db_driver != "" {
-		db, err := sql.Open(flags.db_driver, flags.db_connstr)
-		if err != nil {
-			log.Error("failed to open db", "error", err)
-			os.Exit(1)
-		}
-		configs.WithDB(db)
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(flags.config.LogLevel)}))
+	WithLogger(log)(&flags.config)
+	for _, o := range overrides {
+		o(&flags.config)
 	}
-
-	if flags.context_root != "" {
-		configs.WithContextFS(os.DirFS(flags.context_root))
-	}
-
-	configs.WithTemplateExtension(flags.extension)
-
-	{
-		config := make(map[string]string)
-		for _, kv := range flags.config {
-			config[kv.Key] = kv.Value
-		}
-		if len(config) > 0 {
-			configs.WithConfig(config)
-		}
-	}
-
-	for _, c := range userConfig {
-		*configs = append(*configs, *c...)
-	}
-
-	handler, err := configs.Build()
+	handler, err := Build(&flags.config)
 	if err != nil {
 		log.Error("failed to load xtemplate", "error", err)
 		os.Exit(2)
@@ -98,15 +65,15 @@ func Main(userConfig ...*config) {
 	// set up fswatch
 	{
 		var watchDirs []string
-		if flags.watch_template {
-			watchDirs = append(watchDirs, flags.template_root)
+		if flags.watch_template_path {
+			watchDirs = append(watchDirs, flags.config.Template.Path)
 		}
-		if flags.watch_context {
-			if flags.context_root == "" {
-				log.Error("cannot watch context root if it is not specified", "context_root", flags.context_root)
+		if flags.watch_context_path {
+			if flags.config.Context.Path == "" {
+				log.Error("cannot watch context root if it is not specified", "context_root", flags.config.Context.Path)
 				os.Exit(3)
 			}
-			watchDirs = append(watchDirs, flags.context_root)
+			watchDirs = append(watchDirs, flags.config.Context.Path)
 		}
 		if len(watchDirs) != 0 {
 			changed, halt, err := watch.WatchDirs(watchDirs, 200*time.Millisecond)
@@ -115,7 +82,7 @@ func Main(userConfig ...*config) {
 				os.Exit(4)
 			}
 			watch.React(changed, halt, func() (halt bool) {
-				temphandler, err := configs.Build()
+				temphandler, err := Build(&flags.config)
 				if err != nil {
 					log.Info("failed to reload xtemplate", "error", err)
 				} else {
@@ -133,37 +100,36 @@ func Main(userConfig ...*config) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handler.ServeHTTP(w, r) // wrap handler so it can be changed when reloaded with fswatch
 	})
-	fmt.Printf("server stopped: %v\n", http.ListenAndServe(flags.listen_addr, h))
+
+	values := []any{}
+	if err := http.ListenAndServe(flags.listen_addr, h); err != nil {
+		values = append(values, slog.Any("error", err))
+	}
+	log.Info("server stopped", values...)
 }
 
-type kv struct{ Key, Value string }
+// Implement flag.Value.String to use UserConfigs as a flag.
+func (c UserConfig) String() string {
+	out := ""
+	first := true
+	for k, v := range c {
+		if !first {
+			out += " "
+		}
+		out += k + "=" + v
+	}
+	return out
+}
 
-func (entry kv) String() string { return entry.Key + "=" + entry.Value }
-
-func (entry *kv) Set(arg string) error {
+// Implement flag.Value.Set to use UserConfigs as a flag.
+func (c *UserConfig) Set(arg string) error {
 	s := strings.SplitN(arg, "=", 2)
 	if len(s) != 2 {
 		return fmt.Errorf("config arg must be in the form `k=v`, got: `%s`", arg)
 	}
-	*entry = kv{Key: s[0], Value: s[1]}
-	return nil
-}
-
-type kvflags []kv
-
-func (s *kvflags) String() string {
-	if s == nil {
-		return ""
+	if previous, ok := (*c)[s[0]]; ok {
+		return fmt.Errorf("cannot overwrite key in user config. current value for key `%s` is `%s`. attempted to set to `%s`", s[0], previous, s[1])
 	}
-	r := fmt.Sprint(*s)
-	return r[1 : len(r)-1]
-}
-
-func (s *kvflags) Set(arg string) error {
-	var entry kv
-	if err := entry.Set(arg); err != nil {
-		return err
-	}
-	*s = append(*s, entry)
+	(*c)[s[0]] = s[1]
 	return nil
 }

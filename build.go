@@ -4,12 +4,14 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha512"
+	"database/sql"
 	"encoding/base64"
 	"fmt"
 	"html/template"
 	"io"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"net/http"
 	"os"
 	"path"
@@ -21,88 +23,129 @@ import (
 	"text/template/parse"
 	"time"
 
+	"github.com/Masterminds/sprig/v3"
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
 )
 
-type Handler func(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xtemplate)
-
-var instanceIdentity int64
-
-func (configs *config) Build() (CancelHandler, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// start with default xtemplate struct
-	x := &xtemplate{
-		templateFS:        os.DirFS("templates"),
-		ldelim:            "{{",
-		rdelim:            "}}",
-		templateExtension: ".html",
-		log:               slog.Default().WithGroup("xtemplate"),
-		config:            make(map[string]string),
-		funcs:             make(template.FuncMap),
-		files:             make(map[string]fileInfo),
-		router:            http.NewServeMux(),
-		ctx:               ctx,
-		cancel:            cancel,
-		id:                atomic.AddInt64(&instanceIdentity, 1),
+// Build creates a new xtemplate server instance, a `CancelHandler`, from an xtemplate.Config.
+func Build(config *Config) (CancelHandler, error) {
+	server, err := newServer(config)
+	if err != nil {
+		return nil, err
 	}
+	log := server.Logger.WithGroup("build")
+	stats := &buildStats{}
 
-	// apply all configs, which are funcs that mutate the xtemplate struct
-	for _, c := range *configs {
-		c(x)
-	}
-
-	x.log = x.log.With(slog.Int64("instance", x.id))
-
-	log := x.log.WithGroup("build")
-
-	// Define the template instance that will accumulate all template definitions.
-	x.templates = template.New(".").Delims(x.ldelim, x.rdelim).Funcs(x.funcs)
-
-	// scan all files from the templatefs root
-	if err := fs.WalkDir(x.templateFS, ".", func(path string, d fs.DirEntry, err error) error {
+	// Recursively scan and process all files in Template.FS.
+	if err := fs.WalkDir(server.Template.FS, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
-		if ext := filepath.Ext(path); ext == x.templateExtension {
-			err = x.addTemplateHandler(path, log)
-			} else {
-			err = x.addStaticFileHandler(path, log)
+		if ext := filepath.Ext(path); ext == server.Template.TemplateExtension {
+			err = server.addTemplateHandler(path, log, stats)
+		} else {
+			err = server.addStaticFileHandler(path, log, stats)
 		}
 		return err
 	}); err != nil {
 		return nil, fmt.Errorf("error scanning files: %v", err)
 	}
 
-	// Invoke all initilization templates, aka any template whose name starts with "INIT "
-	for _, tmpl := range x.templates.Templates() {
+	// Invoke all initilization templates, aka any template whose name starts with "INIT ".
+	for _, tmpl := range server.templates.Templates() {
 		if strings.HasPrefix(tmpl.Name(), "INIT ") {
 			context := &struct {
 				baseContext
 				fsContext
 			}{
 				baseContext{
-					server: x,
+					server: server,
 					log:    log,
 				},
 				fsContext{
-					fs: x.contextFS,
+					fs: server.Context.FS,
 				},
 			}
 			err := tmpl.Execute(io.Discard, context)
 			if err = context.resolvePendingTx(err); err != nil {
 				return nil, fmt.Errorf("template initializer '%s' failed: %w", tmpl.Name(), err)
 			}
+			stats.TemplateInitializers += 1
 		}
 	}
 
-	log.Debug("xtemplate instance initialized", slog.Any("xtemplate", x))
-	return x, nil
+	log.Info("xtemplate instance initialized", slog.Any("stats", stats))
+	log.Debug("xtemplate instance details", slog.Any("xtemplate", server))
+	return server, nil
 }
 
-func (server *xtemplate) addHandler(handlerPath string, handler Handler) {
-	server.router.HandleFunc(handlerPath, server.mainHandler(handlerPath, handler))
+// Counter to assign a unique id to each instance of xtemplate created when
+// calling Build(). This is intended to help distinguish logs from multiple
+// instances in a single process.
+var nextInstanceIdentity int64
+
+// Counts of various objects created during Build.
+type buildStats struct {
+	Routes               int
+	TemplateFiles        int
+	TemplateDefinitions  int
+	TemplateInitializers int
+	StaticFiles          int
+	StaticFileEncodings  int
+}
+
+// newServer creates an empty xserver with all data structures initalized using the provided config.
+func newServer(config *Config) (*xserver, error) {
+	c := &xserver{
+		Config: *config,
+	}
+	if c.Template.FS == nil {
+		if c.Template.Path == "" {
+			c.Template.Path = "templates"
+		}
+		c.Template.FS = os.DirFS(c.Template.Path)
+	}
+
+	if c.Context.FS == nil && c.Context.Path != "" {
+		c.Context.FS = os.DirFS(c.Context.Path)
+	}
+
+	if c.Database.DB == nil && c.Database.Driver != "" {
+		var err error
+		c.Database.DB, err = sql.Open(c.Database.Driver, c.Database.Connstr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open database with driver and connstr: `%s`, `%s`", c.Database.Driver, c.Database.Connstr)
+		}
+	}
+
+	c.id = atomic.AddInt64(&nextInstanceIdentity, 1)
+
+	if c.Logger == nil {
+		c.Logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(c.LogLevel)}))
+	}
+	c.Logger = c.Logger.WithGroup("xtemplate").With(slog.Int64("instance", c.id))
+
+	{
+		c.funcs = template.FuncMap{}
+		maps.Copy(c.funcs, xtemplateFuncs)
+		maps.Copy(c.funcs, sprig.HtmlFuncMap())
+		for _, extra := range c.FuncMaps {
+			maps.Copy(c.funcs, extra)
+		}
+	}
+
+	c.ctx, c.cancel = context.WithCancel(context.Background())
+	c.UserConfig = maps.Clone(c.UserConfig)
+	c.files = make(map[string]fileInfo)
+	c.router = http.NewServeMux()
+	c.templates = template.New(".").Delims(c.Template.Delimiters.Left, c.Template.Delimiters.Right).Funcs(c.funcs)
+
+	return c, nil
+}
+
+func (server *xserver) addHandler(pattern string, handler Handler) {
+	server.router.HandleFunc(pattern, server.mainHandler(pattern, handler))
 }
 
 type fileInfo struct {
@@ -116,9 +159,9 @@ type encodingInfo struct {
 	modtime        time.Time
 }
 
-func (x *xtemplate) addStaticFileHandler(path_ string, log *slog.Logger) error {
+func (x *xserver) addStaticFileHandler(path_ string, log *slog.Logger, stats *buildStats) error {
 	// Open and stat the file
-	fsfile, err := x.templateFS.Open(path_)
+	fsfile, err := x.Template.FS.Open(path_)
 	if err != nil {
 		return fmt.Errorf("failed to open static file '%s': %w", path_, err)
 	}
@@ -183,6 +226,8 @@ func (x *xtemplate) addStaticFileHandler(path_ string, log *slog.Logger) error {
 		}
 		file.encodings = []encodingInfo{{encoding: encoding, path: path_, size: size, modtime: stat.ModTime()}}
 		x.addHandler("GET "+basepath, serveFileHandler)
+		stats.StaticFiles += 1
+		stats.Routes += 1
 		log.Debug("added static file handler", slog.String("path", basepath), slog.String("filepath", path_), slog.String("contenttype", file.contentType), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()), slog.String("hash", sri))
 	} else {
 		if file.hash != sri {
@@ -190,6 +235,7 @@ func (x *xtemplate) addStaticFileHandler(path_ string, log *slog.Logger) error {
 		}
 		file.encodings = append(file.encodings, encodingInfo{encoding: encoding, path: path_, size: size, modtime: stat.ModTime()})
 		sort.Slice(file.encodings, func(i, j int) bool { return file.encodings[i].size < file.encodings[j].size })
+		stats.StaticFileEncodings += 1
 		log.Debug("added static file encoding", slog.String("path", basepath), slog.String("filepath", path_), slog.String("encoding", encoding), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()))
 	}
 	x.files[basepath] = file
@@ -198,18 +244,19 @@ func (x *xtemplate) addStaticFileHandler(path_ string, log *slog.Logger) error {
 
 var routeMatcher *regexp.Regexp = regexp.MustCompile("^(GET|POST|PUT|PATCH|DELETE|SSE) (.*)$")
 
-func (x *xtemplate) addTemplateHandler(path_ string, log *slog.Logger) error {
-	content, err := fs.ReadFile(x.templateFS, path_)
+func (x *xserver) addTemplateHandler(path_ string, log *slog.Logger, stats *buildStats) error {
+	content, err := fs.ReadFile(x.Template.FS, path_)
 	if err != nil {
 		return fmt.Errorf("could not read template file '%s': %v", path_, err)
 	}
 	path_ = path.Clean("/" + path_)
 	// parse each template file manually to have more control over its final
 	// names in the template namespace.
-	newtemplates, err := parse.Parse(path_, string(content), x.ldelim, x.rdelim, x.funcs, buliltinsSkeleton)
+	newtemplates, err := parse.Parse(path_, string(content), x.Template.Delimiters.Left, x.Template.Delimiters.Right, x.funcs, buliltinsSkeleton)
 	if err != nil {
 		return fmt.Errorf("could not parse template file '%s': %v", path_, err)
 	}
+	stats.TemplateFiles += 1
 	// add all templates
 	for name, tree := range newtemplates {
 		if x.templates.Lookup(name) != nil {
@@ -219,6 +266,7 @@ func (x *xtemplate) addTemplateHandler(path_ string, log *slog.Logger) error {
 		if err != nil {
 			return fmt.Errorf("could not add template '%s' from '%s': %v", name, path_, err)
 		}
+		stats.TemplateDefinitions += 1
 		if name == path_ {
 			// don't register routes to hidden files
 			_, file := filepath.Split(path_)
@@ -226,7 +274,7 @@ func (x *xtemplate) addTemplateHandler(path_ string, log *slog.Logger) error {
 				continue
 			}
 			// strip the extension from the handled path
-			routePath := strings.TrimSuffix(path_, x.templateExtension)
+			routePath := strings.TrimSuffix(path_, x.Template.TemplateExtension)
 			// files named 'index' handle requests to the directory
 			if path.Base(routePath) == "index" {
 				routePath = path.Dir(routePath)
@@ -235,6 +283,7 @@ func (x *xtemplate) addTemplateHandler(path_ string, log *slog.Logger) error {
 				routePath += "{$}"
 			}
 			x.addHandler("GET "+routePath, bufferedTemplateHandler(tmpl))
+			stats.Routes += 1
 			log.Debug("added path template handler", "method", "GET", "path", routePath, "template_path", path_)
 		} else if matches := routeMatcher.FindStringSubmatch(name); len(matches) == 3 {
 			method, path_ := matches[1], matches[2]
@@ -243,6 +292,7 @@ func (x *xtemplate) addTemplateHandler(path_ string, log *slog.Logger) error {
 			} else {
 				x.addHandler(method+" "+path_, bufferedTemplateHandler(tmpl))
 			}
+			stats.Routes += 1
 			log.Debug("added named template handler", "method", method, "path", path_, "template_name", name, "template_path", path_)
 		}
 	}

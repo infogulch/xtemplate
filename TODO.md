@@ -1,16 +1,6 @@
 # TODO
 
-
-### Features
-
-
-### Documentation
-
-- [ ] Memes
-- [ ] Highlight sse feature
-- [ ] Organize docs according to https://diataxis.fr/
-    - [ ] Add explanation
-- [ ] Document configuration
+- [ ] Republish caddy module as github.com/infogulch/xtemplate-caddy
 
 ### Automation
 
@@ -18,22 +8,27 @@
     - [ ] Set up go tests
     - [ ] Publish binaries and release when a git tag is pushed
 
-### Demos
+### Application
 
+- [ ] Make and link to more example applications
 - [ ] Demonstrate how to do auth with xtemplate
     - [ ] [forward_auth](https://caddyserver.com/docs/caddyfile/directives/forward_auth#forward-auth) / [Trusted Header SSO](https://www.authelia.com/integration/trusted-header-sso/introduction/)
-- [ ] Demonstrate how to integrate with [caddy-git](https://github.com/greenpau/caddy-git) for zero-CI app deployments
-
 
 # BACKLOG
 
 - Support SSE
     - [ ] Integrate nats subscription
-- [ ] Split caddy integration into a separate repo. Trying to shoehorn two modules into one repo just isn't working.
 - [ ] Add a way to register additional routes dynamically during init
-
+- [ ] Organize docs according to https://diataxis.fr/
+- [ ] Demonstrate how to integrate with [caddy-git](https://github.com/greenpau/caddy-git) for zero-CI app deployments
 
 # DONE
+
+## v0.2 - Feb 2024
+
+- [x] Rewrite configuration to be normal
+- [x] Add Why and How to use sections to README
+- [x] Remove caddy module, to republish as github.com/infogulch/xtemplate-caddy
 
 ## v0.2 - Feb 2024
 

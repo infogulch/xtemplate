@@ -20,14 +20,14 @@ import (
 )
 
 type baseContext struct {
-	server     *xtemplate
+	server     *xserver
 	log        *slog.Logger
 	pendingTx  *sql.Tx
 	requestCtx context.Context
 }
 
 func (c *baseContext) Config(key string) string {
-	return c.server.config[key]
+	return c.server.UserConfig[key]
 }
 
 // ServeContent aborts execution of the template and instead responds to the request with content
@@ -70,7 +70,7 @@ func (c *baseContext) Funcs() template.FuncMap {
 }
 
 func (c *baseContext) Tx() (*sqlContext, error) {
-	if c.server.db == nil {
+	if c.server.Database.DB == nil {
 		return nil, fmt.Errorf("database is not configured")
 	}
 	if c.pendingTx != nil {
@@ -79,7 +79,7 @@ func (c *baseContext) Tx() (*sqlContext, error) {
 		}
 		c.pendingTx = nil
 	}
-	tx, err := c.server.db.Begin()
+	tx, err := c.server.Database.DB.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction")
 	}

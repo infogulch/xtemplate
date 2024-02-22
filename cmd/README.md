@@ -1,7 +1,9 @@
-This package simply calls [`xtemplate.Main()`](../main.go) in `func main()`
-which exposes xtemplate's Go API into a CLI app. If you want a custom version of
-the xtemplate cli with a specific database driver, custom template funcs, or
-more control over application startup, this is a good place to start looking.
+This package is a tiny wrapper around [`xtemplate.Main()`](../main.go) which is
+the only code in the package.
+
+If you want to customize the xtemplate build with a specific database driver,
+custom template funcs, or to have more control over application startup, this is
+a good place to start looking.
 
 ### Build
 
@@ -13,7 +15,7 @@ go build -o xtemplate
 go build -o xtemplate ./cmd
 
 # build with sqlite3 driver and json extensions
-GOFLAGS='-tags="sqlite_json"' CGO_ENABLED=1 go build -o xtemplate
+GOFLAGS='-tags="sqlite_json"' CGO_ENABLED=1 go build -o xtemplate ./cmd
 ```
 
 ### Usage

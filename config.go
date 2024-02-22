@@ -1,3 +1,5 @@
+// xtemplate extends Go's html/template to be capable enough to define an entire
+// server-side application with a directory of Go templates.
 package xtemplate
 
 import (
@@ -5,80 +7,86 @@ import (
 	"html/template"
 	"io/fs"
 	"log/slog"
-
-	"github.com/Masterminds/sprig/v3"
 )
 
-func New() *config {
-	c := &config{}
-	c.WithFuncMaps(xtemplateFuncs, sprig.HtmlFuncMap())
-	return c
+func New() *Config {
+	return &Config{}
 }
 
-type config []func(*xtemplate)
+type Config struct {
+	// Control where and how templates are loaded.
+	Template struct {
+		// The FS to load templates from. Overrides Path if not nil.
+		FS fs.FS `json:"-"`
 
-func (c *config) WithTemplateFS(tfs fs.FS) *config {
-	*c = append(*c, func(r *xtemplate) {
-		r.templateFS = tfs
-	})
-	return c
+		// The path to the templates directory.
+		Path string `json:"path,omitempty"`
+
+		// File extension to search for to find template files. Default `.html`.
+		TemplateExtension string `json:"template_extension,omitempty"`
+
+		// The template action delimiters, default "{{" and "}}".
+		Delimiters struct {
+			Left  string `json:"left,omitempty"`
+			Right string `json:"right,omitempty"`
+		} `json:"delimiters,omitempty"`
+	} `json:"template,omitempty"`
+
+	// Control where the templates may have dynamic access the filesystem.
+	Context struct {
+		// The FS to give dynamic access to templates. Overrides Path if not nil.
+		FS fs.FS `json:"-"`
+
+		// Path to a directory to give dynamic access to templates.
+		Path string `json:"path,omitempty"`
+	} `json:"context,omitempty"`
+
+	// The database driver and connection string. If set, must be precicely two
+	// elements: the driver name and the connection string.
+	Database struct {
+		DB      *sql.DB `json:"-"`
+		Driver  string  `json:"driver,omitempty"`
+		Connstr string  `json:"connstr,omitempty"`
+	} `json:"database,omitempty"`
+
+	// User configration, accessible in the template execution context as `.Config`.
+	UserConfig UserConfig `json:"config,omitempty"`
+
+	// Additional functions to add to the template execution context.
+	FuncMaps []template.FuncMap `json:"-"`
+
+	Logger   *slog.Logger `json:"-"`
+	LogLevel int          `json:"log_level,omitempty"`
 }
 
-func (c *config) WithContextFS(cfs fs.FS) *config {
-	*c = append(*c, func(r *xtemplate) {
-		r.contextFS = cfs
-	})
-	return c
+type UserConfig map[string]string
+
+func (c *Config) WithTemplateFS(fs fs.FS) {
+	c.Template.FS = fs
 }
 
-func (c *config) WithFuncMaps(funcmaps ...template.FuncMap) *config {
-	for _, funcs := range funcmaps {
-		funcs := funcs
-		*c = append(*c, func(r *xtemplate) {
-			for name, fn := range funcs {
-				r.funcs[name] = fn
-			}
-		})
+type override func(*Config)
+
+func WithContextFS(fs fs.FS) override {
+	return func(c *Config) {
+		c.Context.FS = fs
 	}
-	return c
 }
 
-func (c *config) WithDB(db *sql.DB) *config {
-	*c = append(*c, func(r *xtemplate) {
-		r.db = db
-	})
-	return c
+func WithDB(db *sql.DB) override {
+	return func(c *Config) {
+		c.Database.DB = db
+	}
 }
 
-func (c *config) WithDelims(l, r string) *config {
-	*c = append(*c, func(rt *xtemplate) {
-		rt.ldelim = l
-		rt.rdelim = r
-	})
-	return c
+func WithLogger(logger *slog.Logger) override {
+	return func(c *Config) {
+		c.Logger = logger
+	}
 }
 
-func (c *config) WithConfig(cfg map[string]string) *config {
-	*c = append(*c, func(r *xtemplate) {
-		for k, v := range cfg {
-			r.config[k] = v
-		}
-	})
-	return c
+func WithFuncMaps(fm ...template.FuncMap) override {
+	return func(c *Config) {
+		c.FuncMaps = append(c.FuncMaps, fm...)
+	}
 }
-
-func (c *config) WithLogger(log *slog.Logger) *config {
-	*c = append(*c, func(r *xtemplate) {
-		r.log = log
-	})
-	return c
-}
-
-func (c *config) WithTemplateExtension(ext string) *config {
-	*c = append(*c, func(r *xtemplate) {
-		r.templateExtension = ext
-	})
-	return c
-}
-
-// Call config.Build() to get an http.Handler that can handle http requests
