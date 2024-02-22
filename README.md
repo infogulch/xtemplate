@@ -4,10 +4,10 @@
 building on Go's `html/template` library to streamline construction of a
 hypermedia-exchange-oriented web server using just template definitions.
 Entirely eschew defining and naming handlers, param structs, query row structs,
-and template context structs. Completely circumvent manual management of route
-tables, discovering and loading template files, and serving static files. Do all
-of this with a development loop measured in milliseconds and response times
-measured in microseconds.
+and template context structs. Avoid manual management of route tables,
+discovering and loading template files, and serving static files, and instead
+focus on writing a hypermedia application with a development loop measured in
+milliseconds and response times measured in microseconds.
 
 > [!IMPORTANT]
 >
@@ -190,12 +190,12 @@ hypermedia clients.
 
 xtemplate is designed to treat the files in the templates directory as
 relatively static. *Consider the templates directory to be your **application
-definition***. Though, any time a file under the templates directory is modified
-then the server will quickly reload (likely faster than you can hit F5) and can
-be configured to automatically refresh browser clients making the development
-experience very snappy. Templates can have dynamic access to a directory in the
-local filesystem if you set set the "context path" config item (ideally pointed
-to a different directory than the templates directory).
+definition***. When a file under the templates directory is modified the server
+will quickly reload and can be configured to automatically refresh browser
+clients making the development experience very snappy. Templates can have
+dynamic access to a directory in the local filesystem if you set set the
+"context path" config item (ideally pointed to a different directory than the
+templates directory).
 
 When [`Build(config)`](build.go) is called, xtemplate recursively scans all
 files in the templates directory:
@@ -204,8 +204,8 @@ files in the templates directory:
   custom `html/template.Template` where all defined templates are available to
   invoke from all other templates, and all files are available to include in any
   other template by their full path relative to the template directory.
-* All other files is considered "static files" and will be served directly from
-  disk as-is. The file is hashed, which is used to optimize caching behavior by
+* All other files are considered "static files" and are served directly from
+  disk. The file is hashed, which is used to optimize caching behavior by
   handling cache management headers like `Etag` and `If-None-Match`. If the file
   has a compressed version (e.g. `file.txt` and `file.txt.gz`), after validating
   that both have equivalent contents, the server will negotiate with clients to
@@ -216,8 +216,8 @@ Then, except for hidden files where its filename starts with `.`, all of these
 files are added to a Go 1.22 `http.ServeMux`: static files by their full path,
 and template files by their path minus extension. In addition, if any template
 file defines a template where the name matches a ServeMux pattern like `{{define
-"GET /path"}}{{end}}` or `{{define "DELETE /items/{id}"}}{{end}}`, then that
-pattern is routed to that defined template.
+"GET /path"}}...{{end}}` or `{{define "DELETE /items/{id}"}}...{{end}}`, then
+that pattern is routed to that defined template.
 
 When a request is 'routed to' a template, the [handler](bufferedTemplateHandler)
 executes the template and writes the output into a buffer; if the template
@@ -405,8 +405,8 @@ depend on request context or mutate state. There are three sets by default:
 functions that come by default in the go template library, functions from the
 sprig library, and custom functions added by xtemplate.
 
-You can also add your own custom FuncMap by calling the
-`config.WithFuncMaps(myfuncmap)` while constructing an `XTemplate` instance.
+You can custom FuncMaps by setting `config.FuncMaps = myFuncMap` or calling
+`xtemplate.Main(xtemplate.WithFuncMaps(myFuncMap))`.
 
 <details><summary><strong>Go stdlib template functions</strong></summary>
 
