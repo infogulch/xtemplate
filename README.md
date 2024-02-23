@@ -308,28 +308,33 @@ when making a custom build.
 
 #### 3. As a Go library
 
-Create an `xtemplate.Config` and customize it, then call `Build(config)`. This gives you a `http.Handler` that will
-serve requests. See [`config.go`](./config.go) for a complete config reference.
+Create an `xtemplate.Config` and customize it, then call `Build(config)`. This
+gives you a `http.Handler` that will serve requests. See
+[`config.go`](./config.go) for a complete config reference.
 
 #### 4. As a Caddy plugin
 
-Download [Caddy](https://caddyserver.com) with xtemplate built in as the `xtemplate-caddy` middleware plugin:
+> [Caddy](https://caddyserver.com) is a fast and extensible multi-platform
+> HTTP/1-2-3 web server with automatic HTTPS
 
-https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate%2Fcaddy
+Download Caddy with `xtemplate-caddy` middleware plugin built-in:
 
-Then configure Caddy as an xtemplate middlware handler:
+https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate-caddy
 
-```Caddyfile
+Then configure Caddy with xtemplate as a route handler:
+
+```Caddy
 :8080
 
 route {
-    xtemplate {
-      /* See xtemplate-caddy for
-    }
+    xtemplate
 }
 ```
 
-The `xtemplate-caddy` module is built on top of the Go library API.
+Find more information about how to configure xtemplate for caddy, see the
+module's repository: https://github.com/infogulch/xtemplate-caddy
+
+`xtemplate-caddy` is built on top of the Go library API.
 
 ### 🧰 Template semantics
 

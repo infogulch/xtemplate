@@ -1,12 +1,9 @@
 # TODO
 
-- [ ] Republish caddy module as github.com/infogulch/xtemplate-caddy
-
 ### Automation
 
-- Add github workflows
-    - [ ] Set up go tests
-    - [ ] Publish binaries and release when a git tag is pushed
+- [ ] Write Go api tests
+- [ ] Write CLI tests
 
 ### Application
 
@@ -21,11 +18,14 @@
 - [ ] Add a way to register additional routes dynamically during init
 - [ ] Organize docs according to https://diataxis.fr/
 - [ ] Demonstrate how to integrate with [caddy-git](https://github.com/greenpau/caddy-git) for zero-CI app deployments
+- [ ] Refactor watch to be easier to use from both Main() and xtemplate-caddy.
 
 # DONE
 
-## v0.2 - Feb 2024
+## v0.3 - Feb 2024
 
+- [x] Republish caddy module as github.com/infogulch/xtemplate-caddy
+- [x] Add github workflow to publish binaries and release when a git tag is pushed
 - [x] Rewrite configuration to be normal
 - [x] Add Why and How to use sections to README
 - [x] Remove caddy module, to republish as github.com/infogulch/xtemplate-caddy
@@ -39,7 +39,6 @@
 - [x] Allow searching for custom file extension to identify template files
 - [x] Don't route hidden files that start with a '.', not a '_'. We don't need to reinvent hidden files.
 - [x] Fix docs, tests after `_` -> `.` change.
-
 
 ## v0.1 - Oct 2023
 
