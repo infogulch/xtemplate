@@ -97,51 +97,51 @@ type buildStats struct {
 
 // newServer creates an empty xserver with all data structures initalized using the provided config.
 func newServer(config *Config) (*xserver, error) {
-	c := &xserver{
+	server := &xserver{
 		Config: *config,
 	}
-	if c.Template.FS == nil {
-		if c.Template.Path == "" {
-			c.Template.Path = "templates"
+	if server.Template.FS == nil {
+		if server.Template.Path == "" {
+			server.Template.Path = "templates"
 		}
-		c.Template.FS = os.DirFS(c.Template.Path)
+		server.Template.FS = os.DirFS(server.Template.Path)
 	}
 
-	if c.Context.FS == nil && c.Context.Path != "" {
-		c.Context.FS = os.DirFS(c.Context.Path)
+	if server.Context.FS == nil && server.Context.Path != "" {
+		server.Context.FS = os.DirFS(server.Context.Path)
 	}
 
-	if c.Database.DB == nil && c.Database.Driver != "" {
+	if server.Database.DB == nil && server.Database.Driver != "" {
 		var err error
-		c.Database.DB, err = sql.Open(c.Database.Driver, c.Database.Connstr)
+		server.Database.DB, err = sql.Open(server.Database.Driver, server.Database.Connstr)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open database with driver and connstr: `%s`, `%s`", c.Database.Driver, c.Database.Connstr)
+			return nil, fmt.Errorf("failed to open database with driver and connstr: `%s`, `%s`", server.Database.Driver, server.Database.Connstr)
 		}
 	}
 
-	c.id = atomic.AddInt64(&nextInstanceIdentity, 1)
+	server.id = atomic.AddInt64(&nextInstanceIdentity, 1)
 
-	if c.Logger == nil {
-		c.Logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(c.LogLevel)}))
+	if server.Logger == nil {
+		server.Logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(server.LogLevel)}))
 	}
-	c.Logger = c.Logger.WithGroup("xtemplate").With(slog.Int64("instance", c.id))
+	server.Logger = server.Logger.WithGroup("xtemplate").With(slog.Int64("instance", server.id))
 
 	{
-		c.funcs = template.FuncMap{}
-		maps.Copy(c.funcs, xtemplateFuncs)
-		maps.Copy(c.funcs, sprig.HtmlFuncMap())
-		for _, extra := range c.FuncMaps {
-			maps.Copy(c.funcs, extra)
+		server.funcs = template.FuncMap{}
+		maps.Copy(server.funcs, xtemplateFuncs)
+		maps.Copy(server.funcs, sprig.HtmlFuncMap())
+		for _, extra := range server.FuncMaps {
+			maps.Copy(server.funcs, extra)
 		}
 	}
 
-	c.ctx, c.cancel = context.WithCancel(context.Background())
-	c.UserConfig = maps.Clone(c.UserConfig)
-	c.files = make(map[string]fileInfo)
-	c.router = http.NewServeMux()
-	c.templates = template.New(".").Delims(c.Template.Delimiters.Left, c.Template.Delimiters.Right).Funcs(c.funcs)
+	server.ctx, server.cancel = context.WithCancel(context.Background())
+	server.UserConfig = maps.Clone(server.UserConfig)
+	server.files = make(map[string]fileInfo)
+	server.router = http.NewServeMux()
+	server.templates = template.New(".").Delims(server.Template.Delimiters.Left, server.Template.Delimiters.Right).Funcs(server.funcs)
 
-	return c, nil
+	return server, nil
 }
 
 func (server *xserver) addHandler(pattern string, handler Handler) {

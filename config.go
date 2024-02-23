@@ -9,8 +9,11 @@ import (
 	"log/slog"
 )
 
-func New() *Config {
-	return &Config{}
+func New() (c *Config) {
+	c = &Config{}
+	c.Template.Path = "templates"
+	c.UserConfig = make(map[string]string)
+	return
 }
 
 type Config struct {
