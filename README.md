@@ -19,10 +19,10 @@ milliseconds and response times measured in microseconds.
 - [👨‍🏭 How to use](#-how-to-use)
   - [📦 Deployment modes](#-deployment-modes)
   - [🧰 Template semantics](#-template-semantics)
-  - [📝 Dynamic Values in dot-context](#-context-values)
+  - [📝 Dynamic Values in dot-context](#-context)
   - [📐 Call custom Go functions and pure builtins](#-functions)
-- [🏆 Known users](#-showcase)
-- [👷‍♀️ Development](#-development)
+- [🏆 Known users](#-known-users)
+- [👷‍♀️ Development](#%EF%B8%8F-development)
 - [✅ License](#-project-history-and-license)
 
 ## 💡 Why?
