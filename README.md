@@ -13,17 +13,17 @@ milliseconds and response times measured in microseconds.
 >
 > xtemplate is somewhat unstable
 
-- [💡 Why?](#why)
-- [🎇 Features](#features)
-- [👨‍🏫 How it works](#how-it-works)
-- [👨‍🏭 How to use](#how-to-use)
-  - [📦 Deployment modes](#deployment-modes)
-  - [🧰 Template semantics](#template-semantics)
-  - [📝 Dynamic Values in dot-context](#context-values)
-  - [📐 Call custom Go functions and pure builtins](#functions)
-- [🏆 Known users](#showcase)
-- [👷‍♀️ Development](#development)
-- [✅ License](#project-history-and-license)
+- [💡 Why?](#-why)
+- [🎇 Features](#-features)
+- [👨‍🏫 How it works](#-how-it-works)
+- [👨‍🏭 How to use](#-how-to-use)
+  - [📦 Deployment modes](#-deployment-modes)
+  - [🧰 Template semantics](#-template-semantics)
+  - [📝 Dynamic Values in dot-context](#-context-values)
+  - [📐 Call custom Go functions and pure builtins](#-functions)
+- [🏆 Known users](#-showcase)
+- [👷‍♀️ Development](#-development)
+- [✅ License](#-project-history-and-license)
 
 ## 💡 Why?
 
@@ -219,21 +219,20 @@ file defines a template where the name matches a ServeMux pattern like `{{define
 "GET /path"}}...{{end}}` or `{{define "DELETE /items/{id}"}}...{{end}}`, then
 that pattern is routed to that defined template.
 
-When a request is 'routed to' a template, the [handler](bufferedTemplateHandler)
-executes the template and writes the output into a buffer; if the template
-execution succeeds then the buffer is written out as the response to the
-request. The template is executed with dynamic data in the dot context: request
-details at [`.Req`](#request-data-and-response-control), database access at
-[`.Tx` and `.Query`](#database-functions), and filesystem access like
-[`.ReadFile`](#file-operations), depending on config, see [context](#context).
+When a request is 'routed to' a template, the
+[bufferedTemplateHandler](server.go#L100) executes the template and writes the
+output into a buffer; if the template execution succeeds then the buffer is
+written out as the response to the request. The template is executed with
+dynamic data in the dot context: request details at
+[`.Req`](#request-data-and-response-control), database access at [`.Tx` and
+`.Query`](#database-functions), and filesystem access like
+[`.ReadFile`](#file-operations), depending on config, see [context](#-context).
 Arbitrary plain go functions can be added to to the templating engine with the
-`FuncMaps` config, in addition to many useful [default funcs](#functions) added
+`FuncMaps` config, in addition to many useful [default funcs](#-functions) added
 by xtemplate like functions to escape html (thanks
 [BlueMonday](https://github.com/microcosm-cc/bluemonday/)), render markdown
 (thanks [Goldmark](https://github.com/yuin/goldmark)), or manipulate lists
 (thanks [Sprig](https://masterminds.github.io/sprig/)).
-
-[bufferedTemplateHandler]: https://github.com/infogulch/xtemplate/blob/2f5c46dccefeb85d5e1debdbd40f218d97922893/serve.go#L64
 
 ## 👨‍🏭 How to use
 
@@ -357,7 +356,7 @@ result is sent to the client.
 The dot context `{{.}}` set on each template invocation facilitates access to
 request-specific data and provides stateful actions.
 
- See [tplcontext.go](tpl.context.go) for details.
+ See [tplcontext.go](tplcontext.go) for details.
 
 #### Request data and response control
 
@@ -400,7 +399,7 @@ All funcs accept a query string and any number of parameters. Prefer using param
 
 - `.Template` evaluate the template name with the given context and return the result as a string.
 - `.Funcs` returns a list of all the custom FuncMap funcs that are available to call. Useful in combination with the `try` func.
-- `.Config` is a map of config strings set in the Caddyfile. See [Config](#config).
+- `.Config` is a map of config strings set in the Caddyfile. See [Config](#-config).
 - `.ServeContent $path $modtime $content`, like `.ServeFile`, discards any template content rendered so far, and responds to the request with the raw string `$content`. Intended to serve rendered documents by responding with 304 Not Modified by coordinating with the client on `$modtime`.
 
 ### 📐 Functions
@@ -553,6 +552,10 @@ Caddy server][caddyhttp-templates] to create `caddy-xtemplate` to add some extra
 features including reading files directly and built-in funcs for markdown
 conversion, and to get a jump start on supporting the broad array of web server
 features without having to implement them from scratch.
+
+xtemplate has since been refactored to be usable without Caddy. Instead,
+[xtemplate-caddy](https://github.com/infogulch/xtemplate-caddy) is published as
+a separate module that depends on this one.
 
 `xtemplate` is licensed under the Apache 2.0 license. See [LICENSE](./LICENSE)
 
