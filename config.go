@@ -13,6 +13,7 @@ func New() (c *Config) {
 	c = &Config{}
 	c.Template.Path = "templates"
 	c.UserConfig = make(map[string]string)
+	c.Template.TemplateExtension = ".html"
 	return
 }
 

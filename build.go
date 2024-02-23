@@ -100,11 +100,18 @@ func newServer(config *Config) (*xserver, error) {
 	server := &xserver{
 		Config: *config,
 	}
+
 	if server.Template.FS == nil {
 		if server.Template.Path == "" {
 			server.Template.Path = "templates"
+			config.Template.Path = "templates"
 		}
 		server.Template.FS = os.DirFS(server.Template.Path)
+	}
+
+	if server.Template.TemplateExtension == "" {
+		server.Template.TemplateExtension = ".html"
+		config.Template.TemplateExtension = ".html"
 	}
 
 	if server.Context.FS == nil && server.Context.Path != "" {

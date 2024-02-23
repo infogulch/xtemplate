@@ -9,12 +9,12 @@ require (
 	github.com/andybalholm/brotli v1.1.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/infogulch/watch v0.1.3
-	github.com/klauspost/compress v1.17.6
+	github.com/klauspost/compress v1.17.7
 	github.com/microcosm-cc/bluemonday v1.0.26
 	github.com/segmentio/ksuid v1.0.4
 	github.com/yuin/goldmark v1.7.0
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
-	golang.org/x/exp v0.0.0-20240205201215-2c58cdc269a3
+	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
 	gopkg.in/yaml.v3 v3.0.1
 )
 
