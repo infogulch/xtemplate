@@ -19,6 +19,7 @@
 - [ ] Organize docs according to https://diataxis.fr/
 - [ ] Demonstrate how to integrate with [caddy-git](https://github.com/greenpau/caddy-git) for zero-CI app deployments
 - [ ] Refactor watch to be easier to use from both Main() and xtemplate-caddy.
+- [ ] Support minifying templates as they're loaded. https://github.com/tdewolff/minify
 
 # DONE
 
