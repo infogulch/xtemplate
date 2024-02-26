@@ -122,7 +122,11 @@ func newServer(config *Config) (*xserver, error) {
 		var err error
 		server.Database.DB, err = sql.Open(server.Database.Driver, server.Database.Connstr)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open database with driver and connstr: `%s`, `%s`", server.Database.Driver, server.Database.Connstr)
+			return nil, fmt.Errorf("failed to open database: driver: `%s`, connstr: `%s`", server.Database.Driver, server.Database.Connstr)
+		}
+		err = server.Database.DB.Ping()
+		if err != nil {
+			return nil, fmt.Errorf("failed to ping database after opening it: driver: `%s`, connstr: `%s`", server.Database.Driver, server.Database.Connstr)
 		}
 	}
 
