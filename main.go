@@ -1,7 +1,6 @@
 package xtemplate
 
 import (
-	"database/sql"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -20,29 +19,65 @@ type flags struct {
 	watch_context_path  bool
 }
 
+var helptext = `xtemplate is a hypertext preprocessor and html templating http server
+
+  -listen string
+        Listen address (default "0.0.0.0:8080")
+
+  -template-path string
+        Directory where templates are loaded from (default "templates")
+  -watch-template
+        Watch the template directory and reload if changed (default true)
+  -template-extension
+        File extension to look for to identify templates (default ".html")
+  -minify
+		Preprocess the template files to minimize their size at load time (default false)
+  -ldelim string
+        Left template delimiter (default "{{")
+  -rdelim string
+        Right template delimiter (default "}}")
+
+  -context-path string
+        Directory that template definitions are given direct access to. No access is given if empty (default "")
+  -watch-context
+        Watch the context directory and reload if changed (default false)
+
+  -db-driver string
+        Name of the database driver registered as a Go 'sql.Driver'. Not available if empty. (default "")
+  -db-connstr string
+        Database connection string
+
+  -c string
+        Config values, in the form 'x=y'. This arg can be specified multiple times
+
+  -log int
+        Log level, DEBUG=-4, INFO=0, WARN=4, ERROR=8
+  -help
+        Display help
+`
+
 func parseflags() (f flags) {
 	flag.StringVar(&f.listen_addr, "listen", "0.0.0.0:8080", "Listen address")
 	flag.StringVar(&f.config.Template.Path, "template-path", "templates", "Directory where templates are loaded from")
 	flag.BoolVar(&f.watch_template_path, "watch-template", true, "Watch the template directory and reload if changed")
 	flag.StringVar(&f.config.Template.TemplateExtension, "template-extension", ".html", "File extension to look for to identify templates")
+	flag.BoolVar(&f.config.Template.Minify, "minify", false, "Preprocess the template files to minimize their size at load time")
 	flag.StringVar(&f.config.Template.Delimiters.Left, "ldelim", "{{", "Left template delimiter")
 	flag.StringVar(&f.config.Template.Delimiters.Right, "rdelim", "}}", "Right template delimiter")
 
 	flag.StringVar(&f.config.Context.Path, "context-path", "", "Directory that template definitions are given direct access to. No access is given if empty (default \"\")")
 	flag.BoolVar(&f.watch_context_path, "watch-context", false, "Watch the context directory and reload if changed (default false)")
 
-	flag.StringVar(&f.config.Database.Driver, "db-driver", "", "Name of the database driver registered as a Go `sql.Driver`. Not available if empty. (default \"\")")
+	flag.StringVar(&f.config.Database.Driver, "db-driver", "", "Name of the database driver registered as a Go 'sql.Driver'. Not available if empty. (default \"\")")
 	flag.StringVar(&f.config.Database.Connstr, "db-connstr", "", "Database connection string")
 
-	flag.Var(&f.config.UserConfig, "c", "Config values, in the form `x=y`, can be specified multiple times")
+	flag.Var(&f.config.UserConfig, "c", "Config values, in the form 'x=y', can be specified multiple times")
 
 	flag.IntVar(&f.config.LogLevel, "log", 0, "Log level, DEBUG=-4, INFO=0, WARN=4, ERROR=8")
 	flag.Parse()
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "xtemplate is a hypertext preprocessor and http templating web server.\nUsage of %s:\n", os.Args[0])
-		flag.PrintDefaults()
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n%s\n", os.Args[0], helptext)
 	}
-	sql.Drivers()
 	return
 }
 

@@ -1,6 +1,5 @@
 # TODO
 
-- [ ] Support minifying templates as they're loaded. https://github.com/tdewolff/minify
 - [ ] Add command to pre-compress all static files
 - Support SSE
     - [ ] Integrate nats subscription
@@ -27,12 +26,13 @@
 
 # DONE
 
-## v0.3.2 - Mar 2024
+## v0.3 - Mar 2024
 
 - [x] Refactor watch to be easier to use from both Main() and xtemplate-caddy.
 - [x] Use LogAttrs in hot paths
 - [x] Simplify handlers
 - [x] Use github.com/felixge/httpsnoop to capture response metrics
+- [x] Support minifying templates as they're loaded. https://github.com/tdewolff/minify
 
 ## v0.3 - Feb 2024
 

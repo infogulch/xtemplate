@@ -3,7 +3,7 @@
 # Set up xtemplate server and cleanup
 echo "Running xtemplate..."
 pushd `dirname "$(readlink -f "$0")"` > /dev/null                # cd to the directory where this script is
-go run ../cmd --log -4 --context-path context > xtemplate.log &  # run xtemplate cmd in the background
+go run ../cmd --log -4 --context-path context -minify > xtemplate.log &  # run xtemplate cmd in the background
 PID=$!                                                           # grab the pid
 exit() {
     sleep 0.1s       # wait for stdout to flush

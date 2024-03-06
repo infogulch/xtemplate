@@ -3,7 +3,7 @@ GET http://localhost:8080/visible
 
 HTTP 200
 [Asserts]
-body contains "<p>You can't see me</p>"
+body contains "<p>You can't see me"
 
 
 # reading files from context
@@ -11,7 +11,7 @@ GET http://localhost:8080/context
 
 HTTP 200
 [Asserts]
-body contains "<!DOCTYPE html>"
+body contains "<!doctype html>"
 body contains "bar"
 
 

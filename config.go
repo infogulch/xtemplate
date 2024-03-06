@@ -34,6 +34,13 @@ type Config struct {
 			Left  string `json:"left,omitempty"`
 			Right string `json:"right,omitempty"`
 		} `json:"delimiters,omitempty"`
+
+		// Minify html templates as they're loaded.
+		//
+		// > Minification is the process of removing bytes from a file (such as
+		// whitespace) without changing its output and therefore shrinking its
+		// size and speeding up transmission over the internet
+		Minify bool `json:"minify"`
 	} `json:"template,omitempty"`
 
 	// Control where the templates may have dynamic access the filesystem.

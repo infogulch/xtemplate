@@ -13,6 +13,7 @@ require (
 	github.com/klauspost/compress v1.17.7
 	github.com/microcosm-cc/bluemonday v1.0.26
 	github.com/segmentio/ksuid v1.0.4
+	github.com/tdewolff/minify/v2 v2.20.18
 	github.com/yuin/goldmark v1.7.0
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
 	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
@@ -35,6 +36,7 @@ require (
 	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/stretchr/testify v1.8.4 // indirect
+	github.com/tdewolff/parse/v2 v2.7.12 // indirect
 	golang.org/x/crypto v0.19.0 // indirect
 	golang.org/x/net v0.21.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect

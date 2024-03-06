@@ -26,26 +26,44 @@ import (
 	"github.com/Masterminds/sprig/v3"
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
+	"github.com/tdewolff/minify/v2"
+	"github.com/tdewolff/minify/v2/css"
+	"github.com/tdewolff/minify/v2/html"
+	"github.com/tdewolff/minify/v2/js"
+	"github.com/tdewolff/minify/v2/svg"
 )
+
+type xbuilder struct {
+	*xserver
+
+	log    *slog.Logger
+	minify *minify.M
+	stats  struct {
+		Routes               int
+		TemplateFiles        int
+		TemplateDefinitions  int
+		TemplateInitializers int
+		StaticFiles          int
+		StaticFileEncodings  int
+	}
+}
 
 // Build creates a new xtemplate server instance, a `CancelHandler`, from an xtemplate.Config.
 func Build(config *Config) (CancelHandler, error) {
-	server, err := newServer(config)
+	builder, err := newBuilder(config)
 	if err != nil {
 		return nil, err
 	}
-	log := server.Logger.WithGroup("build")
-	stats := &buildStats{}
 
 	// Recursively scan and process all files in Template.FS.
-	if err := fs.WalkDir(server.Template.FS, ".", func(path string, d fs.DirEntry, err error) error {
+	if err := fs.WalkDir(builder.Template.FS, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
-		if ext := filepath.Ext(path); ext == server.Template.TemplateExtension {
-			err = server.addTemplateHandler(path, log, stats)
+		if ext := filepath.Ext(path); ext == builder.Template.TemplateExtension {
+			err = builder.addTemplateHandler(path)
 		} else {
-			err = server.addStaticFileHandler(path, log, stats)
+			err = builder.addStaticFileHandler(path)
 		}
 		return err
 	}); err != nil {
@@ -53,31 +71,32 @@ func Build(config *Config) (CancelHandler, error) {
 	}
 
 	// Invoke all initilization templates, aka any template whose name starts with "INIT ".
-	for _, tmpl := range server.templates.Templates() {
+	for _, tmpl := range builder.templates.Templates() {
 		if strings.HasPrefix(tmpl.Name(), "INIT ") {
 			context := &struct {
 				baseContext
 				fsContext
 			}{
 				baseContext{
-					server: server,
-					log:    log,
+					server: builder.xserver,
+					log:    builder.log,
 				},
 				fsContext{
-					fs: server.Context.FS,
+					fs: builder.Context.FS,
 				},
 			}
 			err := tmpl.Execute(io.Discard, context)
 			if err = context.resolvePendingTx(err); err != nil {
 				return nil, fmt.Errorf("template initializer '%s' failed: %w", tmpl.Name(), err)
 			}
-			stats.TemplateInitializers += 1
+			builder.stats.TemplateInitializers += 1
 		}
 	}
 
-	log.Info("xtemplate instance initialized", slog.Any("stats", stats))
-	log.Debug("xtemplate instance details", slog.Any("xtemplate", server))
-	return server, nil
+	builder.log.Info("xtemplate instance initialized", slog.Any("stats", builder.stats))
+	builder.log.Debug("xtemplate instance details", slog.Any("xtemplate", builder.xserver))
+
+	return builder.xserver, nil
 }
 
 // Counter to assign a unique id to each instance of xtemplate created when
@@ -85,18 +104,8 @@ func Build(config *Config) (CancelHandler, error) {
 // instances in a single process.
 var nextInstanceIdentity int64
 
-// Counts of various objects created during Build.
-type buildStats struct {
-	Routes               int
-	TemplateFiles        int
-	TemplateDefinitions  int
-	TemplateInitializers int
-	StaticFiles          int
-	StaticFileEncodings  int
-}
-
-// newServer creates an empty xserver with all data structures initalized using the provided config.
-func newServer(config *Config) (*xserver, error) {
+// newBuilder creates an empty xserver with all data structures initalized using the provided config.
+func newBuilder(config *Config) (*xbuilder, error) {
 	server := &xserver{
 		Config: *config,
 	}
@@ -153,7 +162,23 @@ func newServer(config *Config) (*xserver, error) {
 	server.templates = template.New(".").Delims(server.Template.Delimiters.Left, server.Template.Delimiters.Right).Funcs(server.funcs)
 	server.associatedTemplate = make(map[string]*template.Template)
 
-	return server, nil
+	builder := &xbuilder{
+		xserver: server,
+		log:     server.Logger.WithGroup("build"),
+	}
+
+	if config.Template.Minify {
+		m := minify.New()
+		m.Add("text/css", &css.Minifier{})
+		m.Add("image/svg+xml", &svg.Minifier{})
+		m.Add("text/html", &html.Minifier{
+			TemplateDelims: [...]string{server.Template.Delimiters.Left, server.Template.Delimiters.Right},
+		})
+		m.AddRegexp(regexp.MustCompile("^(application|text)/(x-)?(java|ecma)script$"), &js.Minifier{})
+		builder.minify = m
+	}
+
+	return builder, nil
 }
 
 type fileInfo struct {
@@ -167,7 +192,7 @@ type encodingInfo struct {
 	modtime        time.Time
 }
 
-func (x *xserver) addStaticFileHandler(path_ string, log *slog.Logger, stats *buildStats) error {
+func (x *xbuilder) addStaticFileHandler(path_ string) error {
 	// Open and stat the file
 	fsfile, err := x.Template.FS.Open(path_)
 	if err != nil {
@@ -234,17 +259,17 @@ func (x *xserver) addStaticFileHandler(path_ string, log *slog.Logger, stats *bu
 		}
 		file.encodings = []encodingInfo{{encoding: encoding, path: path_, size: size, modtime: stat.ModTime()}}
 		x.router.HandleFunc("GET "+basepath, staticFileHandler)
-		stats.StaticFiles += 1
-		stats.Routes += 1
-		log.Debug("added static file handler", slog.String("path", basepath), slog.String("filepath", path_), slog.String("contenttype", file.contentType), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()), slog.String("hash", sri))
+		x.stats.StaticFiles += 1
+		x.stats.Routes += 1
+		x.log.Debug("added static file handler", slog.String("path", basepath), slog.String("filepath", path_), slog.String("contenttype", file.contentType), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()), slog.String("hash", sri))
 	} else {
 		if file.hash != sri {
 			return fmt.Errorf("encoded file contents did not match original file '%s': expected %s, got %s", path_, file.hash, sri)
 		}
 		file.encodings = append(file.encodings, encodingInfo{encoding: encoding, path: path_, size: size, modtime: stat.ModTime()})
 		sort.Slice(file.encodings, func(i, j int) bool { return file.encodings[i].size < file.encodings[j].size })
-		stats.StaticFileEncodings += 1
-		log.Debug("added static file encoding", slog.String("path", basepath), slog.String("filepath", path_), slog.String("encoding", encoding), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()))
+		x.stats.StaticFileEncodings += 1
+		x.log.Debug("added static file encoding", slog.String("path", basepath), slog.String("filepath", path_), slog.String("encoding", encoding), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()))
 	}
 	x.files[basepath] = file
 	return nil
@@ -252,10 +277,16 @@ func (x *xserver) addStaticFileHandler(path_ string, log *slog.Logger, stats *bu
 
 var routeMatcher *regexp.Regexp = regexp.MustCompile("^(GET|POST|PUT|PATCH|DELETE|SSE) (.*)$")
 
-func (x *xserver) addTemplateHandler(path_ string, log *slog.Logger, stats *buildStats) error {
+func (x *xbuilder) addTemplateHandler(path_ string) error {
 	content, err := fs.ReadFile(x.Template.FS, path_)
 	if err != nil {
 		return fmt.Errorf("could not read template file '%s': %v", path_, err)
+	}
+	if x.Template.Minify {
+		content, err = x.minify.Bytes("text/html", content)
+		if err != nil {
+			return fmt.Errorf("could not minify template file '%s': %v", path_, err)
+		}
 	}
 	path_ = path.Clean("/" + path_)
 	// parse each template file manually to have more control over its final
@@ -264,17 +295,17 @@ func (x *xserver) addTemplateHandler(path_ string, log *slog.Logger, stats *buil
 	if err != nil {
 		return fmt.Errorf("could not parse template file '%s': %v", path_, err)
 	}
-	stats.TemplateFiles += 1
+	x.stats.TemplateFiles += 1
 	// add all templates
 	for name, tree := range newtemplates {
 		if x.templates.Lookup(name) != nil {
-			log.Debug("overriding named template '%s' with definition from file: %s", name, path_)
+			x.log.Debug("overriding named template '%s' with definition from file: %s", name, path_)
 		}
 		tmpl, err := x.templates.AddParseTree(name, tree)
 		if err != nil {
 			return fmt.Errorf("could not add template '%s' from '%s': %v", name, path_, err)
 		}
-		stats.TemplateDefinitions += 1
+		x.stats.TemplateDefinitions += 1
 		if name == path_ {
 			// don't register routes to hidden files
 			_, file := filepath.Split(path_)
@@ -292,8 +323,8 @@ func (x *xserver) addTemplateHandler(path_ string, log *slog.Logger, stats *buil
 			}
 			x.associatedTemplate["GET "+routePath] = tmpl
 			x.router.HandleFunc("GET "+routePath, bufferingTemplateHandler)
-			stats.Routes += 1
-			log.Debug("added path template handler", "method", "GET", "path", routePath, "template_path", path_)
+			x.stats.Routes += 1
+			x.log.Debug("added path template handler", "method", "GET", "path", routePath, "template_path", path_)
 		} else if matches := routeMatcher.FindStringSubmatch(name); len(matches) == 3 {
 			method, path_ := matches[1], matches[2]
 			if method == "SSE" {
@@ -305,8 +336,8 @@ func (x *xserver) addTemplateHandler(path_ string, log *slog.Logger, stats *buil
 				x.associatedTemplate[pattern] = tmpl
 				x.router.HandleFunc(pattern, bufferingTemplateHandler)
 			}
-			stats.Routes += 1
-			log.Debug("added named template handler", "method", method, "path", path_, "template_name", name, "template_path", path_)
+			x.stats.Routes += 1
+			x.log.Debug("added named template handler", "method", method, "path", path_, "template_name", name, "template_path", path_)
 		}
 	}
 	return nil
