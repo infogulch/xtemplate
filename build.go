@@ -151,12 +151,9 @@ func newServer(config *Config) (*xserver, error) {
 	server.files = make(map[string]fileInfo)
 	server.router = http.NewServeMux()
 	server.templates = template.New(".").Delims(server.Template.Delimiters.Left, server.Template.Delimiters.Right).Funcs(server.funcs)
+	server.associatedTemplate = make(map[string]*template.Template)
 
 	return server, nil
-}
-
-func (server *xserver) addHandler(pattern string, handler Handler) {
-	server.router.HandleFunc(pattern, server.mainHandler(pattern, handler))
 }
 
 type fileInfo struct {
@@ -236,7 +233,7 @@ func (x *xserver) addStaticFileHandler(path_ string, log *slog.Logger, stats *bu
 			file.contentType = http.DetectContentType(content[:count])
 		}
 		file.encodings = []encodingInfo{{encoding: encoding, path: path_, size: size, modtime: stat.ModTime()}}
-		x.addHandler("GET "+basepath, serveFileHandler)
+		x.router.HandleFunc("GET "+basepath, staticFileHandler)
 		stats.StaticFiles += 1
 		stats.Routes += 1
 		log.Debug("added static file handler", slog.String("path", basepath), slog.String("filepath", path_), slog.String("contenttype", file.contentType), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()), slog.String("hash", sri))
@@ -293,15 +290,20 @@ func (x *xserver) addTemplateHandler(path_ string, log *slog.Logger, stats *buil
 			if strings.HasSuffix(routePath, "/") {
 				routePath += "{$}"
 			}
-			x.addHandler("GET "+routePath, bufferedTemplateHandler(tmpl))
+			x.associatedTemplate["GET "+routePath] = tmpl
+			x.router.HandleFunc("GET "+routePath, bufferingTemplateHandler)
 			stats.Routes += 1
 			log.Debug("added path template handler", "method", "GET", "path", routePath, "template_path", path_)
 		} else if matches := routeMatcher.FindStringSubmatch(name); len(matches) == 3 {
 			method, path_ := matches[1], matches[2]
 			if method == "SSE" {
-				x.addHandler("GET "+path_, sseTemplateHandler(tmpl))
+				pattern := "GET " + path_
+				x.associatedTemplate[pattern] = tmpl
+				x.router.HandleFunc(pattern, flushingTemplateHandler)
 			} else {
-				x.addHandler(method+" "+path_, bufferedTemplateHandler(tmpl))
+				pattern := method + " " + path_
+				x.associatedTemplate[pattern] = tmpl
+				x.router.HandleFunc(pattern, bufferingTemplateHandler)
 			}
 			stats.Routes += 1
 			log.Debug("added named template handler", "method", method, "path", path_, "template_name", name, "template_path", path_)

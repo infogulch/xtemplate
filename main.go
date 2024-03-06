@@ -58,7 +58,7 @@ func Main(overrides ...override) {
 	}
 	handler, err := Build(&flags.config)
 	if err != nil {
-		log.Error("failed to load xtemplate", "error", err)
+		log.Error("failed to load xtemplate", slog.Any("error", err))
 		os.Exit(2)
 	}
 
@@ -70,42 +70,38 @@ func Main(overrides ...override) {
 		}
 		if flags.watch_context_path {
 			if flags.config.Context.Path == "" {
-				log.Error("cannot watch context root if it is not specified", "context_root", flags.config.Context.Path)
+				log.Error("cannot watch context root if it is not specified", slog.String("context_root", flags.config.Context.Path))
 				os.Exit(3)
 			}
 			watchDirs = append(watchDirs, flags.config.Context.Path)
 		}
 		if len(watchDirs) != 0 {
-			changed, halt, err := watch.WatchDirs(watchDirs, 200*time.Millisecond)
-			if err != nil {
-				slog.Info("failed to watch directories", "error", err, "directories", watchDirs)
-				os.Exit(4)
-			}
-			watch.React(changed, halt, func() (halt bool) {
+			_, err := watch.Watch(watchDirs, 200*time.Millisecond, log.WithGroup("fswatch"), func() bool {
+				log := log.With(slog.Group("reload", slog.Int64("current_id", handler.Id())))
 				temphandler, err := Build(&flags.config)
 				if err != nil {
-					log.Info("failed to reload xtemplate", "error", err)
+					log.Info("failed to reload xtemplate", slog.Any("error", err))
 				} else {
 					handler, temphandler = temphandler, handler
 					temphandler.Cancel()
-					log.Info("reloaded templates after file changed")
+					log.Info("reloaded templates after filesystem change", slog.Int64("new_id", handler.Id()))
 				}
-				return
+				return true
 			})
+			if err != nil {
+				log.Info("failed to watch directories", slog.Any("error", err), slog.Any("directories", watchDirs))
+				os.Exit(4)
+			}
 		}
 	}
 
-	log.Info("serving", "address", flags.listen_addr)
+	log.Info("serving", slog.String("address", flags.listen_addr))
 
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handler.ServeHTTP(w, r) // wrap handler so it can be changed when reloaded with fswatch
 	})
 
-	values := []any{}
-	if err := http.ListenAndServe(flags.listen_addr, h); err != nil {
-		values = append(values, slog.Any("error", err))
-	}
-	log.Info("server stopped", values...)
+	log.Info("server stopped", slog.Any("error", http.ListenAndServe(flags.listen_addr, h)))
 }
 
 // Implement flag.Value.String to use UserConfigs as a flag.

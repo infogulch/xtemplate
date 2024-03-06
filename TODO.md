@@ -1,5 +1,10 @@
 # TODO
 
+- [ ] Support minifying templates as they're loaded. https://github.com/tdewolff/minify
+- [ ] Add command to pre-compress all static files
+- Support SSE
+    - [ ] Integrate nats subscription
+
 ### Automation
 
 - [ ] Write Go api tests
@@ -8,20 +13,26 @@
 ### Application
 
 - [ ] Make and link to more example applications
+    - [ ] Demo/test how to use sql
+    - [ ] Demo/test reading and writing to the context fs
 - [ ] Demonstrate how to do auth with xtemplate
     - [ ] [forward_auth](https://caddyserver.com/docs/caddyfile/directives/forward_auth#forward-auth) / [Trusted Header SSO](https://www.authelia.com/integration/trusted-header-sso/introduction/)
+- [ ] Demo integration with [caddy-git](https://github.com/greenpau/caddy-git) for zero-CI app deployments
 
 # BACKLOG
 
-- Support SSE
-    - [ ] Integrate nats subscription
 - [ ] Add a way to register additional routes dynamically during init
 - [ ] Organize docs according to https://diataxis.fr/
-- [ ] Demonstrate how to integrate with [caddy-git](https://github.com/greenpau/caddy-git) for zero-CI app deployments
-- [ ] Refactor watch to be easier to use from both Main() and xtemplate-caddy.
-- [ ] Support minifying templates as they're loaded. https://github.com/tdewolff/minify
+- [ ] Fine tune timeouts? https://ieftimov.com/posts/make-resilient-golang-net-http-servers-using-timeouts-deadlines-context-cancellation/
 
 # DONE
+
+## v0.3.2 - Mar 2024
+
+- [x] Refactor watch to be easier to use from both Main() and xtemplate-caddy.
+- [x] Use LogAttrs in hot paths
+- [x] Simplify handlers
+- [x] Use github.com/felixge/httpsnoop to capture response metrics
 
 ## v0.3 - Feb 2024
 

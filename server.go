@@ -13,21 +13,22 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"time"
 
+	"github.com/felixge/httpsnoop"
 	"github.com/segmentio/ksuid"
 	"golang.org/x/exp/maps"
 )
 
 type xserver struct {
 	Config
-	id        int64
-	funcs     template.FuncMap
-	files     map[string]fileInfo
-	router    *http.ServeMux
-	ctx       context.Context
-	cancel    func()
-	templates *template.Template
+	id                 int64
+	funcs              template.FuncMap
+	files              map[string]fileInfo
+	associatedTemplate map[string]*template.Template
+	router             *http.ServeMux
+	ctx                context.Context
+	cancel             func()
+	templates          *template.Template
 }
 
 func (x *xserver) Cancel() {
@@ -35,13 +36,14 @@ func (x *xserver) Cancel() {
 	x.cancel()
 }
 
-func (x *xserver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	x.router.ServeHTTP(w, r)
+func (x *xserver) Id() int64 {
+	return x.id
 }
 
 type CancelHandler interface {
 	http.Handler
 	Cancel()
+	Id() int64
 }
 
 var _ = (CancelHandler)((*xserver)(nil))
@@ -53,34 +55,32 @@ var (
 	LevelDebug3 slog.Level = slog.LevelDebug + 3
 )
 
-type Handler func(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xserver)
-
-func (server *xserver) mainHandler(handlerPath string, handler Handler) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case <-server.ctx.Done():
-			server.Logger.Error("received request after xtemplate instance cancelled", slog.String("method", r.Method), slog.String("path", r.URL.Path))
-			http.Error(w, "server stopped", http.StatusInternalServerError)
-			return
-		default:
-		}
-
-		start := time.Now()
-
-		log := server.Logger.With(slog.Group("serve",
-			slog.String("requestid", getRequestId(r.Context())),
-			slog.String("method", r.Method),
-			slog.String("requestPath", r.URL.Path),
-			slog.String("handlerPath", handlerPath),
-		))
-		log.DebugContext(r.Context(), "serving request",
-			slog.String("user-agent", r.Header.Get("User-Agent")),
-		)
-
-		handler(w, r, log, server)
-
-		log.Log(r.Context(), LevelDebug2, "request served", slog.Duration("response-time", time.Since(start)))
+func (server *xserver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	select {
+	case <-server.ctx.Done():
+		server.Logger.Error("received request after xtemplate instance cancelled", slog.String("method", r.Method), slog.String("path", r.URL.Path))
+		http.Error(w, "server stopped", http.StatusInternalServerError)
+		return
+	default:
 	}
+
+	handler, handlerPattern := server.router.Handler(r)
+	template := server.associatedTemplate[handlerPattern]
+
+	log := server.Logger.With(slog.Group("serve",
+		slog.String("requestid", getRequestId(r.Context())),
+		slog.String("method", r.Method),
+		slog.String("requestPath", r.URL.Path),
+		slog.String("handlerPattern", handlerPattern),
+	))
+	log.LogAttrs(r.Context(), LevelDebug, "serving request",
+		slog.String("user-agent", r.Header.Get("User-Agent")),
+	)
+
+	r = r.WithContext(context.WithValue(r.Context(), ctxKey{}, ctxValue{log, server, template, handlerPattern}))
+	metrics := httpsnoop.CaptureMetrics(handler, w, r)
+
+	log.LogAttrs(r.Context(), LevelDebug2, "request served", slog.Any("duration", metrics.Duration), slog.Int("statusCode", metrics.Code), slog.Int64("bytes", metrics.Written))
 }
 
 func getRequestId(ctx context.Context) string {
@@ -97,129 +97,149 @@ func getRequestId(ctx context.Context) string {
 	return ksuid.New().String()
 }
 
-func bufferedTemplateHandler(tmpl *template.Template) Handler {
-	return func(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xserver) {
-		buf := bufPool.Get().(*bytes.Buffer)
-		buf.Reset()
-		defer bufPool.Put(buf)
+type ctxKey struct{}
 
-		context := &struct {
-			baseContext
-			fsContext
-			requestContext
-			responseContext
-		}{
+type ctxValue struct {
+	log            *slog.Logger
+	server         *xserver
+	tmpl           *template.Template
+	handlerPattern string
+}
+
+func getCtxValue(r *http.Request) (log *slog.Logger, server *xserver, tmpl *template.Template, handlerPattern string) {
+	ctxv := r.Context().Value(ctxKey{}).(ctxValue)
+	log = ctxv.log
+	server = ctxv.server
+	tmpl = ctxv.tmpl
+	handlerPattern = ctxv.handlerPattern
+	return
+}
+
+func bufferingTemplateHandler(w http.ResponseWriter, r *http.Request) {
+	log, server, tmpl, _ := getCtxValue(r)
+
+	buf := bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufPool.Put(buf)
+
+	context := &struct {
+		baseContext
+		fsContext
+		requestContext
+		responseContext
+	}{
+		baseContext{
+			log:    log,
+			server: server,
+		},
+		fsContext{
+			fs:  server.Context.FS,
+			log: log,
+		},
+		requestContext{
+			Req: r,
+		},
+		responseContext{
+			status: 200,
+			Header: http.Header{},
+		},
+	}
+
+	err := tmpl.Execute(buf, context)
+
+	var handlerErr HandlerError
+	if errors.As(err, &handlerErr) {
+		if dberr := context.resolvePendingTx(nil); dberr != nil {
+			log.Info("failed to commit transaction", slog.Any("error", dberr))
+		}
+		log.Debug("forwarding response handling", slog.Any("handler", handlerErr))
+		handlerErr.ServeHTTP(w, r)
+		return
+	}
+	if errors.As(err, &ReturnError{}) {
+		err = nil
+	}
+	if err = context.resolvePendingTx(err); err != nil {
+		log.Info("error executing template", slog.Any("error", err))
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	maps.Copy(w.Header(), context.Header)
+	w.WriteHeader(context.status)
+	w.Write(buf.Bytes())
+}
+
+func flushingTemplateHandler(w http.ResponseWriter, r *http.Request) {
+	log, server, tmpl, _ := getCtxValue(r)
+
+	if r.Header.Get("Accept") != "text/event-stream" {
+		http.Error(w, "SSE endpoint", http.StatusNotAcceptable)
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		log.LogAttrs(r.Context(), slog.LevelWarn, "response writer could not cast to http.Flusher")
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	context := &struct {
+		flushContext
+		fsContext
+		requestContext
+	}{
+		flushContext{
+			flusher,
 			baseContext{
-				log:    log,
-				server: server,
+				log:        log,
+				server:     server,
+				requestCtx: r.Context(),
 			},
-			fsContext{
-				fs:  server.Context.FS,
-				log: log,
-			},
-			requestContext{
-				Req: r,
-			},
-			responseContext{
-				status: 200,
-				Header: http.Header{},
-			},
-		}
+		},
+		fsContext{
+			fs:  server.Context.FS,
+			log: log,
+		},
+		requestContext{
+			Req: r,
+		},
+	}
 
-		err := tmpl.Execute(buf, context)
+	err := tmpl.Execute(w, context)
 
-		var handlerErr HandlerError
-		if errors.As(err, &handlerErr) {
-			if dberr := context.resolvePendingTx(nil); dberr != nil {
-				log.Info("failed to commit transaction", slog.Any("error", dberr))
-			}
-			log.Debug("forwarding response handling", slog.Any("handler", handlerErr))
-			handlerErr.ServeHTTP(w, r)
-			return
+	var handlerErr HandlerError
+	if errors.As(err, &handlerErr) {
+		if dberr := context.resolvePendingTx(nil); dberr != nil {
+			log.LogAttrs(r.Context(), slog.LevelInfo, "failed to commit transaction", slog.Any("error", dberr))
 		}
-		if errors.As(err, &ReturnError{}) {
-			err = nil
-		}
-		if err = context.resolvePendingTx(err); err != nil {
-			log.Info("error executing template", slog.Any("error", err))
-			http.Error(w, "internal server error", http.StatusInternalServerError)
-			return
-		}
-
-		maps.Copy(w.Header(), context.Header)
-		w.WriteHeader(context.status)
-		w.Write(buf.Bytes())
+		log.LogAttrs(r.Context(), slog.LevelDebug, "forwarding response handling", slog.Any("handler", handlerErr))
+		handlerErr.ServeHTTP(w, r)
+		return
+	}
+	if errors.As(err, &ReturnError{}) {
+		err = nil
+	}
+	if err = context.resolvePendingTx(err); err != nil {
+		log.LogAttrs(r.Context(), slog.LevelInfo, "error executing template", slog.Any("error", err))
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
 	}
 }
 
-func sseTemplateHandler(tmpl *template.Template) Handler {
-	return func(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xserver) {
-		if r.Header.Get("Accept") != "text/event-stream" {
-			http.Error(w, "SSE endpoint", http.StatusNotAcceptable)
-			return
-		}
+func staticFileHandler(w http.ResponseWriter, r *http.Request) {
+	log, server, _, _ := getCtxValue(r)
 
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			log.Debug("response writer could not cast to http.Flusher")
-			http.Error(w, "internal server error", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-
-		context := &struct {
-			flushContext
-			fsContext
-			requestContext
-		}{
-			flushContext{
-				flusher,
-				baseContext{
-					log:        log,
-					server:     server,
-					requestCtx: r.Context(),
-				},
-			},
-			fsContext{
-				fs:  server.Context.FS,
-				log: log,
-			},
-			requestContext{
-				Req: r,
-			},
-		}
-
-		err := tmpl.Execute(w, context)
-
-		var handlerErr HandlerError
-		if errors.As(err, &handlerErr) {
-			if dberr := context.resolvePendingTx(nil); dberr != nil {
-				log.Info("failed to commit transaction", slog.Any("error", dberr))
-			}
-			log.Debug("forwarding response handling", slog.Any("handler", handlerErr))
-			handlerErr.ServeHTTP(w, r)
-			return
-		}
-		if errors.As(err, &ReturnError{}) {
-			err = nil
-		}
-		if err = context.resolvePendingTx(err); err != nil {
-			log.Info("error executing template", slog.Any("error", err))
-			http.Error(w, "internal server error", http.StatusInternalServerError)
-			return
-		}
-	}
-}
-
-func serveFileHandler(w http.ResponseWriter, r *http.Request, log *slog.Logger, server *xserver) {
 	urlpath := path.Clean(r.URL.Path)
 	fileinfo, ok := server.files[urlpath]
 	if !ok {
 		// should not happen; we only add handlers for existent files
-		log.Warn("tried to serve a file that doesn't exist", slog.String("path", urlpath), slog.String("urlpath", r.URL.Path))
+		log.LogAttrs(r.Context(), slog.LevelWarn, "tried to serve a file that doesn't exist")
 		http.NotFound(w, r)
 		return
 	}
@@ -228,7 +248,7 @@ func serveFileHandler(w http.ResponseWriter, r *http.Request, log *slog.Logger, 
 	// consider it a match if its a prefix of the full hash at least 40 bytes long.
 	queryhash := r.URL.Query().Get("hash")
 	if queryhash != "" && len(strings.TrimPrefix(fileinfo.hash, queryhash)) > 31 {
-		log.Debug("request for file with wrong hash query parameter", slog.String("expected", fileinfo.hash), slog.String("queryhash", queryhash))
+		log.LogAttrs(r.Context(), slog.LevelDebug, "request for file with wrong hash query parameter", slog.String("expected", fileinfo.hash), slog.String("queryhash", queryhash))
 		http.NotFound(w, r)
 		return
 	}
@@ -236,7 +256,7 @@ func serveFileHandler(w http.ResponseWriter, r *http.Request, log *slog.Logger, 
 	// negotiate encoding between the client's q value preference and fileinfo.encodings ordering (prefer earlier listed encodings first)
 	encoding, err := negiotiateEncoding(r.Header["Accept-Encoding"], fileinfo.encodings)
 	if err != nil {
-		log.Warn("error selecting encoding to serve", slog.Any("error", err))
+		log.LogAttrs(r.Context(), slog.LevelWarn, "error selecting encoding to serve", slog.Any("error", err))
 	}
 	// we may have gotten an encoding even if there was an error; test separately
 	if encoding == nil {
@@ -244,10 +264,10 @@ func serveFileHandler(w http.ResponseWriter, r *http.Request, log *slog.Logger, 
 		return
 	}
 
-	log.Debug("serving file request", slog.String("path", urlpath), slog.String("encoding", encoding.encoding), slog.String("contenttype", fileinfo.contentType))
+	log.LogAttrs(r.Context(), slog.LevelDebug, "serving file request", slog.String("encoding", encoding.encoding), slog.String("contenttype", fileinfo.contentType))
 	file, err := server.Template.FS.Open(encoding.path)
 	if err != nil {
-		log.Error("failed to open file", slog.Any("error", err), slog.String("encoding.path", encoding.path), slog.String("requestpath", r.URL.Path))
+		log.LogAttrs(r.Context(), slog.LevelWarn, "failed to open file", slog.Any("error", err), slog.String("encoding.path", encoding.path), slog.String("requestpath", r.URL.Path))
 		http.Error(w, "internal server error", 500)
 		return
 	}
@@ -257,9 +277,9 @@ func serveFileHandler(w http.ResponseWriter, r *http.Request, log *slog.Logger, 
 	{
 		stat, err := file.Stat()
 		if err != nil {
-			log.Error("error getting stat of file", slog.Any("error", err))
+			log.LogAttrs(r.Context(), slog.LevelError, "error getting stat of file", slog.Any("error", err))
 		} else if modtime := stat.ModTime(); !modtime.Equal(encoding.modtime) {
-			log.Warn("file maybe modified since loading", slog.Time("expected-modtime", encoding.modtime), slog.Time("actual-modtime", modtime))
+			log.LogAttrs(r.Context(), slog.LevelWarn, "file maybe modified since loading", slog.Time("expected-modtime", encoding.modtime), slog.Time("actual-modtime", modtime))
 		}
 	}
 
