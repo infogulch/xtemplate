@@ -248,64 +248,55 @@ Download from the [Releases page](https://github.com/infogulch/xtemplate/release
 
 <details><summary><strong>🎏 CLI flags listing and examples</strong></summary>
 
-```
-$ ./xtemplate -help
-xtemplate is a hypertext preprocessor and http templating web server
+```shell
+$ ./xtemplate --help
+xtemplate is a hypertext preprocessor and html templating http server
 
-  -listen string
-        Listen address (default "0.0.0.0:8080")
+Usage: ./xtemplate [options]
 
-  -template-path string
-        Directory where templates are loaded from (default "templates")
-  -watch-template
-        Watch the template directory and reload if changed (default true)
-  -template-extension
-        File extension to look for to identify templates (default ".html")
-  -ldelim string
-        Left template delimiter (default "{{")
-  -rdelim string
-        Right template delimiter (default "}}")
+Options:
+  -listen string              Listen address (default "0.0.0.0:8080")
 
-  -context-path string
-        Directory that template definitions are given direct access to. No access is given if empty (default "")
-  -watch-context
-        Watch the context directory and reload if changed (default false)
+  -template-path string       Directory where templates are loaded from (default "templates")
+  -watch-template bool        Watch the template directory and reload if changed (default true)
+  -template-extension string  File extension to look for to identify templates (default ".html")
+  -minify bool                Preprocess the template files to minimize their size at load time (default false)
+  -ldelim string              Left template delimiter (default "{{")
+  -rdelim string              Right template delimiter (default "}}")
 
-  -db-driver string
-        Name of the database driver registered as a Go `sql.Driver`. Not available if empty. (default "")
-  -db-connstr string
-        Database connection string
+  -context-path string        Directory that template definitions are given direct access to. No access is given if empty (default "")
+  -watch-context bool         Watch the context directory and reload if changed (default false)
 
-  -c string
-        Config values, in the form `x=y`. This arg can be specified multiple times
+  -db-driver string           Name of the database driver registered as a Go 'sql.Driver'. Not available if empty. (default "")
+  -db-connstr string          Database connection string
 
-  -log int
-        Log level, DEBUG=-4, INFO=0, WARN=4, ERROR=8
-  -help
-        Display help
-```
+  -c string                   Config values, in the form 'x=y'. Can be used multiple times
+
+  -log int                    Log level. Log statements below this value are omitted from log output, DEBUG=-4, INFO=0, WARN=4, ERROR=8 (Default: 0)
+  -help                       Display help
 
 Examples:
-```shell
-# Listen on a custom port or address, see net.Listen.
-xtemplate -listen ":80"
+    Listen on port 80:
+    $ ./xtemplate -listen :80
 
-# Specify a custom path to the templates directory. Unless disabled with `-watch-template false`, xtemplate will
-# automatically reload the server when files in the templates directory are modified.
-xtemplate -template-path ./my-templates
+    Specify a context directory and reload when it changes:
+    $ ./xtemplate -context-path context/ -watch-context
 
-# This opens the specified db and makes it available to template files `.DB`. See
-xtemplate -db-driver sqlite3 -db-connstr 'file:rss.sqlite?_journal=WAL'
+    Parse template files matching a custom extension and minify them:
+    $ ./xtemplate -template-extension ".go.html" -minify
+
+    Open the specified db and makes it available to template files as '.DB':
+    $ ./xtemplate -db-driver sqlite3 -db-connstr 'file:rss.sqlite?_journal=WAL'
 ```
 
 </details>
 
 #### 2. As a custom CLI application
 
-Custom builds can add your chosen db drivers, add Go functions to the funcmap
-that are available to the template definitions, and even embed templates for
-true single binary deployments. See The [`./cmd` package](./cmd/) for reference
-when making a custom build.
+Custom builds can include your chosen db drivers, make Go functions available to
+the template definitions, and even embed templates for true single binary
+deployments. See The [`./cmd` package](./cmd/) for reference when making a
+custom build.
 
 #### 3. As a Go library
 
