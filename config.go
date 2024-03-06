@@ -11,9 +11,7 @@ import (
 
 func New() (c *Config) {
 	c = &Config{}
-	c.Template.Path = "templates"
-	c.UserConfig = make(map[string]string)
-	c.Template.TemplateExtension = ".html"
+	c.FillDefaults()
 	return
 }
 
@@ -70,13 +68,39 @@ type Config struct {
 	LogLevel int          `json:"log_level,omitempty"`
 }
 
+// UserConfig are key-value pairs made available to the template context as .Config
 type UserConfig map[string]string
 
-func (c *Config) WithTemplateFS(fs fs.FS) {
-	c.Template.FS = fs
+// FillDefaults sets default values for unset fields
+func (config *Config) FillDefaults() {
+	if config.Template.Path == "" {
+		config.Template.Path = "templates"
+	}
+
+	if config.Template.TemplateExtension == "" {
+		config.Template.TemplateExtension = ".html"
+	}
+
+	if config.Template.Delimiters.Left == "" {
+		config.Template.Delimiters.Left = "{{"
+	}
+
+	if config.Template.Delimiters.Right == "" {
+		config.Template.Delimiters.Right = "}}"
+	}
+
+	if config.UserConfig == nil {
+		config.UserConfig = make(map[string]string)
+	}
 }
 
 type override func(*Config)
+
+func WithTemplateFS(fs fs.FS) override {
+	return func(c *Config) {
+		c.Template.FS = fs
+	}
+}
 
 func WithContextFS(fs fs.FS) override {
 	return func(c *Config) {

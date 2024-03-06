@@ -57,6 +57,7 @@ var helptext = `xtemplate is a hypertext preprocessor and html templating http s
 `
 
 func parseflags() (f flags) {
+	f.config = *New()
 	flag.StringVar(&f.listen_addr, "listen", "0.0.0.0:8080", "Listen address")
 	flag.StringVar(&f.config.Template.Path, "template-path", "templates", "Directory where templates are loaded from")
 	flag.BoolVar(&f.watch_template_path, "watch-template", true, "Watch the template directory and reload if changed")
@@ -91,7 +92,7 @@ func Main(overrides ...override) {
 	for _, o := range overrides {
 		o(&flags.config)
 	}
-	handler, err := Build(&flags.config)
+	handler, err := Build(flags.config)
 	if err != nil {
 		log.Error("failed to load xtemplate", slog.Any("error", err))
 		os.Exit(2)
@@ -113,7 +114,7 @@ func Main(overrides ...override) {
 		if len(watchDirs) != 0 {
 			_, err := watch.Watch(watchDirs, 200*time.Millisecond, log.WithGroup("fswatch"), func() bool {
 				log := log.With(slog.Group("reload", slog.Int64("current_id", handler.Id())))
-				temphandler, err := Build(&flags.config)
+				temphandler, err := Build(flags.config)
 				if err != nil {
 					log.Info("failed to reload xtemplate", slog.Any("error", err))
 				} else {

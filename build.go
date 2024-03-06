@@ -49,7 +49,7 @@ type xbuilder struct {
 }
 
 // Build creates a new xtemplate server instance, a `CancelHandler`, from an xtemplate.Config.
-func Build(config *Config) (CancelHandler, error) {
+func Build(config Config) (CancelHandler, error) {
 	builder, err := newBuilder(config)
 	if err != nil {
 		return nil, err
@@ -105,22 +105,14 @@ func Build(config *Config) (CancelHandler, error) {
 var nextInstanceIdentity int64
 
 // newBuilder creates an empty xserver with all data structures initalized using the provided config.
-func newBuilder(config *Config) (*xbuilder, error) {
+func newBuilder(config Config) (*xbuilder, error) {
+	config.FillDefaults()
 	server := &xserver{
-		Config: *config,
+		Config: config,
 	}
 
 	if server.Template.FS == nil {
-		if server.Template.Path == "" {
-			server.Template.Path = "templates"
-			config.Template.Path = "templates"
-		}
 		server.Template.FS = os.DirFS(server.Template.Path)
-	}
-
-	if server.Template.TemplateExtension == "" {
-		server.Template.TemplateExtension = ".html"
-		config.Template.TemplateExtension = ".html"
 	}
 
 	if server.Context.FS == nil && server.Context.Path != "" {
