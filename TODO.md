@@ -33,6 +33,8 @@
 - [x] Simplify handlers
 - [x] Use github.com/felixge/httpsnoop to capture response metrics
 - [x] Support minifying templates as they're loaded. https://github.com/tdewolff/minify
+- [x] Adjust the way config defaults are set
+- [x] Improve cli help output
 
 ## v0.3 - Feb 2024
 
