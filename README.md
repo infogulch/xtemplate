@@ -1,13 +1,13 @@
-# XTemplate
+# xtemplate
 
 `xtemplate` is an html/http server that simplifies server side web development,
 building on Go's `html/template` library to streamline construction of a
-hypermedia-exchange-oriented web server using just template definitions.
-Entirely eschew defining and naming handlers, param structs, query row structs,
-and template context structs. Avoid manual management of route tables,
-discovering and loading template files, and serving static files, and instead
-focus on writing a hypermedia application with a development loop measured in
-milliseconds and response times measured in microseconds.
+hypermedia-exchange-oriented web server using just template definitions and a
+`sql.DB`. Entirely eschew defining and naming handlers, param structs, query row
+structs, and template context structs. Absolutely avoid manual management of
+route tables, discovering and loading template files, and serving static files;
+instead focus on writing your hypermedia application with a development loop
+measured in milliseconds and response times measured in microseconds.
 
 > [!IMPORTANT]
 >
@@ -28,12 +28,14 @@ milliseconds and response times measured in microseconds.
 ## 💡 Why?
 
 After bulding some Go websites with [htmx](https://htmx.org) I wished that
-everything would get out of the way of writing html templates.
+everything would get out of the way of writing html templates and querying the
+database.
 
 xtemplate is optimized to develop and serve websites defined using just template
 files in a directory. It abstracts out the repetitive route declarations and
-handlers by using file system based http rouing which lets you focus on building
-the html you are responding to the client with instead of boilerplate busywork.
+handlers by using file system based http rouing which lets you focus on querying
+your database to build the html you are responding to the client with instead of
+so much busywork.
 
 I hypothesize that this is an efficient way to both develop for and serve to
 hypermedia clients.
