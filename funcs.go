@@ -57,7 +57,7 @@ func funcSanitizeHtml(policyName string, html string) (template.HTML, error) {
 
 // funcMarkdown renders the markdown body as HTML. The resulting
 // HTML is NOT escaped so that it can be rendered as HTML.
-func funcMarkdown(input string) (string, error) {
+func funcMarkdown(input string) (template.HTML, error) {
 	md := goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,
@@ -85,7 +85,7 @@ func funcMarkdown(input string) (string, error) {
 		return "", err
 	}
 
-	return buf.String(), nil
+	return template.HTML(buf.String()), nil
 }
 
 // splitFrontMatter parses front matter out from the beginning of input,
