@@ -49,10 +49,7 @@ type CancelHandler interface {
 var _ = (CancelHandler)((*xserver)(nil))
 
 var (
-	LevelDebug  slog.Level = slog.LevelDebug
-	LevelDebug1 slog.Level = slog.LevelDebug + 1
-	LevelDebug2 slog.Level = slog.LevelDebug + 2
-	LevelDebug3 slog.Level = slog.LevelDebug + 3
+	levelDebug2 slog.Level = slog.LevelDebug + 2
 )
 
 func (server *xserver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -73,14 +70,14 @@ func (server *xserver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		slog.String("requestPath", r.URL.Path),
 		slog.String("handlerPattern", handlerPattern),
 	))
-	log.LogAttrs(r.Context(), LevelDebug, "serving request",
+	log.LogAttrs(r.Context(), slog.LevelDebug, "serving request",
 		slog.String("user-agent", r.Header.Get("User-Agent")),
 	)
 
 	r = r.WithContext(context.WithValue(r.Context(), ctxKey{}, ctxValue{log, server, template, handlerPattern}))
 	metrics := httpsnoop.CaptureMetrics(handler, w, r)
 
-	log.LogAttrs(r.Context(), LevelDebug2, "request served", slog.Any("duration", metrics.Duration), slog.Int("statusCode", metrics.Code), slog.Int64("bytes", metrics.Written))
+	log.LogAttrs(r.Context(), levelDebug2, "request served", slog.Any("duration", metrics.Duration), slog.Int("statusCode", metrics.Code), slog.Int64("bytes", metrics.Written))
 }
 
 func getRequestId(ctx context.Context) string {

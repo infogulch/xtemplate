@@ -11,7 +11,7 @@ import (
 
 func New() (c *Config) {
 	c = &Config{}
-	c.FillDefaults()
+	c.Defaults()
 	return
 }
 
@@ -38,7 +38,7 @@ type Config struct {
 		// > Minification is the process of removing bytes from a file (such as
 		// whitespace) without changing its output and therefore shrinking its
 		// size and speeding up transmission over the internet
-		Minify bool `json:"minify"`
+		Minify bool `json:"minify,omitempty"`
 	} `json:"template,omitempty"`
 
 	// Control where the templates may have dynamic access the filesystem.
@@ -72,7 +72,7 @@ type Config struct {
 type UserConfig map[string]string
 
 // FillDefaults sets default values for unset fields
-func (config *Config) FillDefaults() {
+func (config *Config) Defaults() *Config {
 	if config.Template.Path == "" {
 		config.Template.Path = "templates"
 	}
@@ -92,6 +92,8 @@ func (config *Config) FillDefaults() {
 	if config.UserConfig == nil {
 		config.UserConfig = make(map[string]string)
 	}
+
+	return config
 }
 
 type override func(*Config)

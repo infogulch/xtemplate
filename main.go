@@ -92,11 +92,11 @@ func parseflags() (f flags) {
 func Main(overrides ...override) {
 	flags := parseflags()
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(flags.config.LogLevel)}))
-	WithLogger(log)(&flags.config)
+	flags.config.Logger = log
 	for _, o := range overrides {
 		o(&flags.config)
 	}
-	handler, err := Build(flags.config)
+	handler, err := flags.config.Build()
 	if err != nil {
 		log.Error("failed to load xtemplate", slog.Any("error", err))
 		os.Exit(2)
@@ -118,7 +118,7 @@ func Main(overrides ...override) {
 		if len(watchDirs) != 0 {
 			_, err := watch.Watch(watchDirs, 200*time.Millisecond, log.WithGroup("fswatch"), func() bool {
 				log := log.With(slog.Group("reload", slog.Int64("current_id", handler.Id())))
-				temphandler, err := Build(flags.config)
+				temphandler, err := flags.config.Build()
 				if err != nil {
 					log.Info("failed to reload xtemplate", slog.Any("error", err))
 				} else {
