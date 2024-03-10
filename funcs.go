@@ -321,7 +321,7 @@ func (r *result) OK() bool {
 
 // Skeleton versions of the built-in functions in templates. This is needed to
 // make text/template/parse.Parse parse correctly because the number of
-// arguments is checked at parse time, but they are never not called and the
+// arguments is checked at parse time, but they are never called and the
 // argument types are not checked, just their number.
 var buliltinsSkeleton template.FuncMap = template.FuncMap{
 	"and":      func(any, ...any) any { return nil },

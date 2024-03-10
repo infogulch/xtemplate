@@ -20,7 +20,7 @@ import (
 )
 
 type baseContext struct {
-	server     *xserver
+	server     *xinstance
 	log        *slog.Logger
 	pendingTx  *sql.Tx
 	requestCtx context.Context

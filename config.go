@@ -3,6 +3,7 @@
 package xtemplate
 
 import (
+	"context"
 	"database/sql"
 	"html/template"
 	"io/fs"
@@ -59,17 +60,18 @@ type Config struct {
 	} `json:"database,omitempty"`
 
 	// User configration, accessible in the template execution context as `.Config`.
-	UserConfig UserConfig `json:"config,omitempty"`
+	UserConfig TemplateConfig `json:"config,omitempty"`
 
 	// Additional functions to add to the template execution context.
 	FuncMaps []template.FuncMap `json:"-"`
 
 	Logger   *slog.Logger `json:"-"`
 	LogLevel int          `json:"log_level,omitempty"`
+	Ctx      context.Context
 }
 
-// UserConfig are key-value pairs made available to the template context as .Config
-type UserConfig map[string]string
+// TemplateConfig the the type of key-value pairs made available to the template context as .Config
+type TemplateConfig map[string]string
 
 // FillDefaults sets default values for unset fields
 func (config *Config) Defaults() *Config {

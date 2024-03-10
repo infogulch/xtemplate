@@ -1,6 +1,7 @@
 # TODO
 
-- [ ] Add command to pre-compress all static files
+- [ ] Create system for optional modules. DB/FS/NATS
+    - Inject?
 - Support SSE
     - [ ] Integrate nats subscription
 
@@ -23,8 +24,20 @@
 - [ ] Add a way to register additional routes dynamically during init
 - [ ] Organize docs according to https://diataxis.fr/
 - [ ] Fine tune timeouts? https://ieftimov.com/posts/make-resilient-golang-net-http-servers-using-timeouts-deadlines-context-cancellation/
+- [ ] Idea: Add special FILE pseudo-func that is replaced with a string constant of the current filename.
+    - Potentially useful for invoking a template file with a relative path. (Add DIR constant too?)
+    - Parse().Tree.Root.(*ListNode).[].(recurse) where NodeType()==NodeIdentifier replace with StringNode
+    - Should be fine?
+- [ ] Add command to pre-compress all static files
 
 # DONE
+
+## v0.4 - Mar 2024
+
+- [x] Reorganize to expose different layers:
+    - Config: Configure xtemplate
+    - Instance: Serves as the local context and http.Handler
+    - Server: Manages instances and lets you live reload instances.
 
 ## v0.3 - Mar 2024
 
