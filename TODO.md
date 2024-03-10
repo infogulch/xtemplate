@@ -37,7 +37,7 @@
 - [x] Reorganize to expose different layers:
     - Config: Configure xtemplate
     - Instance: Serves as the local context and http.Handler
-    - Server: Manages instances and lets you live reload instances.
+    - Server: Manages instances and lets you live reload live.
 
 ## v0.3 - Mar 2024
 

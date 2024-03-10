@@ -98,33 +98,33 @@ func (config *Config) Defaults() *Config {
 	return config
 }
 
-type override func(*Config)
+type ConfigOverride func(*Config)
 
-func WithTemplateFS(fs fs.FS) override {
+func WithTemplateFS(fs fs.FS) ConfigOverride {
 	return func(c *Config) {
 		c.Template.FS = fs
 	}
 }
 
-func WithContextFS(fs fs.FS) override {
+func WithContextFS(fs fs.FS) ConfigOverride {
 	return func(c *Config) {
 		c.Context.FS = fs
 	}
 }
 
-func WithDB(db *sql.DB) override {
+func WithDB(db *sql.DB) ConfigOverride {
 	return func(c *Config) {
 		c.Database.DB = db
 	}
 }
 
-func WithLogger(logger *slog.Logger) override {
+func WithLogger(logger *slog.Logger) ConfigOverride {
 	return func(c *Config) {
 		c.Logger = logger
 	}
 }
 
-func WithFuncMaps(fm ...template.FuncMap) override {
+func WithFuncMaps(fm ...template.FuncMap) ConfigOverride {
 	return func(c *Config) {
 		c.FuncMaps = append(c.FuncMaps, fm...)
 	}

@@ -158,7 +158,6 @@ func (config Config) instance() (*xinstance, error) {
 	}
 
 	inst.Logger.Info("instance loaded",
-		slog.Int64("id", inst.id),
 		slog.Duration("load_time", time.Since(start)),
 		slog.Group("stats",
 			slog.Int("routes", inst.stats.Routes),

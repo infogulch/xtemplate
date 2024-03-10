@@ -88,7 +88,7 @@ func parseflags() (f flags) {
 // Main can be called from your func main() if you want your program to act like
 // the default xtemplate cli, or use it as a reference for making your own.
 // Provide configs to override the defaults like: `xtemplate.Main(xtemplate.WithFooConfig())`
-func Main(overrides ...override) {
+func Main(overrides ...ConfigOverride) {
 	flags := parseflags()
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(flags.config.LogLevel)}))
 	flags.config.Logger = log
@@ -123,7 +123,7 @@ func Main(overrides ...override) {
 		}
 	}
 
-	server.Serve(flags.listen_addr)
+	log.Info("server stopped", server.Serve(flags.listen_addr))
 }
 
 // Implement flag.Value.String to use UserConfigs as a flag.
