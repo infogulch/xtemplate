@@ -184,15 +184,15 @@ func (x *xinstance) addTemplateHandler(path_ string) error {
 				routePath += "{$}"
 			}
 			pattern = "GET " + routePath
-			handler = x.bufferingTemplateHandler(tmpl)
+			handler = bufferingTemplateHandler(x, tmpl)
 		} else if matches := routeMatcher.FindStringSubmatch(name); len(matches) == 3 {
 			method, path_ := matches[1], matches[2]
 			if method == "SSE" {
 				pattern = "GET " + path_
-				handler = x.flushingTemplateHandler(tmpl)
+				handler = flushingTemplateHandler(x, tmpl)
 			} else {
 				pattern = method + " " + path_
-				handler = x.bufferingTemplateHandler(tmpl)
+				handler = bufferingTemplateHandler(x, tmpl)
 			}
 		}
 

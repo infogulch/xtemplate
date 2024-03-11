@@ -19,7 +19,7 @@ import (
 )
 
 // requires request-scoped log, request ctx, server ctx, fs, req, templates, funcmap, db, nats conn
-func (server *xinstance) bufferingTemplateHandler(tmpl *template.Template) http.HandlerFunc {
+func bufferingTemplateHandler(server *xinstance, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := getCtxLogger(r)
 
@@ -76,7 +76,7 @@ func (server *xinstance) bufferingTemplateHandler(tmpl *template.Template) http.
 	}
 }
 
-func (server *xinstance) flushingTemplateHandler(tmpl *template.Template) http.HandlerFunc {
+func flushingTemplateHandler(server *xinstance, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := getCtxLogger(r)
 
