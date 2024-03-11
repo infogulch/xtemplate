@@ -190,8 +190,8 @@ relatively static. When a file under the templates directory is modified the
 server will quickly reload and can be configured to automatically refresh
 browser clients making the development experience very snappy. Templates can
 have dynamic access to a directory in the local filesystem if you set set the
-"context path" config. It may be helpful to consider the templates directory and
-context directory as 'application definition' and 'user storage', respectively.
+"context path" config. It may be helpful to consider the templates and context
+directories to be 'application definition' and 'user storage', respectively.
 
 When [`config.Instance()`](instance.go) is called, xtemplate recursively scans
 all files in the templates directory and loads them in. Except for hidden files
@@ -206,7 +206,7 @@ path minus extension.
   template file is added as the route handler for that path. If any template
   file defines a named template where the name matches a ServeMux pattern like
   `{{define "GET /path"}}...{{end}}` or `{{define "DELETE
-  /items/{id}"}}...{{end}}`, then that pattern is added also to the routes and
+  /items/{id}"}}...{{end}}`, then that pattern is also added to the routes and
   the named template definition will be used as the handler.
 * All other files are considered "static files" and are served directly from
   disk. The file is hashed, which is used to optimize caching behavior by
@@ -217,11 +217,11 @@ path minus extension.
   order to optimize bandwidth and cpu.
 
 In response to a request, the [bufferedTemplateHandler](handlers.go) executes
-the template, writing the output into a buffer; if the template execution
-succeeds then the buffer is written out as the response to the request. The
-template is executed with dynamic data in the dot context: request details at
-[`.Req`](#request-data-and-response-control), database access at [`.Tx` and
-`.Query`](#database-functions), and filesystem access like
+the associated template, writing the output into a buffer; if the template
+execution succeeds then the buffer is written out as the response to the
+request. The template is executed with dynamic data in the dot context: request
+details at [`.Req`](#request-data-and-response-control), database access at
+[`.Tx` and `.Query`](#database-functions), and filesystem access like
 [`.ReadFile`](#file-operations), depending on config (see [context](#-context)).
 Arbitrary plain go functions can be added to to the templating engine with the
 `FuncMaps` config, in addition to many useful [default funcs](#-functions) added
