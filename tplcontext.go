@@ -388,7 +388,7 @@ func (f flushContext) Repeat(max_ ...int) <-chan int {
 			select {
 			case <-f.requestCtx.Done():
 				break loop
-			case <-f.server.ctx.Done():
+			case <-f.server.Ctx.Done():
 				break loop
 			case c <- i:
 			}
@@ -408,7 +408,7 @@ func (f flushContext) Sleep(ms int) (string, error) {
 	case <-time.After(time.Duration(ms) * time.Millisecond):
 	case <-f.requestCtx.Done():
 		return "", ReturnError{}
-	case <-f.server.ctx.Done():
+	case <-f.server.Ctx.Done():
 		return "", ReturnError{}
 	}
 	return "", nil
@@ -420,7 +420,7 @@ func (f flushContext) Block() (string, error) {
 	select {
 	case <-f.requestCtx.Done():
 		return "", ReturnError{}
-	case <-f.server.ctx.Done():
+	case <-f.server.Ctx.Done():
 		return "", nil
 	}
 }

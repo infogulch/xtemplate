@@ -182,8 +182,7 @@ var nextInstanceIdentity atomic.Int64
 
 type xinstance struct {
 	Config
-	id  int64
-	ctx context.Context
+	id int64
 
 	stats  InstanceStats
 	routes []InstanceRoute
@@ -215,7 +214,7 @@ var (
 
 func (server *xinstance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	select {
-	case <-server.ctx.Done():
+	case <-server.Ctx.Done():
 		server.Logger.Error("received request after xtemplate instance cancelled", slog.String("method", r.Method), slog.String("path", r.URL.Path))
 		http.Error(w, "server stopped", http.StatusInternalServerError)
 		return

@@ -89,12 +89,12 @@ func (x *xserver) Reload() error {
 	}
 
 	var newcancel func()
-	x.config.Ctx, newcancel = context.WithCancel(x.config.Ctx)
-
 	var new_ *xinstance
 	{
 		var err error
-		new_, err = x.config.instance()
+		config := x.config
+		config.Ctx, newcancel = context.WithCancel(x.config.Ctx)
+		new_, err = config.instance()
 		if err != nil {
 			if newcancel != nil {
 				newcancel()
