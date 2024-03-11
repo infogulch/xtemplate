@@ -4,8 +4,8 @@
 building on Go's `html/template` library to streamline construction of a
 hypermedia-exchange-oriented web server. Focus on writing templates with
 configurable data sources provided to the templates as the dot context. Avoid
-defining many objects by accessing data sources directly. Define routes with
-simple path based routing and specially named template definitions.
+defining unnecessary objects by accessing data sources directly. Define routes
+with simple path based routing and specially named template definitions.
 Automatically and efficiently serve static files with SRI and alternate
 encodings. xtemplate does all this for you, so you can focus on writing your
 hypermedia application.
@@ -29,11 +29,9 @@ hypermedia application.
 ## 💡 Why?
 
 After bulding some Go websites with [htmx](https://htmx.org) I wished that
-everything would just get out of the way of writing html templates. xtemplate
-was created to do all of the things I wish were done for me.
-
-I hypothesize that xtemplate could be an efficient way to both develop for and
-serve hypermedia clients.
+everything would just get out of the way of writing html templates. I
+hypothesize that xtemplate is an efficient way to both develop and serve
+hypermedia applications.
 
 ## 🎇 Features
 
@@ -230,24 +228,17 @@ by xtemplate like functions to escape html (thanks
 (thanks [Goldmark](https://github.com/yuin/goldmark)), or manipulate lists
 (thanks [Sprig](https://masterminds.github.io/sprig/)).
 
-> [!TIP]
->
-> Suggested reading order for comprehension: [`main.go`](./main.go),
-> [`config.go`](./config.go), [`server.go`](./server.go)
-> [`instance.go`](./instance.go), [`build.go`](./build.go),
-> [`handlers.go`](./handlers.go).
-
 ## 👨‍🏭 How to use
 
 ### 📦 Deployment modes
 
-XTemplate is designed to be modular and can be used in various modes:
+XTemplate can be used in various modes:
 
-#### 1. As the default CLI application
+#### **1.** As the default CLI application
 
 Download from the [Releases page](https://github.com/infogulch/xtemplate/releases) or build the binary in [`./cmd`](./cmd/).
 
-<details><summary><strong>🎏 CLI flags listing and examples</strong></summary>
+<details><summary><strong>🎏 CLI flags and examples: (click to show)</strong></summary>
 
 ```shell
 $ ./xtemplate -help
@@ -292,27 +283,33 @@ Examples:
 
 </details>
 
-#### 2. As a custom CLI application
+#### **2.** As a custom CLI application
 
 Custom builds can include your chosen db drivers, make Go functions available to
 the template definitions, and even embed templates for true single binary
 deployments. See The [`./cmd` package](./cmd/) for reference when making a
 custom build.
 
-#### 3. As a Go library
+#### **3.** As a Go library
 
-Call [`xtemplate.New()`](./config.go) for a new `xtemplate.Config` or create it
-yourself, configure as desired, then call either
-[`config.Instance()`](./instance.go) to build a `xtemplate.Instance` or
-[`config.Server()`](./server.go) to get a `xtemplate.Server`. The
-`xtemplate.Instance` is an immutable `http.Handler` that will serve requests,
-and exposes some metadata about the files loaded and handlers added. An
-`xtemplate.Server` also handles http requests with `server.Handler()`, but it
-manages a current instance and can reload it by calling `server.Reload()`, which
-creates a new instance and atomically switches the handler to direct requests to
-the new instance.
+xtemplate's public Go API starts with a [`xtemplate.Config`](./config.go),
+from which you can get either an [`xtemplate.Instance`](./instance.go) interface
+or a [`xtemplate.Server`](./server.go) interface, with the methods
+`config.Instance()` and `config.Server()`, respectively.
 
-#### 4. As a Caddy plugin
+An `xtemplate.Instance` is an immutable `http.Handler` that can handle requests,
+and exposes some metadata about the files loaded as well as the ServeMux
+patterns and associated handlers for individual routes. An `xtemplate.Server`
+also handles http requests by forwarding requests to an internal Instance, but
+the `Server` can be reloaded by calling `server.Reload()`, which creates a new
+Instance and atomically switches the handler to direct new requests to the new
+Instance.
+
+Use an Instance if you have no interest in reloading, or if you want to use
+xtemplate handlers in your own mux. Use a Server if you want an easy way to
+smoothly reload and replace the xtemplate Instance behind a http.Handler.
+
+#### **4.** As a Caddy plugin
 
 > [Caddy](https://caddyserver.com) is a fast and extensible multi-platform
 > HTTP/1-2-3 web server with automatic HTTPS
@@ -506,7 +503,7 @@ See the Sprig documentation for details: [Sprig Function Documentation](https://
 
 </details>
 
-<details><summary><strong>XTemplate functions</strong></summary>
+<details><summary><strong>xtemplate functions</strong></summary>
 
 See [funcs.go](/funcs.go) for details.
 
@@ -534,12 +531,28 @@ See [funcs.go](/funcs.go) for details.
 
 # 👷‍♀️ Development
 
-XTemplate is three Go packages in this repository:
+xtemplate is split into the following packages:
 
-* `github.com/infogulch/xtemplate`, a library that loads template files and implements `http.Handler`, routing requests to templates and serving static files. Use it in your own Go application by depending on it as a library and using the [`New` func](config.go) and functional options.
-* `github.com/infogulch/xtemplate/cmd`, a simple binary that configures `XTemplate` with CLI args and serves http requests with it. Build it yourself or download the binary from github releases.
+* `github.com/infogulch/xtemplate`, a library that loads template files and
+  implements an `http.Handler` that routes requests to templates and serves
+  static files.
+* `github.com/infogulch/xtemplate/cmd`, a simple binary that configures
+  `xtemplate` with CLI args and serves http requests with it.
+* [`github.com/infogulch/xtemplate-caddy`](https://github.com/infogulch/xtemplate-caddy),
+  uses xtemplate's Go library API to integrate xtemplate into Caddy server as a
+  Caddy module.
 
-XTemplate is tested by running `./test/exec.sh` which loads using the `test/templates` and `test/context` directories, and runs hurl files from the `test/tests` directory.
+xtemplate is tested by running [`./test/exec.sh`](./test/exec.sh) which loads
+using the `test/templates` and `test/context` directories, and runs hurl files
+from the `test/tests` directory.
+
+> [!TIP]
+>
+> To understand how the xtemplate package works, it may be helpful to skim
+> through the files in this order: [`main.go`](./main.go),
+> [`config.go`](./config.go), [`server.go`](./server.go)
+> [`instance.go`](./instance.go), [`build.go`](./build.go),
+> [`handlers.go`](./handlers.go).
 
 ## ✅ Project history and license
 
@@ -554,10 +567,10 @@ features including reading files directly and built-in funcs for markdown
 conversion, and to get a jump start on supporting the broad array of web server
 features without having to implement them from scratch.
 
-xtemplate has since been refactored to be usable without Caddy. Instead,
-[xtemplate-caddy](https://github.com/infogulch/xtemplate-caddy) is published as
-a separate module that depends on this one and integrates xtemlpate into Caddy
-as a Caddy http middleware.
+xtemplate has since been refactored to be usable independently from Caddy.
+Instead, [xtemplate-caddy](https://github.com/infogulch/xtemplate-caddy) is
+published as a separate module that depends on the xtemplate Go API and
+integrates xtemplate into Caddy as a Caddy http middleware.
 
 `xtemplate` is licensed under the Apache 2.0 license. See [LICENSE](./LICENSE)
 
