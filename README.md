@@ -250,7 +250,7 @@ Download from the [Releases page](https://github.com/infogulch/xtemplate/release
 <details><summary><strong>🎏 CLI flags listing and examples</strong></summary>
 
 ```shell
-$ ./xtemplate --help
+$ ./xtemplate -help
 xtemplate is a hypertext preprocessor and html templating http server
 
 Usage: ./xtemplate [options]

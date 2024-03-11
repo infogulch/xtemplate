@@ -1,9 +1,10 @@
 # TODO
 
-- [ ] Create system for optional modules. DB/FS/NATS
-    - Inject?
-- Support SSE
-    - [ ] Integrate nats subscription
+- [ ] Create system for optional modules. DB/FS/NATS. Inject?
+- [ ] Integrate nats:
+    - [ ] Subscribe to subject, loop on receive to send via open SSE connection
+    - [ ] Publish message to subject
+    - [ ] Request-Reply
 
 ### Automation
 
@@ -28,7 +29,9 @@
     - Potentially useful for invoking a template file with a relative path. (Add DIR constant too?)
     - Parse().Tree.Root.(*ListNode).[].(recurse) where NodeType()==NodeIdentifier replace with StringNode
     - Should be fine?
-- [ ] Add command to pre-compress all static files
+- [ ] Add command that pre-compresses static files
+- [ ] Pass Config.Ctx down to http.Server/net.Listener to allow caller to cancel
+  .Serve() and all associated instances.
 
 # DONE
 

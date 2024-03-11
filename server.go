@@ -14,11 +14,35 @@ import (
 // Pubic Definitions //
 ///////////////////////
 
+// Server is a configured, *reloadable*, xtemplate request handler ready to
+// execute templates and serve static files in response to http requests. It
+// manages an [Instance] and allows you to reload template files with the same
+// config by calling `server.Reload()`. If successful, Reload atomically swaps
+// the old Instance with the new Instance so subsequent requests are handled by
+// the new instance, and any outstanding requests still being served by the old
+// Instance can continue to completion. The old instance's Config.Ctx is also
+// cancelled.
+//
+// Create a new Server:
+//
+// 1. Create a [Config], directly or with [New]
+// 2. Configure as desired
+// 3. Call [Config.Server]
 type Server interface {
-	Instance() Instance
-	Serve(listen_addr string) error
+	// Handler returns a `http.Handler` that always routes new requests to the
+	// current Instance.
 	Handler() http.Handler
+
+	// Instance returns the current [Instance]. After calling Reload, this may
+	// return a different Instance.
+	Instance() Instance
+
+	// Reload creates a new Instance from the config and swaps it with the
+	// current instance if successful.
 	Reload() error
+
+	// Serve opens a net listener on `listen_addr` and serves requests from it.
+	Serve(listen_addr string) error
 }
 
 /////////////
