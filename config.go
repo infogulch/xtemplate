@@ -3,6 +3,7 @@
 package xtemplate
 
 import (
+	"context"
 	"database/sql"
 	"html/template"
 	"io/fs"
@@ -11,7 +12,7 @@ import (
 
 func New() (c *Config) {
 	c = &Config{}
-	c.FillDefaults()
+	c.Defaults()
 	return
 }
 
@@ -38,7 +39,7 @@ type Config struct {
 		// > Minification is the process of removing bytes from a file (such as
 		// whitespace) without changing its output and therefore shrinking its
 		// size and speeding up transmission over the internet
-		Minify bool `json:"minify"`
+		Minify bool `json:"minify,omitempty"`
 	} `json:"template,omitempty"`
 
 	// Control where the templates may have dynamic access the filesystem.
@@ -59,20 +60,21 @@ type Config struct {
 	} `json:"database,omitempty"`
 
 	// User configration, accessible in the template execution context as `.Config`.
-	UserConfig UserConfig `json:"config,omitempty"`
+	UserConfig TemplateConfig `json:"config,omitempty"`
 
 	// Additional functions to add to the template execution context.
 	FuncMaps []template.FuncMap `json:"-"`
 
 	Logger   *slog.Logger `json:"-"`
 	LogLevel int          `json:"log_level,omitempty"`
+	Ctx      context.Context
 }
 
-// UserConfig are key-value pairs made available to the template context as .Config
-type UserConfig map[string]string
+// TemplateConfig the the type of key-value pairs made available to the template context as .Config
+type TemplateConfig map[string]string
 
 // FillDefaults sets default values for unset fields
-func (config *Config) FillDefaults() {
+func (config *Config) Defaults() *Config {
 	if config.Template.Path == "" {
 		config.Template.Path = "templates"
 	}
@@ -92,35 +94,37 @@ func (config *Config) FillDefaults() {
 	if config.UserConfig == nil {
 		config.UserConfig = make(map[string]string)
 	}
+
+	return config
 }
 
-type override func(*Config)
+type ConfigOverride func(*Config)
 
-func WithTemplateFS(fs fs.FS) override {
+func WithTemplateFS(fs fs.FS) ConfigOverride {
 	return func(c *Config) {
 		c.Template.FS = fs
 	}
 }
 
-func WithContextFS(fs fs.FS) override {
+func WithContextFS(fs fs.FS) ConfigOverride {
 	return func(c *Config) {
 		c.Context.FS = fs
 	}
 }
 
-func WithDB(db *sql.DB) override {
+func WithDB(db *sql.DB) ConfigOverride {
 	return func(c *Config) {
 		c.Database.DB = db
 	}
 }
 
-func WithLogger(logger *slog.Logger) override {
+func WithLogger(logger *slog.Logger) ConfigOverride {
 	return func(c *Config) {
 		c.Logger = logger
 	}
 }
 
-func WithFuncMaps(fm ...template.FuncMap) override {
+func WithFuncMaps(fm ...template.FuncMap) ConfigOverride {
 	return func(c *Config) {
 		c.FuncMaps = append(c.FuncMaps, fm...)
 	}

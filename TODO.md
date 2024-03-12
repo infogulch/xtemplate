@@ -1,8 +1,11 @@
 # TODO
 
-- [ ] Add command to pre-compress all static files
-- Support SSE
-    - [ ] Integrate nats subscription
+- [ ] Fix dockerfile
+- [ ] Create system for optional modules. Config/DB/FS/NATS. Inject?
+- [ ] Integrate nats:
+    - [ ] Subscribe to subject, loop on receive to send via open SSE connection
+    - [ ] Publish message to subject
+    - [ ] Request-Reply
 
 ### Automation
 
@@ -23,8 +26,25 @@
 - [ ] Add a way to register additional routes dynamically during init
 - [ ] Organize docs according to https://diataxis.fr/
 - [ ] Fine tune timeouts? https://ieftimov.com/posts/make-resilient-golang-net-http-servers-using-timeouts-deadlines-context-cancellation/
+- [ ] Idea: Add special FILE pseudo-func that is replaced with a string constant of the current filename.
+    - Potentially useful for invoking a template file with a relative path. (Add
+      DIR constant too?)
+    - Parse().Tree.Root.(*ListNode).[].(recurse) where NodeType()==NodeIdentifier replace with StringNode
+- [ ] Modify relative path invocations to point to the local path. https://pkg.go.dev/text/template/parse@go1.22.1#TemplateNode
+    - Should be fine?
+- [ ] Add command that pre-compresses static files
+- [ ] Pass Config.Ctx down to http.Server/net.Listener to allow caller to cancel
+  .Serve() and associated instances.
 
 # DONE
+
+## v0.4 - Mar 2024
+
+- [x] Add library documentation
+- [x] Reorganize to expose different layers:
+    - Config: Configure xtemplate
+    - Instance: Serves as the local context and http.Handler
+    - Server: Manages instances and lets you live reload live.
 
 ## v0.3 - Mar 2024
 

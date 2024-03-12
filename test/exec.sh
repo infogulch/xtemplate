@@ -11,7 +11,7 @@ exit() {
     popd > /dev/null # cd back to wherever the script was invoked from
 }
 trap exit EXIT   # register exit handler
-until grep -q -i 'msg=serving' xtemplate.log  # wait for the server to start
+until grep -q -i 'msg="starting server"' xtemplate.log  # wait for the server to start
 do
     sleep 0.1
 done

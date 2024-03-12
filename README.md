@@ -2,12 +2,13 @@
 
 `xtemplate` is an html/http server that simplifies server side web development,
 building on Go's `html/template` library to streamline construction of a
-hypermedia-exchange-oriented web server using just template definitions and a
-`sql.DB`. Entirely eschew defining and naming handlers, param structs, query row
-structs, and template context structs. Absolutely avoid manual management of
-route tables, discovering and loading template files, and serving static files;
-instead focus on writing your hypermedia application with a development loop
-measured in milliseconds and response times measured in microseconds.
+hypermedia-exchange-oriented web server. Focus on writing templates with
+configurable data sources provided to the templates as the dot context. Avoid
+defining unnecessary objects by accessing data sources directly. Define routes
+with simple path based routing and specially named template definitions.
+Automatically and efficiently serve static files with SRI and alternate
+encodings. xtemplate does all this for you, so you can focus on writing your
+hypermedia application.
 
 > [!IMPORTANT]
 >
@@ -28,17 +29,9 @@ measured in milliseconds and response times measured in microseconds.
 ## 💡 Why?
 
 After bulding some Go websites with [htmx](https://htmx.org) I wished that
-everything would get out of the way of writing html templates and querying the
-database.
-
-xtemplate is optimized to develop and serve websites defined using just template
-files in a directory. It abstracts out the repetitive route declarations and
-handlers by using file system based http rouing which lets you focus on querying
-your database to build the html you are responding to the client with instead of
-so much busywork.
-
-I hypothesize that this is an efficient way to both develop for and serve to
-hypermedia clients.
+everything would just get out of the way of writing html templates. I
+hypothesize that xtemplate is an efficient way to both develop and serve
+hypermedia applications.
 
 ## 🎇 Features
 
@@ -191,44 +184,43 @@ hypermedia clients.
 ## 👨‍🏫 How it works
 
 xtemplate is designed to treat the files in the templates directory as
-relatively static. *Consider the templates directory to be your **application
-definition***. When a file under the templates directory is modified the server
-will quickly reload and can be configured to automatically refresh browser
-clients making the development experience very snappy. Templates can have
-dynamic access to a directory in the local filesystem if you set set the
-"context path" config item (ideally pointed to a different directory than the
-templates directory).
+relatively static. When a file under the templates directory is modified the
+server will quickly reload and can be configured to automatically refresh
+browser clients making the development experience very snappy. Templates can
+have dynamic access to a directory in the local filesystem if you set set the
+"context path" config. It may be helpful to consider the templates and context
+directories to be 'application definition' and 'user storage', respectively.
 
-When [`Build(config)`](build.go) is called, xtemplate recursively scans all
-files in the templates directory:
+When [`config.Instance()`](instance.go) is called, xtemplate recursively scans
+all files in the templates directory and loads them in. Except for hidden files
+where its filename starts with `.`, all of these files are added to a Go 1.22
+`http.ServeMux`: static files by their full path, and template files by their
+path minus extension.
 
 * Template files (files with extension `.html`; configurable) are loaded into a
   custom `html/template.Template` where all defined templates are available to
   invoke from all other templates, and all files are available to include in any
-  other template by their full path relative to the template directory.
+  other template by their full path relative to the template directory. Each
+  template file is added as the route handler for that path. If any template
+  file defines a named template where the name matches a ServeMux pattern like
+  `{{define "GET /path"}}...{{end}}` or `{{define "DELETE
+  /items/{id}"}}...{{end}}`, then that pattern is also added to the routes and
+  the named template definition will be used as the handler.
 * All other files are considered "static files" and are served directly from
   disk. The file is hashed, which is used to optimize caching behavior by
   handling cache management headers like `Etag` and `If-None-Match`. If the file
   has a compressed version (e.g. `file.txt` and `file.txt.gz`), after validating
   that both have equivalent contents, the server will negotiate with clients to
   select the best encoding when requesting the path of the original file in
-  order to optimize both bandwidth and cpu.
+  order to optimize bandwidth and cpu.
 
-Then, except for hidden files where its filename starts with `.`, all of these
-files are added to a Go 1.22 `http.ServeMux`: static files by their full path,
-and template files by their path minus extension. In addition, if any template
-file defines a template where the name matches a ServeMux pattern like `{{define
-"GET /path"}}...{{end}}` or `{{define "DELETE /items/{id}"}}...{{end}}`, then
-that pattern is routed to that defined template.
-
-When a request is 'routed to' a template, the
-[bufferedTemplateHandler](server.go#L100) executes the template and writes the
-output into a buffer; if the template execution succeeds then the buffer is
-written out as the response to the request. The template is executed with
-dynamic data in the dot context: request details at
-[`.Req`](#request-data-and-response-control), database access at [`.Tx` and
-`.Query`](#database-functions), and filesystem access like
-[`.ReadFile`](#file-operations), depending on config, see [context](#-context).
+In response to a request, the [bufferedTemplateHandler](handlers.go) executes
+the associated template, writing the output into a buffer; if the template
+execution succeeds then the buffer is written out as the response to the
+request. The template is executed with dynamic data in the dot context: request
+details at [`.Req`](#request-data-and-response-control), database access at
+[`.Tx` and `.Query`](#database-functions), and filesystem access like
+[`.ReadFile`](#file-operations), depending on config (see [context](#-context)).
 Arbitrary plain go functions can be added to to the templating engine with the
 `FuncMaps` config, in addition to many useful [default funcs](#-functions) added
 by xtemplate like functions to escape html (thanks
@@ -240,16 +232,16 @@ by xtemplate like functions to escape html (thanks
 
 ### 📦 Deployment modes
 
-XTemplate is designed to be modular and can be used in various modes:
+XTemplate can be used in various modes:
 
-#### 1. As the default CLI application
+#### **1.** As the default CLI application
 
 Download from the [Releases page](https://github.com/infogulch/xtemplate/releases) or build the binary in [`./cmd`](./cmd/).
 
-<details><summary><strong>🎏 CLI flags listing and examples</strong></summary>
+<details><summary><strong>🎏 CLI flags and examples: (click to show)</strong></summary>
 
 ```shell
-$ ./xtemplate --help
+$ ./xtemplate -help
 xtemplate is a hypertext preprocessor and html templating http server
 
 Usage: ./xtemplate [options]
@@ -291,20 +283,33 @@ Examples:
 
 </details>
 
-#### 2. As a custom CLI application
+#### **2.** As a custom CLI application
 
 Custom builds can include your chosen db drivers, make Go functions available to
 the template definitions, and even embed templates for true single binary
 deployments. See The [`./cmd` package](./cmd/) for reference when making a
 custom build.
 
-#### 3. As a Go library
+#### **3.** As a Go library
 
-Create an `xtemplate.Config` and customize it, then call `Build(config)`. This
-gives you a `http.Handler` that will serve requests. See
-[`config.go`](./config.go) for a complete config reference.
+xtemplate's public Go API starts with a [`xtemplate.Config`](./config.go),
+from which you can get either an [`xtemplate.Instance`](./instance.go) interface
+or a [`xtemplate.Server`](./server.go) interface, with the methods
+`config.Instance()` and `config.Server()`, respectively.
 
-#### 4. As a Caddy plugin
+An `xtemplate.Instance` is an immutable `http.Handler` that can handle requests,
+and exposes some metadata about the files loaded as well as the ServeMux
+patterns and associated handlers for individual routes. An `xtemplate.Server`
+also handles http requests by forwarding requests to an internal Instance, but
+the `Server` can be reloaded by calling `server.Reload()`, which creates a new
+Instance and atomically switches the handler to direct new requests to the new
+Instance.
+
+Use an Instance if you have no interest in reloading, or if you want to use
+xtemplate handlers in your own mux. Use a Server if you want an easy way to
+smoothly reload and replace the xtemplate Instance behind a http.Handler.
+
+#### **4.** As a Caddy plugin
 
 > [Caddy](https://caddyserver.com) is a fast and extensible multi-platform
 > HTTP/1-2-3 web server with automatic HTTPS
@@ -313,7 +318,7 @@ Download Caddy with `xtemplate-caddy` middleware plugin built-in:
 
 https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate-caddy
 
-Then configure Caddy with xtemplate as a route handler:
+This is the simplest Caddyfile that uses the `xtemplate-caddy` plugin:
 
 ```Caddy
 :8080
@@ -326,7 +331,7 @@ route {
 Find more information about how to configure xtemplate for caddy, see the
 module's repository: https://github.com/infogulch/xtemplate-caddy
 
-`xtemplate-caddy` is built on top of the Go library API.
+`xtemplate-caddy` is built on top of the [library API](#-as-a-go-library).
 
 ### 🧰 Template semantics
 
@@ -498,7 +503,7 @@ See the Sprig documentation for details: [Sprig Function Documentation](https://
 
 </details>
 
-<details><summary><strong>XTemplate functions</strong></summary>
+<details><summary><strong>xtemplate functions</strong></summary>
 
 See [funcs.go](/funcs.go) for details.
 
@@ -526,12 +531,28 @@ See [funcs.go](/funcs.go) for details.
 
 # 👷‍♀️ Development
 
-XTemplate is three Go packages in this repository:
+xtemplate is split into the following packages:
 
-* `github.com/infogulch/xtemplate`, a library that loads template files and implements `http.Handler`, routing requests to templates and serving static files. Use it in your own Go application by depending on it as a library and using the [`New` func](config.go) and functional options.
-* `github.com/infogulch/xtemplate/cmd`, a simple binary that configures `XTemplate` with CLI args and serves http requests with it. Build it yourself or download the binary from github releases.
+* `github.com/infogulch/xtemplate`, a library that loads template files and
+  implements an `http.Handler` that routes requests to templates and serves
+  static files.
+* `github.com/infogulch/xtemplate/cmd`, a simple binary that configures
+  `xtemplate` with CLI args and serves http requests with it.
+* [`github.com/infogulch/xtemplate-caddy`](https://github.com/infogulch/xtemplate-caddy),
+  uses xtemplate's Go library API to integrate xtemplate into Caddy server as a
+  Caddy module.
 
-XTemplate is tested by running `./test/exec.sh` which loads using the `test/templates` and `test/context` directories, and runs hurl files from the `test/tests` directory.
+xtemplate is tested by running [`./test/exec.sh`](./test/exec.sh) which loads
+using the `test/templates` and `test/context` directories, and runs hurl files
+from the `test/tests` directory.
+
+> [!TIP]
+>
+> To understand how the xtemplate package works, it may be helpful to skim
+> through the files in this order: [`main.go`](./main.go),
+> [`config.go`](./config.go), [`server.go`](./server.go)
+> [`instance.go`](./instance.go), [`build.go`](./build.go),
+> [`handlers.go`](./handlers.go).
 
 ## ✅ Project history and license
 
@@ -546,9 +567,10 @@ features including reading files directly and built-in funcs for markdown
 conversion, and to get a jump start on supporting the broad array of web server
 features without having to implement them from scratch.
 
-xtemplate has since been refactored to be usable without Caddy. Instead,
-[xtemplate-caddy](https://github.com/infogulch/xtemplate-caddy) is published as
-a separate module that depends on this one.
+xtemplate has since been refactored to be usable independently from Caddy.
+Instead, [xtemplate-caddy](https://github.com/infogulch/xtemplate-caddy) is
+published as a separate module that depends on the xtemplate Go API and
+integrates xtemplate into Caddy as a Caddy http middleware.
 
 `xtemplate` is licensed under the Apache 2.0 license. See [LICENSE](./LICENSE)
 

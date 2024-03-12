@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -89,14 +88,15 @@ func parseflags() (f flags) {
 // Main can be called from your func main() if you want your program to act like
 // the default xtemplate cli, or use it as a reference for making your own.
 // Provide configs to override the defaults like: `xtemplate.Main(xtemplate.WithFooConfig())`
-func Main(overrides ...override) {
+func Main(overrides ...ConfigOverride) {
 	flags := parseflags()
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(flags.config.LogLevel)}))
-	WithLogger(log)(&flags.config)
+	flags.config.Logger = log
 	for _, o := range overrides {
 		o(&flags.config)
 	}
-	handler, err := Build(flags.config)
+
+	server, err := flags.config.Server()
 	if err != nil {
 		log.Error("failed to load xtemplate", slog.Any("error", err))
 		os.Exit(2)
@@ -104,48 +104,30 @@ func Main(overrides ...override) {
 
 	// set up fswatch
 	{
-		var watchDirs []string
+		var dirs []string
 		if flags.watch_template_path {
-			watchDirs = append(watchDirs, flags.config.Template.Path)
+			dirs = append(dirs, flags.config.Template.Path)
 		}
 		if flags.watch_context_path {
-			if flags.config.Context.Path == "" {
-				log.Error("cannot watch context root if it is not specified", slog.String("context_root", flags.config.Context.Path))
-				os.Exit(3)
-			}
-			watchDirs = append(watchDirs, flags.config.Context.Path)
+			dirs = append(dirs, flags.config.Context.Path)
 		}
-		if len(watchDirs) != 0 {
-			_, err := watch.Watch(watchDirs, 200*time.Millisecond, log.WithGroup("fswatch"), func() bool {
-				log := log.With(slog.Group("reload", slog.Int64("current_id", handler.Id())))
-				temphandler, err := Build(flags.config)
-				if err != nil {
-					log.Info("failed to reload xtemplate", slog.Any("error", err))
-				} else {
-					handler, temphandler = temphandler, handler
-					temphandler.Cancel()
-					log.Info("reloaded templates after filesystem change", slog.Int64("new_id", handler.Id()))
-				}
+		if len(dirs) != 0 {
+			_, err := watch.Watch(dirs, 200*time.Millisecond, log.WithGroup("fswatch"), func() bool {
+				server.Reload()
 				return true
 			})
 			if err != nil {
-				log.Info("failed to watch directories", slog.Any("error", err), slog.Any("directories", watchDirs))
+				log.Info("failed to watch directories", slog.Any("error", err), slog.Any("directories", dirs))
 				os.Exit(4)
 			}
 		}
 	}
 
-	log.Info("serving", slog.String("address", flags.listen_addr))
-
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handler.ServeHTTP(w, r) // wrap handler so it can be changed when reloaded with fswatch
-	})
-
-	log.Info("server stopped", slog.Any("error", http.ListenAndServe(flags.listen_addr, h)))
+	log.Info("server stopped", server.Serve(flags.listen_addr))
 }
 
 // Implement flag.Value.String to use UserConfigs as a flag.
-func (c UserConfig) String() string {
+func (c TemplateConfig) String() string {
 	out := ""
 	first := true
 	for k, v := range c {
@@ -158,7 +140,7 @@ func (c UserConfig) String() string {
 }
 
 // Implement flag.Value.Set to use UserConfigs as a flag.
-func (c *UserConfig) Set(arg string) error {
+func (c *TemplateConfig) Set(arg string) error {
 	s := strings.SplitN(arg, "=", 2)
 	if len(s) != 2 {
 		return fmt.Errorf("config arg must be in the form `k=v`, got: `%s`", arg)

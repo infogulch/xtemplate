@@ -22,7 +22,7 @@ GOFLAGS='-tags="sqlite_json"' CGO_ENABLED=1 go build -o xtemplate ./cmd
 ### Usage
 
 ```shell
-$ ./xtemplate --help
+$ ./xtemplate -help
 xtemplate is a hypertext preprocessor and html templating http server
 
 Usage: ./xtemplate [options]
