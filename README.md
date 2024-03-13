@@ -524,12 +524,12 @@ See [funcs.go](/funcs.go) for details.
 
 </details>
 
-# 🏆 Known users
+## 🏆 Known users
 
 * [infogulch/xrss](https://github.com/infogulch/xrss), an rss feed reader built with htmx and inline css.
 * [infogulch/todos](https://github.com/infogulch/todos), a demo todomvc application.
 
-# 👷‍♀️ Development
+## 👷‍♀️ Development
 
 xtemplate is split into the following packages:
 
