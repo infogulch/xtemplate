@@ -10,7 +10,7 @@
 {{- define "SSE /events"}}
 {{- $count := .Req.URL.Query.Get `count` | default `100` | atoi}}
 {{- $delay := .Req.URL.Query.Get `delay` | default `100` | atoi}}
-{{- range .Repeat $count }}
-data: {{.}}{{printf "\n\n"}}{{ $.Flush }}{{ $.Sleep $delay }}
+{{- range .Flush.Repeat $count }}
+data: {{.}}{{printf "\n\n"}}{{ $.Flush.Flush }}{{ $.Flush.Sleep $delay }}
 {{- end}}
 {{- end}}

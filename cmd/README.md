@@ -1,5 +1,6 @@
-This package is a tiny wrapper around [`xtemplate.Main()`](../main.go) which is
-the only code in the package.
+# xtemplate `cmd`
+
+The `cmd` package is xtemplate's Command Line Interface (CLI) application.
 
 If you want to customize the xtemplate build with a specific database driver,
 custom template funcs, or to have more control over application startup copy

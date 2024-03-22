@@ -37,6 +37,9 @@ var xtemplateFuncs template.FuncMap = template.FuncMap{
 	"ksuid":            funcKsuid,
 	"idx":              funcIdx,
 	"try":              funcTry,
+	"debug": func() string {
+		return ""
+	},
 }
 
 var blueMondayPolicies map[string]*bluemonday.Policy = map[string]*bluemonday.Policy{

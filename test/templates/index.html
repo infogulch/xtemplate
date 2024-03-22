@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-{{- with $hash := .StaticFileHash `/reset.css`}}
+{{- with $hash := .X.StaticFileHash `/reset.css`}}
 <link rel="stylesheet" href="/reset.css?hash={{$hash}}" integrity="{{$hash}}">
 {{- end}}
 <p>Hello world!</p>

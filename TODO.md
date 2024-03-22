@@ -1,11 +1,24 @@
 # TODO
 
-- [ ] Fix dockerfile
-- [ ] Create system for optional modules. Config/DB/FS/NATS. Inject?
-- [ ] Integrate nats:
+- [ ] Update documentation
+    - [ ] Readme docs
+    - [ ] Go API docs
+    - [ ] CLI docs
+- [ ] Downgrade to go 1.21
+- [ ] Use go-arg library for arg parsing
+    - [ ] Fix go-arg embedded structs or don't use them https://github.com/alexflint/go-arg/issues/242
+- [ ] Add ServeTemplate that delays template rendering until requested by
+  http.ServeContent to optimize cache behavior.
+- [ ] Add NATS module:
     - [ ] Subscribe to subject, loop on receive to send via open SSE connection
     - [ ] Publish message to subject
     - [ ] Request-Reply
+- [ ] Add mail module:
+    - [ ] Send mail, send mail by rendering template
+- [ ] Use https://github.com/abhinav/goldmark-frontmatter
+- [ ] Publish docker image, document docker usage
+- [ ] Pass Config.Ctx down to http.Server/net.Listener to allow caller to cancel
+  .Serve() and associated instances.
 
 ### Automation
 
@@ -14,6 +27,7 @@
 
 ### Application
 
+- [ ] Measure performance
 - [ ] Make and link to more example applications
     - [ ] Demo/test how to use sql
     - [ ] Demo/test reading and writing to the context fs
@@ -23,8 +37,7 @@
 
 # BACKLOG
 
-- [ ] Add a way to register additional routes dynamically during init
-- [ ] Organize docs according to https://diataxis.fr/
+- [ ] Built-in CSRF handling?
 - [ ] Fine tune timeouts? https://ieftimov.com/posts/make-resilient-golang-net-http-servers-using-timeouts-deadlines-context-cancellation/
 - [ ] Idea: Add special FILE pseudo-func that is replaced with a string constant of the current filename.
     - Potentially useful for invoking a template file with a relative path. (Add
@@ -32,11 +45,20 @@
     - Parse().Tree.Root.(*ListNode).[].(recurse) where NodeType()==NodeIdentifier replace with StringNode
 - [ ] Modify relative path invocations to point to the local path. https://pkg.go.dev/text/template/parse@go1.22.1#TemplateNode
     - Should be fine?
+- [ ] See if its possible to implement sql queryrows with https://go.dev/wiki/RangefuncExperiment
+    - Not until caddy releases 2.8.0 and upgrades to 1.22.
 - [ ] Add command that pre-compresses static files
-- [ ] Pass Config.Ctx down to http.Server/net.Listener to allow caller to cancel
-  .Serve() and associated instances.
+- [ ] Schema migration? https://david.rothlis.net/declarative-schema-migration-for-sqlite/
+- [ ] Add a way to register additional routes dynamically during init
+- [ ] Organize docs according to https://diataxis.fr/
 
 # DONE
+
+## v0.5 beta - Mar 2024
+
+- [x] Create system for customizing template dot value. Potential modules: Config/DB/FS/NATS/mail
+- [x] Get rid of Server/Instance interfaces, expose structs directly
+- [x] Catch servemux addhandler panics and return an error instead
 
 ## v0.4 - Mar 2024
 
@@ -45,6 +67,9 @@
     - Config: Configure xtemplate
     - Instance: Serves as the local context and http.Handler
     - Server: Manages instances and lets you live reload live.
+- [x] Fix dockerfile
+    - https://blog.2read.net/posts/building-a-minimalist-docker-container-with-alpine-linux-and-golang/
+    - https://chemidy.medium.com/create-the-smallest-and-secured-golang-docker-image-based-on-scratch-4752223b7324
 
 ## v0.3 - Mar 2024
 

@@ -18,11 +18,11 @@ jobs:
     - name: Build
       run: go build -v ./...
 
-    - name: Test
+    - name: Run Go Tests
       run: go test -v ./...
 
-    - name: Run Hurl Tests
-      run: ./test/exec.sh
+    - name: Run Integration Tests
+      run: go run ./test
 
     - name: Build binaries for all platforms
       run: .github/workflows/release.sh

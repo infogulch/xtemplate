@@ -92,7 +92,7 @@ HTTP 200
 Content-Type: text/css; charset=utf-8
 Content-Encoding: gzip
 Etag: "sha384-5rcfZgbOPW7qvI7_bo9eNa8hclwmmmzNeyvDzZlqI6vAzNwzbmi7PTS4uA15-fJj"
-Cache-Control: public, max-age=31536000
+Cache-Control: public, max-age=31536000, immutable
 
 
 # CSS file

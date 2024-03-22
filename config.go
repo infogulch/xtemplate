@@ -4,7 +4,6 @@ package xtemplate
 
 import (
 	"context"
-	"database/sql"
 	"html/template"
 	"io/fs"
 	"log/slog"
@@ -17,82 +16,48 @@ func New() (c *Config) {
 }
 
 type Config struct {
-	// Control where and how templates are loaded.
-	Template struct {
-		// The FS to load templates from. Overrides Path if not nil.
-		FS fs.FS `json:"-"`
+	// The FS to load templates from. Overrides Path if not nil.
+	FS fs.FS `json:"-" arg:"-"`
 
-		// The path to the templates directory.
-		Path string `json:"path,omitempty"`
+	// The path to the templates directory.
+	TemplatesDir string `json:"templates_dir,omitempty" arg:"-t,--template-dir" default:"templates"`
 
-		// File extension to search for to find template files. Default `.html`.
-		TemplateExtension string `json:"template_extension,omitempty"`
+	// File extension to search for to find template files. Default `.html`.
+	TemplateExtension string `json:"template_extension,omitempty" arg:"--template-ext" default:".html"`
 
-		// The template action delimiters, default "{{" and "}}".
-		Delimiters struct {
-			Left  string `json:"left,omitempty"`
-			Right string `json:"right,omitempty"`
-		} `json:"delimiters,omitempty"`
+	// The template action delimiters, default "{{" and "}}".
+	LDelim string `json:"left,omitempty" arg:"--ldelim" default:"{{"`
+	RDelim string `json:"right,omitempty" arg:"--rdelim" default:"}}"`
 
-		// Minify html templates as they're loaded.
-		//
-		// > Minification is the process of removing bytes from a file (such as
-		// whitespace) without changing its output and therefore shrinking its
-		// size and speeding up transmission over the internet
-		Minify bool `json:"minify,omitempty"`
-	} `json:"template,omitempty"`
+	// Minify html templates at load time.
+	Minify bool `json:"minify,omitempty" arg:"-m,--minify" default:"true"`
 
-	// Control where the templates may have dynamic access the filesystem.
-	Context struct {
-		// The FS to give dynamic access to templates. Overrides Path if not nil.
-		FS fs.FS `json:"-"`
-
-		// Path to a directory to give dynamic access to templates.
-		Path string `json:"path,omitempty"`
-	} `json:"context,omitempty"`
-
-	// The database driver and connection string. If set, must be precicely two
-	// elements: the driver name and the connection string.
-	Database struct {
-		DB      *sql.DB `json:"-"`
-		Driver  string  `json:"driver,omitempty"`
-		Connstr string  `json:"connstr,omitempty"`
-	} `json:"database,omitempty"`
-
-	// User configration, accessible in the template execution context as `.Config`.
-	UserConfig TemplateConfig `json:"config,omitempty"`
+	Dot []DotConfig `json:"dot_config" arg:"-c,--dot-config,separate"`
 
 	// Additional functions to add to the template execution context.
-	FuncMaps []template.FuncMap `json:"-"`
+	FuncMaps []template.FuncMap `json:"-" arg:"-"`
+	Ctx      context.Context    `json:"-" arg:"-"`
 
-	Logger   *slog.Logger `json:"-"`
+	Logger   *slog.Logger `json:"-" arg:"-"`
 	LogLevel int          `json:"log_level,omitempty"`
-	Ctx      context.Context
 }
-
-// TemplateConfig the the type of key-value pairs made available to the template context as .Config
-type TemplateConfig map[string]string
 
 // FillDefaults sets default values for unset fields
 func (config *Config) Defaults() *Config {
-	if config.Template.Path == "" {
-		config.Template.Path = "templates"
+	if config.TemplatesDir == "" {
+		config.TemplatesDir = "templates"
 	}
 
-	if config.Template.TemplateExtension == "" {
-		config.Template.TemplateExtension = ".html"
+	if config.TemplateExtension == "" {
+		config.TemplateExtension = ".html"
 	}
 
-	if config.Template.Delimiters.Left == "" {
-		config.Template.Delimiters.Left = "{{"
+	if config.LDelim == "" {
+		config.LDelim = "{{"
 	}
 
-	if config.Template.Delimiters.Right == "" {
-		config.Template.Delimiters.Right = "}}"
-	}
-
-	if config.UserConfig == nil {
-		config.UserConfig = make(map[string]string)
+	if config.RDelim == "" {
+		config.RDelim = "}}"
 	}
 
 	return config
@@ -102,19 +67,7 @@ type ConfigOverride func(*Config)
 
 func WithTemplateFS(fs fs.FS) ConfigOverride {
 	return func(c *Config) {
-		c.Template.FS = fs
-	}
-}
-
-func WithContextFS(fs fs.FS) ConfigOverride {
-	return func(c *Config) {
-		c.Context.FS = fs
-	}
-}
-
-func WithDB(db *sql.DB) ConfigOverride {
-	return func(c *Config) {
-		c.Database.DB = db
+		c.FS = fs
 	}
 }
 
@@ -127,5 +80,11 @@ func WithLogger(logger *slog.Logger) ConfigOverride {
 func WithFuncMaps(fm ...template.FuncMap) ConfigOverride {
 	return func(c *Config) {
 		c.FuncMaps = append(c.FuncMaps, fm...)
+	}
+}
+
+func WithProvider(name string, p DotProvider) ConfigOverride {
+	return func(c *Config) {
+		c.Dot = append(c.Dot, DotConfig{Name: name, DotProvider: p})
 	}
 }

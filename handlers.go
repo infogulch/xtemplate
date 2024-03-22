@@ -4,79 +4,53 @@ package xtemplate
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"html/template"
 	"io"
 	"io/fs"
 	"log/slog"
-	"maps"
 	"math"
 	"net/http"
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 )
 
-// requires request-scoped log, request ctx, server ctx, fs, req, templates, funcmap, db, nats conn
-func bufferingTemplateHandler(server *xinstance, tmpl *template.Template) http.HandlerFunc {
+var bufPool = sync.Pool{
+	New: func() any {
+		return new(bytes.Buffer)
+	},
+}
+
+func bufferingTemplateHandler(server *Instance, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := getCtxLogger(r)
+
+		dot, err := server.bufferDot.value(log, server.config.Ctx, w, r)
+		if err != nil {
+			log.Error("failed to initialize dot value: %w", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
 
 		buf := bufPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer bufPool.Put(buf)
 
-		context := &struct {
-			baseContext
-			fsContext
-			requestContext
-			responseContext
-		}{
-			baseContext{
-				log:    log,
-				server: server,
-			},
-			fsContext{
-				fs:  server.Context.FS,
-				log: log,
-			},
-			requestContext{
-				Req: r,
-			},
-			responseContext{
-				status: 200,
-				Header: http.Header{},
-			},
-		}
+		err = tmpl.Execute(buf, *dot)
 
-		err := tmpl.Execute(buf, context)
-
-		var handlerErr HandlerError
-		if errors.As(err, &handlerErr) {
-			if dberr := context.resolvePendingTx(nil); dberr != nil {
-				log.Info("failed to commit transaction", slog.Any("error", dberr))
-			}
-			log.Debug("forwarding response handling", slog.Any("handler", handlerErr))
-			handlerErr.ServeHTTP(w, r)
-			return
-		}
-		if errors.As(err, &ReturnError{}) {
-			err = nil
-		}
-		if err = context.resolvePendingTx(err); err != nil {
-			log.Info("error executing template", slog.Any("error", err))
+		if err = server.bufferDot.cleanup(dot, err); err != nil {
+			log.Warn("error executing template", slog.Any("error", err))
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
 
-		maps.Copy(w.Header(), context.Header)
-		w.WriteHeader(context.status)
 		w.Write(buf.Bytes())
 	}
 }
 
-func flushingTemplateHandler(server *xinstance, tmpl *template.Template) http.HandlerFunc {
+func flushingTemplateHandler(server *Instance, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := getCtxLogger(r)
 
@@ -85,62 +59,27 @@ func flushingTemplateHandler(server *xinstance, tmpl *template.Template) http.Ha
 			return
 		}
 
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			log.LogAttrs(r.Context(), slog.LevelWarn, "response writer could not cast to http.Flusher")
-			http.Error(w, "internal server error", http.StatusInternalServerError)
-			return
-		}
-
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
 
-		context := &struct {
-			flushContext
-			fsContext
-			requestContext
-		}{
-			flushContext{
-				flusher,
-				baseContext{
-					log:        log,
-					server:     server,
-					requestCtx: r.Context(),
-				},
-			},
-			fsContext{
-				fs:  server.Context.FS,
-				log: log,
-			},
-			requestContext{
-				Req: r,
-			},
-		}
-
-		err := tmpl.Execute(w, context)
-
-		var handlerErr HandlerError
-		if errors.As(err, &handlerErr) {
-			if dberr := context.resolvePendingTx(nil); dberr != nil {
-				log.LogAttrs(r.Context(), slog.LevelInfo, "failed to commit transaction", slog.Any("error", dberr))
-			}
-			log.LogAttrs(r.Context(), slog.LevelDebug, "forwarding response handling", slog.Any("handler", handlerErr))
-			handlerErr.ServeHTTP(w, r)
+		dot, err := server.flusherDot.value(log, server.config.Ctx, w, r)
+		if err != nil {
+			log.Error("failed to initialize dot value: %w", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
-		if errors.As(err, &ReturnError{}) {
-			err = nil
-		}
-		if err = context.resolvePendingTx(err); err != nil {
-			log.LogAttrs(r.Context(), slog.LevelInfo, "error executing template", slog.Any("error", err))
+
+		err = tmpl.Execute(w, *dot)
+
+		if err = server.flusherDot.cleanup(dot, err); err != nil {
+			log.Info("error executing template", slog.Any("error", err))
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
 	}
 }
 
-// requires request-scoped log, fileinfo
 func staticFileHandler(fs fs.FS, fileinfo *fileInfo) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := getCtxLogger(r)
@@ -153,10 +92,9 @@ func staticFileHandler(fs fs.FS, fileinfo *fileInfo) http.HandlerFunc {
 			return
 		}
 
-		// if the request provides a hash, check that it matches. if not, we don't have that file
-		// consider it a match if its a prefix of the full hash at least 40 bytes long.
+		// If the request provides a hash, check that it matches. If not, we don't have that file.
 		queryhash := r.URL.Query().Get("hash")
-		if queryhash != "" && len(strings.TrimPrefix(fileinfo.hash, queryhash)) > 31 {
+		if queryhash != "" && queryhash != fileinfo.hash {
 			log.LogAttrs(r.Context(), slog.LevelDebug, "request for file with wrong hash query parameter", slog.String("expected", fileinfo.hash), slog.String("queryhash", queryhash))
 			http.NotFound(w, r)
 			return
@@ -200,7 +138,7 @@ func staticFileHandler(fs fs.FS, fileinfo *fileInfo) http.HandlerFunc {
 		if queryhash != "" {
 			// cache aggressively if the request is disambiguated by a valid hash
 			// should be `public` ???
-			w.Header().Set("Cache-Control", "public, max-age=31536000")
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		}
 		http.ServeContent(w, r, encoding.path, encoding.modtime, file.(io.ReadSeeker))
 	}
@@ -285,33 +223,16 @@ func negiotiateEncoding(acceptHeaders []string, encodings []encodingInfo) (*enco
 	return &encodings[maxqIdx], err
 }
 
-// ReturnError is a template implementation detail.
-//
-// ReturnError is a sentinel value returned by the `return` template
-// func/keyword that indicates a successful/normal exit but allows the template
-// to exit early.
-//
-// If a custom func needs to stop template execution to immediately exit
-// successfully, then it can return this value in the second error param.
-type ReturnError struct{}
-
-func (ReturnError) Error() string { return "returned" }
-
-var _ = (error)((*ReturnError)(nil))
-
-// HandlerError is a template implementation detail.
-//
-// HandlerError is a special error that hijacks the normal response handling and
-// passes response handling off to the ServeHTTP method on this error value.
-//
-// Useful if you want a method or struct to override
+// HandlerError is a special error that hijacks xtemplate's normal response
+// handling and passes response handling off to the ServeHTTP method on this
+// error value instead.
 type HandlerError interface {
 	Error() string
 	ServeHTTP(w http.ResponseWriter, r *http.Request)
 }
 
-// interface guard
-var _ = (error)((HandlerError)(nil))
+var _ error = HandlerError(nil)
+var _ http.Handler = HandlerError(nil)
 
 // NewHandlerError returns a new HandlerError based on a string and a function
 // that matches the ServeHTTP signature.
