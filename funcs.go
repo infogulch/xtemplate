@@ -25,7 +25,6 @@ var xtemplateFuncs template.FuncMap = template.FuncMap{
 	"sanitizeHtml":     funcSanitizeHtml,
 	"markdown":         funcMarkdown,
 	"splitFrontMatter": funcSplitFrontMatter,
-	"abortWithStatus":  funcAbortWithStatus,
 	"return":           funcReturn,
 	"status":           funcStatus,
 	"humanize":         funcHumanize,
@@ -105,14 +104,6 @@ func funcSplitFrontMatter(input string) (parsedMarkdownDoc, error) {
 // funcReturn causes the template to exit early
 func funcReturn() (string, error) {
 	return "", ReturnError{}
-}
-
-// funcAbortWithStatus stops rendering the reponse template and immediately returns the status indicated.
-// Example usage: `{{if not (fileExists $includeFile)}}{{abortWithStatus 404}}{{end}}`
-func funcAbortWithStatus(statusCode int) (struct{}, error) {
-	return struct{}{}, NewHandlerError("abort", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(statusCode)
-	})
 }
 
 // See status.go

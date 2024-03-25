@@ -222,29 +222,3 @@ func negiotiateEncoding(acceptHeaders []string, encodings []encodingInfo) (*enco
 	}
 	return &encodings[maxqIdx], err
 }
-
-// HandlerError is a special error that hijacks xtemplate's normal response
-// handling and passes response handling off to the ServeHTTP method on this
-// error value instead.
-type HandlerError interface {
-	Error() string
-	ServeHTTP(w http.ResponseWriter, r *http.Request)
-}
-
-var _ error = HandlerError(nil)
-var _ http.Handler = HandlerError(nil)
-
-// NewHandlerError returns a new HandlerError based on a string and a function
-// that matches the ServeHTTP signature.
-func NewHandlerError(name string, fn func(w http.ResponseWriter, r *http.Request)) HandlerError {
-	return funcHandlerError{name, fn}
-}
-
-type funcHandlerError struct {
-	name string
-	fn   func(w http.ResponseWriter, r *http.Request)
-}
-
-func (fhe funcHandlerError) Error() string { return fhe.name }
-
-func (fhe funcHandlerError) ServeHTTP(w http.ResponseWriter, r *http.Request) { fhe.fn(w, r) }

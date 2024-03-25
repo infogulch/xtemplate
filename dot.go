@@ -12,31 +12,6 @@ import (
 	"sync"
 )
 
-/*
-
-Name DotProvider
-
-- Context providers should be able to add methods and fields directly to the
-  root context {{.}}, by having an anonymous field
-- Context providers should have customizable name
-
-- Should have a default
-- Users should be able to override name
-
-
-Needs to get configuration from:
-
-- Args
-	- Parse args with https://pkg.go.dev/github.com/alexflint/go-arg#Parse
-	- https://github.com/alexflint/go-arg/issues/220
-	- Format:   -c "Tx:sql:sqlite3:file"
-- Json
-- Caddyfile
-- Manual go configuration
-- env? defaults?
-
-*/
-
 var registrations map[string]RegisteredDotProvider = make(map[string]RegisteredDotProvider)
 
 func RegisterDot(r RegisteredDotProvider) {

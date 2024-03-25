@@ -1,14 +1,17 @@
 # TODO
 
+- [ ] Dot Provider system
+    - [ ] Accept configuration from JSON
+    - [ ] Accept configuration from Caddyfile
+    - [ ] Env?
 - [ ] Update documentation
     - [ ] Readme docs
     - [ ] Go API docs
     - [ ] CLI docs
 - [ ] Downgrade to go 1.21
-- [ ] Use go-arg library for arg parsing
-    - [ ] Fix go-arg embedded structs or don't use them https://github.com/alexflint/go-arg/issues/242
 - [ ] Add ServeTemplate that delays template rendering until requested by
-  http.ServeContent to optimize cache behavior.
+  http.ServeContent to optimize cache behavior. Something like
+  https://github.com/spatialcurrent/go-lazy ?
 - [ ] Add NATS module:
     - [ ] Subscribe to subject, loop on receive to send via open SSE connection
     - [ ] Publish message to subject
@@ -56,9 +59,14 @@
 
 ## v0.5 beta - Mar 2024
 
-- [x] Create system for customizing template dot value. Potential modules: Config/DB/FS/NATS/mail
+- Dot Provider system
+    - [x] Create system for customizing template dot value
+    - [x] Convert existing modules
+    - [x] Accept configuration from cli
 - [x] Get rid of Server/Instance interfaces, expose structs directly
 - [x] Catch servemux addhandler panics and return an error instead
+- [x] Use go-arg library for arg parsing
+    - [x] Fix go-arg embedded structs or don't use them https://github.com/alexflint/go-arg/issues/242
 
 ## v0.4 - Mar 2024
 

@@ -54,12 +54,14 @@ var _ encoding.TextUnmarshaler = &FSDot{}
 var _ encoding.TextMarshaler = &FSDot{}
 
 func (fs FSDot) Value(log *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
-	return reflect.ValueOf(fsDot{fs, log}), nil
+	return reflect.ValueOf(fsDot{fs, log, w, r}), nil
 }
 
 type fsDot struct {
 	fs  fs.FS
 	log *slog.Logger
+	w   http.ResponseWriter
+	r   *http.Request
 }
 
 var bufPool = sync.Pool{
@@ -145,24 +147,24 @@ func (c *fsDot) FileExists(filename string) (bool, error) {
 // ServeFile aborts execution of the template and instead responds to the
 // request with the content of the file at path_
 func (c *fsDot) ServeFile(path_ string) (string, error) {
-	return "", xtemplate.NewHandlerError("ServeFile", func(w http.ResponseWriter, r *http.Request) {
-		path_ = path.Clean(path_)
+	path_ = path.Clean(path_)
 
-		c.log.Debug("serving file response", slog.String("path", path_))
+	c.log.Debug("serving file response", slog.String("path", path_))
 
-		file, err := c.fs.Open(path_)
-		if err != nil {
-			c.log.Debug("failed to open file", slog.Any("error", err), slog.String("path", path_))
-			http.Error(w, "internal server error", 500)
-			return
-		}
-		defer file.Close()
+	file, err := c.fs.Open(path_)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file at path '%s': %w", path_, err)
+	}
+	defer file.Close()
 
-		stat, err := file.Stat()
-		if err != nil {
-			c.log.Debug("error getting stat of file", slog.Any("error", err), slog.String("path", path_))
-		}
+	stat, err := file.Stat()
+	if err != nil {
+		c.log.Debug("error getting stat of file", slog.Any("error", err), slog.String("path", path_))
+	}
 
-		http.ServeContent(w, r, path_, stat.ModTime(), file.(io.ReadSeeker))
-	})
+	// TODO: Handle setting headers.
+
+	http.ServeContent(c.w, c.r, path_, stat.ModTime(), file.(io.ReadSeeker))
+
+	return "", xtemplate.ReturnError{}
 }
