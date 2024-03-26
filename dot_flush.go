@@ -10,37 +10,37 @@ import (
 	"time"
 )
 
-type flushDotProvider struct{}
+type dotFlushProvider struct{}
 
-func (flushDotProvider) Type() reflect.Type { return reflect.TypeOf(FlushDot{}) }
+func (dotFlushProvider) Type() reflect.Type { return reflect.TypeOf(DotFlush{}) }
 
-func (flushDotProvider) Value(_ *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
+func (dotFlushProvider) Value(_ *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
 	f, ok := w.(http.Flusher)
 	if !ok {
 		return reflect.Value{}, fmt.Errorf("response writer could not cast to http.Flusher")
 	}
-	return reflect.ValueOf(FlushDot{flusher: f, serverCtx: sctx, requestCtx: r.Context()}), nil
+	return reflect.ValueOf(DotFlush{flusher: f, serverCtx: sctx, requestCtx: r.Context()}), nil
 }
 
-func (flushDotProvider) Cleanup(v reflect.Value, err error) {
+func (dotFlushProvider) Cleanup(v reflect.Value, err error) {
 	if err == nil {
-		v.Interface().(FlushDot).flusher.Flush()
+		v.Interface().(DotFlush).flusher.Flush()
 	}
 }
 
-var _ DotProvider = flushDotProvider{}
+var _ DotProvider = dotFlushProvider{}
 
-type FlushDot struct {
+type DotFlush struct {
 	flusher               http.Flusher
 	serverCtx, requestCtx context.Context
 }
 
-func (f FlushDot) Flush() string {
+func (f DotFlush) Flush() string {
 	f.flusher.Flush()
 	return ""
 }
 
-func (f FlushDot) Repeat(max_ ...int) <-chan int {
+func (f DotFlush) Repeat(max_ ...int) <-chan int {
 	max := math.MaxInt64 // sorry you can only loop for 2^63-1 iterations max
 	if len(max_) > 0 {
 		max = max_[0]
@@ -68,7 +68,7 @@ func (f FlushDot) Repeat(max_ ...int) <-chan int {
 }
 
 // Sleep sleeps for ms millisecionds.
-func (f FlushDot) Sleep(ms int) (string, error) {
+func (f DotFlush) Sleep(ms int) (string, error) {
 	select {
 	case <-time.After(time.Duration(ms) * time.Millisecond):
 	case <-f.requestCtx.Done():
@@ -81,7 +81,7 @@ func (f FlushDot) Sleep(ms int) (string, error) {
 
 // Block blocks execution until the request is canceled by the client or until
 // the server closes.
-func (f FlushDot) WaitForServerStop() (string, error) {
+func (f DotFlush) WaitForServerStop() (string, error) {
 	select {
 	case <-f.requestCtx.Done():
 		return "", ReturnError{}

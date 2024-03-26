@@ -44,7 +44,7 @@ func main() {
 
 	// Run xtemplate, wait until its ready, exit test if it fails early
 	{
-		args := split(`./xtemplate --loglevel -4 -c DB:sql:sqlite:file:test.sqlite -c FS:fs:./context`)
+		args := split(`./xtemplate --loglevel -4 -d DB:sql:sqlite:file:test.sqlite -d FS:fs:./context`)
 		cmd := exec.Command(args[0], args[1:]...)
 		cmd.Dir = testdir
 

@@ -16,30 +16,37 @@ func New() (c *Config) {
 }
 
 type Config struct {
-	// The FS to load templates from. Overrides Path if not nil.
-	FS fs.FS `json:"-" arg:"-"`
-
-	// The path to the templates directory.
+	// The path to the templates directory. Default `templates`.
 	TemplatesDir string `json:"templates_dir,omitempty" arg:"-t,--template-dir" default:"templates"`
+
+	// The FS to load templates from. Overrides Path if not nil.
+	TemplatesFS fs.FS `json:"-" arg:"-"`
 
 	// File extension to search for to find template files. Default `.html`.
 	TemplateExtension string `json:"template_extension,omitempty" arg:"--template-ext" default:".html"`
 
-	// The template action delimiters, default "{{" and "}}".
+	// Left template action delimiter. Default `{{`.
 	LDelim string `json:"left,omitempty" arg:"--ldelim" default:"{{"`
+
+	// Right template action delimiter. Default `}}`.
 	RDelim string `json:"right,omitempty" arg:"--rdelim" default:"}}"`
 
-	// Minify html templates at load time.
+	// Whether html templates are minified at load time. Default `true`.
 	Minify bool `json:"minify,omitempty" arg:"-m,--minify" default:"true"`
 
-	Dot []DotConfig `json:"dot_config" arg:"-c,--dot-config,separate"`
+	// A list of additional custom fields to add to the template dot value
+	// `{{.}}`.
+	Dot []DotConfig `json:"dot_config" arg:"-d,--dot,separate"`
 
 	// Additional functions to add to the template execution context.
 	FuncMaps []template.FuncMap `json:"-" arg:"-"`
-	Ctx      context.Context    `json:"-" arg:"-"`
 
-	Logger   *slog.Logger `json:"-" arg:"-"`
-	LogLevel int          `json:"log_level,omitempty"`
+	// The instance context that is threaded through dot providers and can
+	// cancel the server. Defaults to `context.Background()`.
+	Ctx context.Context `json:"-" arg:"-"`
+
+	// The default logger. Defaults to `slog.Default()`.
+	Logger *slog.Logger `json:"-" arg:"-"`
 }
 
 // FillDefaults sets default values for unset fields
@@ -60,6 +67,14 @@ func (config *Config) Defaults() *Config {
 		config.RDelim = "}}"
 	}
 
+	if config.Logger == nil {
+		config.Logger = slog.Default()
+	}
+
+	if config.Ctx == nil {
+		config.Ctx = context.Background()
+	}
+
 	return config
 }
 
@@ -67,7 +82,7 @@ type ConfigOverride func(*Config)
 
 func WithTemplateFS(fs fs.FS) ConfigOverride {
 	return func(c *Config) {
-		c.FS = fs
+		c.TemplatesFS = fs
 	}
 }
 

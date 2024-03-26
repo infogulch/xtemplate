@@ -6,10 +6,10 @@ hypermedia-exchange-oriented web sites by efficiently handling basic server
 tasks, enabling authors to focus on defining routes and responding to them using
 templates and configurable data sources.
 
-## 💡 Why?
+## 🎇 Why?
 
 After bulding some sites with [htmx](https://htmx.org) and Go, I wished that
-everything would just get out of the way of the absolute fundamentals:
+everything would just get out of the way of the fundamentals:
 
 - URLs and path patterns
 - Access to a backing data source
@@ -18,11 +18,34 @@ everything would just get out of the way of the absolute fundamentals:
 **The hypothesis of `xtemplate` is that *templates* can be the nexus of these
 fundamentals.**
 
-The Go stdlib `html/template` package is a good foundation, but it requires some
-acute customization and a decent surrounding implementation to realize a vision
-of 'templates as the engine of backend server state'.
+## 🚫 What to avoid
 
-## 🎇 Features
+`xtemplate` needs to implement some of the things that are required to make a
+good web server in a way that avoids common issues with existing web server
+designs, otherwise they'll be in the way of the fundamentals:
+
+* **Rigid template behavior**: Most designs relegate templates to be dumb string
+  concatenators with just enough dynamic behavior to walk over some fixed data
+  structure.
+* **Inefficient template loading**: Some designs read template files from disk
+  and parse them on every request. This seems wasteful when the web server
+  definition is typically static.
+* **Constant rebuilds**: On the other end of the spectrum, some designs require
+  rebuilding the entire server from source when any little thing changes. This
+  seems wasteful and makes graceful restarts more difficult than necessary when
+  all you're doing is changing a button name.
+* **Repetitive route definitions**: Why should you have to name a http handler
+  and add it to a central registry (or maintain a pile of code that plumbs these
+  together for you) when new routes are often only relevant to the local html?
+* **Default unsafe**: Some designs require authors to vigilantly escape user
+  inputs, risking XSS attacks that could have been avoided with less effort.
+* **Inefficient asset serving**: Some designs compress static assets at request
+  time, instead of serving pre-compressed content with sendfile(2) and
+  negotiated content encoding. Most designs don't give templates access to the
+  hash of asset files, depriving clients of enough information to optimize
+  caching behavior and check resource integrity.
+
+## ✨ Features
 
 *Click a feature to expand and show details:*
 
@@ -42,13 +65,13 @@ of 'templates as the engine of backend server state'.
 > load the previous instance remains intact and continues to serve while the
 > loading error is printed to the logs. A successful reload atomically swaps the
 > handler so new requests are served by the new instance; pending requests are
-> allowed to complete *gracefully*.
+> allowed to complete gracefully.
 >
 > Add this template definition and one-line script to your page, then
 > clients will automatically reload when the server does:
 >
 > ```html
-> {{- define "SSE /reload"}}{{.Block}}data: reload{{printf "\n\n"}}{{end}}
+> {{- define "SSE /reload"}}{{.WaitForServerStop}}data: reload{{printf "\n\n"}}{{end}}
 > <script>new EventSource("/reload").onmessage = () => location.reload()</script>
 > <!-- Maybe not a great idea for production, but you do you. -->
 > ```
@@ -229,60 +252,27 @@ of 'templates as the engine of backend server state'.
 > deployments.
 </details>
 
-## 👨‍🏫 How it works
+## 📦 How to run
 
-xtemplate is designed to treat the files in the templates directory as
-relatively static. When a file under the templates directory is modified the
-server will quickly reload and can be configured to automatically refresh
-browser clients making the development experience very snappy. Templates can
-have dynamic access to a directory in the local filesystem if you set set the
-"context path" config. It may be helpful to consider the templates and context
-directories to be 'application definition' and 'user storage', respectively.
+### 1. 📦 As a Caddy plugin
 
-When [`config.Instance()`](instance.go) is called, xtemplate recursively scans
-all files in the templates directory and loads them in. Except for hidden files
-where its filename starts with `.`, all of these files are added to a Go 1.22
-`http.ServeMux`: static files by their full path, and template files by their
-path minus extension.
+The `xtemplate-caddy` plugin offers all `xtemplate` features integrated into
+[Caddy](https://caddyserver.com), a fast and extensible multi-platform
+HTTP/1-2-3 web server with automatic HTTPS.
 
-* Template files (files with extension `.html`; configurable) are loaded into a
-  custom `html/template.Template` where all defined templates are available to
-  invoke from all other templates, and all files are available to include in any
-  other template by their full path relative to the template directory. Each
-  template file is added as the route handler for that path. If any template
-  file defines a named template where the name matches a ServeMux pattern like
-  `{{define "GET /path"}}...{{end}}` or `{{define "DELETE
-  /items/{id}"}}...{{end}}`, then that pattern is also added to the routes and
-  the named template definition will be used as the handler.
-* All other files are considered "static files" and are served directly from
-  disk. The file is hashed, which is used to optimize caching behavior by
-  handling cache management headers like `Etag` and `If-None-Match`. If the file
-  has a compressed version (e.g. `file.txt` and `file.txt.gz`), after validating
-  that both have equivalent contents, the server will negotiate with clients to
-  select the best encoding when requesting the path of the original file in
-  order to optimize bandwidth and cpu.
+Download Caddy with `xtemplate-caddy` middleware plugin built-in:
 
-In response to a request, the [bufferedTemplateHandler](handlers.go) executes
-the associated template, writing the output into a buffer; if the template
-execution succeeds then the buffer is written out as the response to the
-request. The template is executed with dynamic data in the dot context: request
-details at [`.Req`](#request-data-and-response-control), database access at
-[`.Tx` and `.Query`](#database-functions), and filesystem access like
-[`.ReadFile`](#file-operations), depending on config (see [context](#-context)).
-Arbitrary plain go functions can be added to to the templating engine with the
-`FuncMaps` config, in addition to many useful [default funcs](#-functions) added
-by xtemplate like functions to escape html (thanks
-[BlueMonday](https://github.com/microcosm-cc/bluemonday/)), render markdown
-(thanks [Goldmark](https://github.com/yuin/goldmark)), or manipulate lists
-(thanks [Sprig](https://masterminds.github.io/sprig/)).
+https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate-caddy
 
-## 👨‍🏭 How to use
+This is the simplest Caddyfile that uses the `xtemplate-caddy` plugin:
 
-### 📦 Deployment modes
+```Caddyfile
+routes {
+  xtemplate
+}
+```
 
-XTemplate can be used in various modes:
-
-#### 1. 📦 As the default CLI application
+### 2. 📦 As the default CLI application
 
 Download from the [Releases page](https://github.com/infogulch/xtemplate/releases) or build the binary in [`./cmd`](./cmd/).
 
@@ -335,7 +325,7 @@ Examples:
 ```
 </details>
 
-#### 2. 📦 As a Go library
+### 3. 📦 As a Go library
 
 xtemplate's public Go API starts with a [`xtemplate.Config`](./config.go),
 from which you can get either an [`xtemplate.Instance`](./instance.go) interface
@@ -347,56 +337,68 @@ and exposes some metadata about the files loaded as well as the ServeMux
 patterns and associated handlers for individual routes. An `xtemplate.Server`
 also handles http requests by forwarding requests to an internal Instance, but
 the `Server` can be reloaded by calling `server.Reload()`, which creates a new
-Instance and atomically switches the handler to direct new requests to the new
-Instance.
+Instance with the previous config and atomically switches the handler to direct
+new requests to the new Instance.
 
 Use an Instance if you have no interest in reloading, or if you want to use
 xtemplate handlers in your own mux. Use a Server if you want an easy way to
 smoothly reload and replace the xtemplate Instance behind a http.Handler at
 runtime.
 
-#### 3. 📦 As a Caddy plugin
-
-The `xtemplate-caddy` plugin offers all `xtemplate` features integrated into
-[Caddy](https://caddyserver.com), a fast and extensible multi-platform
-HTTP/1-2-3 web server with automatic HTTPS.
-
-Download Caddy with `xtemplate-caddy` middleware plugin built-in:
-
-https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate-caddy
-
-This is the simplest Caddyfile that uses the `xtemplate-caddy` plugin:
-`caddy-xtemplate` is a [Caddy](https://caddyserver.com) module that extends
-Go's [`html/template` library](https://pkg.go.dev/html/template) to be capable
-enough to host an entire server-side application in it. Designed with the
-[htmx.org](https://htmx.org/) js library in mind, which makes server side
-rendered sites feel as interactive as a Single Page Apps.
+## 👨‍🏭 How to use
 
 ### 🧰 Template semantics
 
-Templates are loaded using Go's [`html/template`](https://pkg.go.dev/html/template)
-module, which is extended with additional functions and a specific context.
+xtemplate templates are based on Go's `html/template` package, with some
+additional features and enhancements. Here are the key things to keep in mind:
 
-Unlike the html/template default, all template files are recursively loaded into
-the same persistent templates instance. Requests are served by invoking the
-matching template name that matches the request route and path. Templates can
-also be invoked from another template by full path name rooted at template root,
-or by explicitly defined templates by any name.
+- All template files are loaded recursively from the specified root directory,
+  and they are parsed and cached in memory at startup. This means you don't have
+  to worry about slow disk access or parsing overhead during request handling.
+- Each template file is associated with a specific route based on its file path.
+  For example, `index.html` in the root directory will handle requests to the
+  `/` path, while `admin/settings.html` will handle requests to
+  `/admin/settings`.
+- You can define custom routes by using a special syntax in your template files.
+  For example, `{{define "GET /custom-route"}}...{{end}}` will create a new route
+  that handles GET requests to `/custom-route`.
+- Template files can be invoked from within other templates using either their
+  full path relative to the template root or by using its defined template name.
+- Templates are executed with a uniform context object, which provides access to
+  request data, database connections, and other useful dynamic functionality.
+- Templates can also call functions set at startup.
 
-Route handling templates are invoked with a uniform root context `{{$}}` which
-includes request data, local file access (if configured), and db access (if
-configured). (See the next section for details.) When the template finishes the
-result is sent to the client.
-Write `.html` files in the root directory specified in your Caddy config.
-
-`xtemplate-caddy` is built on top of the [library API](#-as-a-go-library).
+> [!note]
+>
+> Custom dot fields and functions are similar in that they both add
+> functionality to the templates, but dot fields are distinguished in that they
+> are initialized on every request with access to request-scoped details
+> including the underlying `http.Request` and `http.ResponseWriter` objects, the
+> request-scoped logger, and the server context.
+>
+> Thus FuncMap functions are recommended for adding simple computational
+> functionality (like parsing, escaping, data structure manipulation, etc),
+> whereas dot fields are recommended for more complicated tasks like accessing
+> network resources, running database queries, accessing the file system, etc.
 
 ### 📝 Context
 
 The dot context `{{.}}` set on each template invocation provides access to
-request-specific data and response control methods, as well as any custom
+request-specific data and response control methods, and can be modified to add
+custom fields with your own methods.
 
-#### Access request details with `.Req`
+#### ✏️ Access instance data with the `.X` field
+
+All template invocations include the `.X` field with instance content
+
+- `.X.StaticFileHash $filename` returns the `sha-384` hash of the named static
+  file to be used for integrity or caching behavior.
+- `.X.Template $templatename $dot` evaluates the template `$name` with the given
+ `$dot` value, returning the result as an html string.
+- `.X.Func $name` returns a FuncMap function by name to call manually. Useful in
+  combination with the `call` and `try` funcs.
+
+#### ✏️ Access request details with `.Req` field
 
 `.Req` contains the current HTTP request struct,
 [http.Request](https://pkg.go.dev/net/http#Request), which can be used to read
@@ -420,9 +422,9 @@ the detailed contents of the request. Some notable methods are mentioned here:
   query parameters and the PATCH, POST, or PUT form data
 - See also `RemoteAddr`, `PostForm`, `FormValue`
 
-#### Control the http response with `.Resp`
+#### ✏️ Control the HTTP response with `.Resp` field
 
-`.Resp` contains methods to control the buffered template response:
+The `.Resp` dot field contains methods to control the buffered template response:
 
 - `.Resp.SetStatus 201` Set the status code of the current response if no error
   occurs during template rendering.
@@ -436,33 +438,31 @@ the detailed contents of the request. Some notable methods are mentioned here:
   string `$content`. Intended to serve rendered documents by responding with 304
   Not Modified by coordinating with the client on `$modtime`.
 
-#### File operations
+#### ✏️ Read and list files with the `.FS` field
 
-File operations are rooted at the directory specified by the `context_root`
-config option. If a context root is not configured these functions produce an
-error.
+- `.FS.ReadFile $file` reads and returns the contents of a file, as a string.
+- `.FS.ListFiles $dir` returns a list of the files in the given directory.
+- `.FS.FileExists $file` returns true if filename can be opened successfully.
+- `.FS.StatFile $file` returns Stat of a filename.
+- `.FS.ServeFile $file` discards any template content rendered so far and
+  responds to the request with the contents of the named file
 
-- `.ReadFile $file` reads and returns the contents of a file, as a string.
-- `.ListFiles $file` returns a list of the files in the given directory.
-- `.FileExists $file` returns true if filename can be opened successfully.
-- `.StatFile $file` returns Stat of a filename.
-- `.ServeFile $file` discards any template content rendered so far and responds to the request with the contents of the file at `$file`
+#### ✏️ Query and execute SQL statements with the `.DB` field
 
-#### Database functions
+All funcs accept a query string and any number of parameters. Prefer using
+parameters over building the query string dynamically.
 
-All funcs accept a query string and any number of parameters. Prefer using parameters over building the query string dynamically.
+- `.DB.Exec $querystring [...params]` executes a statment with parameters
+- `.DB.QueryRows` executes a query and returns all rows in a big `[]map[string]any`.
+- `.DB.QueryRow` executes a query, which must return one row, and returns the `map[string]any`.
+- `.DB.QueryVal` executes a query, which must return one row and one column, and
+  returns the value of the column.
+- `.DB.Commit`
+- `.DB.Rollback`
 
-- `.Exec` executes a statment
-- `.QueryRows` executes a query and returns all rows in a big `[]map[string]any`.
-- `.QueryRow` executes a query, which must return one row, and returns the `map[string]any`.
-- `.QueryVal` executes a query, which must return one row and one column, and returns the value of the column.
+#### ✏️ Read template-level config map with the `.KV` field
 
-#### Other
-
-- `.Template` evaluate the template name with the given context and return the result as a string.
-- `.Funcs` returns a list of all the custom FuncMap funcs that are available to call. Useful in combination with the `try` func.
-- `.Config` is a map of config strings set in the Caddyfile. See [Config](#-config).
-
+- `.KV.Value` is a map of string keys to string values.
 
 ### 📐 Functions
 
@@ -474,7 +474,29 @@ sprig library, and custom functions added by xtemplate.
 You can custom FuncMaps by setting `config.FuncMaps = myFuncMap` or calling
 `xtemplate.Main(xtemplate.WithFuncMaps(myFuncMap))`.
 
+<details><summary><strong>xtemplate functions</strong></summary>
+
+See [funcs.go](/funcs.go) for details.
+
+- `markdown` Renders the given Markdown text as HTML and returns it. This uses the [Goldmark](https://github.com/yuin/goldmark) library, which is CommonMark compliant. It also has these extensions enabled: Github Flavored Markdown, Footnote, and syntax highlighting provided by [Chroma](https://github.com/alecthomas/chroma).
+- `splitFrontMatter` Splits front matter out from the body. Front matter is metadata that appears at the very beginning of a file or string. Front matter can be in YAML, TOML, or JSON formats.
+  - `.Meta` to access the metadata fields, for example: `{{$parsed.Meta.title}}`
+  - `.Body` to access the body after the front matter, for example: `{{markdown $parsed.Body}}`
+- `sanitizeHtml` Uses [bluemonday](https://github.com/microcosm-cc/bluemonday/) to sanitize strings with html content. `{{sanitizeHtml "strict" "Shows <b>only</b> text content"}}`
+  - First parameter is the name of the chosen sanitization policy. `"strict"` = [`StrictPolicy()`](https://github.com/microcosm-cc/bluemonday/blob/main/policies.go#L38C6-L38C20), `"ugc"` = [`UGCPolicy()`](https://github.com/microcosm-cc/bluemonday/blob/main/policies.go#L54C6-L54C17) for 'user generated content', `"externalugc"` = `UGCPolicy()` + disallow relative urls + add target=_blank to urls.
+  - Second parameter is the content to sanitize.
+  - Returns the string as a `template.HTML` type which can be output directly into the document without `trustHtml`.
+- `humanize` Transforms size and time inputs to a human readable format using the [go-humanize](https://github.com/dustin/go-humanize) library. Call with two parameters, the format type and the value to format. Format types are:
+  - **size** which turns an integer amount of bytes into a string like `2.3 MB`, for example: `{{humanize "size" "2048000"}}`
+  - **time** which turns a time string into a relative time string like `2 weeks ago`, for example: `{{humanize "time" "Fri, 05 May 2022 15:04:05 +0200"}}`
+- `ksuid` returns a 'K-Sortable Globally Unique ID' using [segmentio/ksuid](https://github.com/segmentio/ksuid)
+- `idx` gets an item from a list, similar to the built-in `index`, but with reversed args: index first, then array. This is useful to use index in a pipeline, for example: `{{generate-list | idx 5}}`
+- `try` takes a function that returns an error in the first argument and calls it with the values from the remaining arguments, and returns the result including any error as struct fields. This enables template authors to handle funcs that return errors within the template definition. Example: `{{ $result := try .QueryVal "SELECT 'oops' WHERE 1=0" }}{{if $result.OK}}{{$result.Value}}{{else}}QueryVal requires exactly one row. Error: {{$result.Error}}{{end}}`
+
+</details>
+
 <details><summary><strong>Go stdlib template functions</strong></summary>
+
 
 See [text/template#Functions](https://pkg.go.dev/text/template#hdr-Functions).
 
@@ -567,27 +589,6 @@ See the Sprig documentation for details: [Sprig Function Documentation](https://
 
 </details>
 
-<details><summary><strong>xtemplate functions</strong></summary>
-
-See [funcs.go](/funcs.go) for details.
-
-- `markdown` Renders the given Markdown text as HTML and returns it. This uses the [Goldmark](https://github.com/yuin/goldmark) library, which is CommonMark compliant. It also has these extensions enabled: Github Flavored Markdown, Footnote, and syntax highlighting provided by [Chroma](https://github.com/alecthomas/chroma).
-- `splitFrontMatter` Splits front matter out from the body. Front matter is metadata that appears at the very beginning of a file or string. Front matter can be in YAML, TOML, or JSON formats.
-  - `.Meta` to access the metadata fields, for example: `{{$parsed.Meta.title}}`
-  - `.Body` to access the body after the front matter, for example: `{{markdown $parsed.Body}}`
-- `sanitizeHtml` Uses [bluemonday](https://github.com/microcosm-cc/bluemonday/) to sanitize strings with html content. `{{sanitizeHtml "strict" "Shows <b>only</b> text content"}}`
-  - First parameter is the name of the chosen sanitization policy. `"strict"` = [`StrictPolicy()`](https://github.com/microcosm-cc/bluemonday/blob/main/policies.go#L38C6-L38C20), `"ugc"` = [`UGCPolicy()`](https://github.com/microcosm-cc/bluemonday/blob/main/policies.go#L54C6-L54C17) for 'user generated content', `"externalugc"` = `UGCPolicy()` + disallow relative urls + add target=_blank to urls.
-  - Second parameter is the content to sanitize.
-  - Returns the string as a `template.HTML` type which can be output directly into the document without `trustHtml`.
-- `humanize` Transforms size and time inputs to a human readable format using the [go-humanize](https://github.com/dustin/go-humanize) library. Call with two parameters, the format type and the value to format. Format types are:
-  - **size** which turns an integer amount of bytes into a string like `2.3 MB`, for example: `{{humanize "size" "2048000"}}`
-  - **time** which turns a time string into a relative time string like `2 weeks ago`, for example: `{{humanize "time" "Fri, 05 May 2022 15:04:05 +0200"}}`
-- `ksuid` returns a 'K-Sortable Globally Unique ID' using [segmentio/ksuid](https://github.com/segmentio/ksuid)
-- `idx` gets an item from a list, similar to the built-in `index`, but with reversed args: index first, then array. This is useful to use index in a pipeline, for example: `{{generate-list | idx 5}}`
-- `try` takes a function that returns an error in the first argument and calls it with the values from the remaining arguments, and returns the result including any error as struct fields. This enables template authors to handle funcs that return errors within the template definition. Example: `{{ $result := try .QueryVal "SELECT 'oops' WHERE 1=0" }}{{if $result.OK}}{{$result.Value}}{{else}}QueryVal requires exactly one row. Error: {{$result.Error}}{{end}}`
-
-</details>
-
 ## 🏆 Users
 
 * [infogulch/xrss](https://github.com/infogulch/xrss), an rss feed reader built with htmx and inline css.
@@ -595,61 +596,44 @@ See [funcs.go](/funcs.go) for details.
 
 ## 👷‍♀️ Development
 
-xtemplate is split into the following packages:
-
-* `github.com/infogulch/xtemplate`, a library that loads template files and
-  implements an `http.Handler` that routes requests to templates and serves
-  static files.
-* `github.com/infogulch/xtemplate/cmd`, a simple binary that configures
-  `xtemplate` with CLI args and serves http requests with it.
-* [`github.com/infogulch/xtemplate-caddy`](https://github.com/infogulch/xtemplate-caddy),
-  uses xtemplate's Go library API to integrate xtemplate into Caddy server as a
-  Caddy module.
-
-xtemplate is tested by running [`./test/exec.sh`](./test/exec.sh) which loads
-using the `test/templates` and `test/context` directories, and runs hurl files
-from the `test/tests` directory.
-
-> [!TIP]
->
-> To understand how the xtemplate package works, it may be helpful to skim
-> through the files in this order: [`main.go`](./main.go),
-> [`config.go`](./config.go), [`server.go`](./server.go)
-> [`instance.go`](./instance.go), [`build.go`](./build.go),
-> [`handlers.go`](./handlers.go).
-
-## ✅ Project history and license
-# Development
-
-## 🏆 Known users
-
-* [infogulch/xrss](https://github.com/infogulch/xrss), an rss feed reader built with htmx and inline css.
-* [infogulch/todos](https://github.com/infogulch/todos), a demo todomvc application.
-
-## 👷‍♀️ Development
+### 🗺️ Repository structure
 
 xtemplate is split into the following packages:
 
 * `github.com/infogulch/xtemplate`, a library that loads template files and
   implements an `http.Handler` that routes requests to templates and serves
   static files.
+* `github.com/infogulch/xtemplate/providers`, contains optional dot provider
+  implementations for common functionality.
 * `github.com/infogulch/xtemplate/cmd`, a simple binary that configures
   `xtemplate` with CLI args and serves http requests with it.
 * [`github.com/infogulch/xtemplate-caddy`](https://github.com/infogulch/xtemplate-caddy),
   uses xtemplate's Go library API to integrate xtemplate into Caddy server as a
   Caddy module.
 
-xtemplate is tested by running [`./test/exec.sh`](./test/exec.sh) which loads
-using the `test/templates` and `test/context` directories, and runs hurl files
-from the `test/tests` directory.
+xtemplate is tested by running [`./test/test.go`](./test/test.go) which runs
+xtemplate configured to use `test/templates` as the templates dir and
+`test/context` as the FS dot provider, and runs hurl files from the `test/tests`
+directory.
 
 > [!TIP]
 >
 > To understand how the xtemplate package works, it may be helpful to skim
-> through the files in this order: [`main.go`](./main.go),
-> [`config.go`](./config.go), [`server.go`](./server.go)
-> [`instance.go`](./instance.go), [`build.go`](./build.go),
-> [`handlers.go`](./handlers.go).
+> through the files in this order: [`config.go`](./config.go),
+> [`server.go`](./server.go) [`instance.go`](./instance.go),
+> [`build.go`](./build.go), [`handlers.go`](./handlers.go).
+
+### 👩‍⚕️ Writing a custom `DotProvider`
+
+Implement the `xtemplate.RegisteredDotProvider` interface on your type and
+register it with `xtemplate.Register()`. Optionally implement
+`encoding.TextMarshaller` and `encoding.TextUnmarshaller` to round-trip
+configuration from cli flags.
+
+On startup xtemplate will create a struct that includes your value as a field.
+For every request your DotProvider.Value method is called with request details
+and its return value is assigned onto the struct which is passed to
+`html/template` as the dot value `{{.}}`.
 
 ## ✅ Project history and license
 

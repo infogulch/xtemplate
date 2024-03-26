@@ -25,15 +25,16 @@ func main() {
 // Provide configs to override the defaults like: `xtemplate.Main(xtemplate.WithFooConfig())`
 func Main(overrides ...xtemplate.ConfigOverride) {
 	var args struct {
-		xtemplate.Config
-		Watch          []string
-		WatchTemplates bool   `default:"true"`
-		Listen         string `arg:"-l" default:"0.0.0.0:8080"`
+		xtemplate.Config `arg:"-w"`
+		Watch            []string
+		WatchTemplates   bool   `default:"true"`
+		Listen           string `arg:"-l" default:"0.0.0.0:8080"`
+		LogLevel         int    `default:"-2"`
 	}
 	arg.MustParse(&args)
 	args.Defaults()
 
-	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(args.Config.LogLevel)}))
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(args.LogLevel)}))
 	args.Config.Logger = log
 
 	for _, o := range overrides {

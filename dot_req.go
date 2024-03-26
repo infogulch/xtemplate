@@ -7,16 +7,16 @@ import (
 	"reflect"
 )
 
-type requestDotProvider struct{}
+type dotReqProvider struct{}
 
-func (requestDotProvider) Type() reflect.Type { return reflect.TypeOf(requestDot{}) }
+func (dotReqProvider) Type() reflect.Type { return reflect.TypeOf(DotReq{}) }
 
-func (requestDotProvider) Value(log *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
-	return reflect.ValueOf(requestDot{r}), nil
+func (dotReqProvider) Value(log *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
+	return reflect.ValueOf(DotReq{r}), nil
 }
 
-var _ DotProvider = requestDotProvider{}
+var _ DotProvider = dotReqProvider{}
 
-type requestDot struct {
+type DotReq struct {
 	*http.Request
 }

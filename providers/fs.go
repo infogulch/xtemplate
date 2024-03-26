@@ -18,23 +18,23 @@ import (
 )
 
 func init() {
-	xtemplate.RegisterDot(&FSDot{})
+	xtemplate.RegisterDot(&DotFSProvider{})
 }
 
 func WithFS(name string, fs fs.FS) xtemplate.ConfigOverride {
-	return xtemplate.WithProvider(name, FSDot{FS: fs})
+	return xtemplate.WithProvider(name, DotFSProvider{FS: fs})
 }
 
-type FSDot struct {
+type DotFSProvider struct {
 	fs.FS
 	dir string
 }
 
-func (FSDot) New() xtemplate.DotProvider { return &FSDot{} }
-func (FSDot) Name() string               { return "fs" }
-func (FSDot) Type() reflect.Type         { return reflect.TypeOf(fsDot{}) }
+func (DotFSProvider) New() xtemplate.DotProvider { return &DotFSProvider{} }
+func (DotFSProvider) Name() string               { return "fs" }
+func (DotFSProvider) Type() reflect.Type         { return reflect.TypeOf(DotFS{}) }
 
-func (fs *FSDot) UnmarshalText(b []byte) error {
+func (fs *DotFSProvider) UnmarshalText(b []byte) error {
 	dir := string(b)
 	if dir == "" {
 		return fmt.Errorf("fs dir cannot be empty string")
@@ -43,21 +43,21 @@ func (fs *FSDot) UnmarshalText(b []byte) error {
 	return nil
 }
 
-func (fs *FSDot) MarshalText() ([]byte, error) {
+func (fs *DotFSProvider) MarshalText() ([]byte, error) {
 	if fs.dir == "" {
 		return nil, fmt.Errorf("FSDir cannot be marhsaled")
 	}
 	return []byte(fs.dir), nil
 }
 
-var _ encoding.TextUnmarshaler = &FSDot{}
-var _ encoding.TextMarshaler = &FSDot{}
+var _ encoding.TextUnmarshaler = &DotFSProvider{}
+var _ encoding.TextMarshaler = &DotFSProvider{}
 
-func (fs FSDot) Value(log *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
-	return reflect.ValueOf(fsDot{fs, log, w, r}), nil
+func (fs DotFSProvider) Value(log *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
+	return reflect.ValueOf(DotFS{fs, log, w, r}), nil
 }
 
-type fsDot struct {
+type DotFS struct {
 	fs  fs.FS
 	log *slog.Logger
 	w   http.ResponseWriter
@@ -74,7 +74,7 @@ var bufPool = sync.Pool{
 // Note that included files are NOT escaped, so you should only include
 // trusted files. If it is not trusted, be sure to use escaping functions
 // in your template.
-func (c *fsDot) ReadFile(filename string) (string, error) {
+func (c *DotFS) ReadFile(filename string) (string, error) {
 	if c.fs == nil {
 		return "", fmt.Errorf("context file system is not configured")
 	}
@@ -98,7 +98,7 @@ func (c *fsDot) ReadFile(filename string) (string, error) {
 }
 
 // StatFile returns Stat of a filename
-func (c *fsDot) StatFile(filename string) (fs.FileInfo, error) {
+func (c *DotFS) StatFile(filename string) (fs.FileInfo, error) {
 	if c.fs == nil {
 		return nil, fmt.Errorf("context file system is not configured")
 	}
@@ -114,7 +114,7 @@ func (c *fsDot) StatFile(filename string) (fs.FileInfo, error) {
 
 // ListFiles reads and returns a slice of names from the given
 // directory relative to the root of c.
-func (c *fsDot) ListFiles(name string) ([]string, error) {
+func (c *DotFS) ListFiles(name string) ([]string, error) {
 	if c.fs == nil {
 		return nil, fmt.Errorf("context file system is not configured")
 	}
@@ -132,7 +132,7 @@ func (c *fsDot) ListFiles(name string) ([]string, error) {
 }
 
 // FileExists returns true if filename can be opened successfully.
-func (c *fsDot) FileExists(filename string) (bool, error) {
+func (c *DotFS) FileExists(filename string) (bool, error) {
 	if c.fs == nil {
 		return false, fmt.Errorf("context file system is not configured")
 	}
@@ -146,7 +146,7 @@ func (c *fsDot) FileExists(filename string) (bool, error) {
 
 // ServeFile aborts execution of the template and instead responds to the
 // request with the content of the file at path_
-func (c *fsDot) ServeFile(path_ string) (string, error) {
+func (c *DotFS) ServeFile(path_ string) (string, error) {
 	path_ = path.Clean(path_)
 
 	c.log.Debug("serving file response", slog.String("path", path_))

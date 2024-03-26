@@ -10,25 +10,29 @@ import (
 )
 
 func init() {
-	xtemplate.RegisterDot(&KVDot{})
+	xtemplate.RegisterDot(&DotKVProvider{})
 }
 
 func WithKV(name string, kv map[string]string) xtemplate.ConfigOverride {
-	return xtemplate.WithProvider(name, KVDot{kv})
+	return xtemplate.WithProvider(name, DotKVProvider{kv})
 }
 
-type KVDot struct {
+type DotKVProvider struct {
 	Map map[string]string
 }
 
-func (KVDot) New() xtemplate.DotProvider { return KVDot{} }
-func (KVDot) Name() string               { return "kv" }
-func (KVDot) Type() reflect.Type         { return reflect.TypeOf(KVDot{}) }
+func (DotKVProvider) New() xtemplate.DotProvider { return &DotKVProvider{} }
+func (DotKVProvider) Name() string               { return "kv" }
+func (DotKVProvider) Type() reflect.Type         { return reflect.TypeOf(DotKV{}) }
 
-func (c KVDot) Value(log *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
-	return reflect.ValueOf(c), nil
+func (c DotKVProvider) Value(log *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
+	return reflect.ValueOf(DotKV{c.Map}), nil
 }
 
-func (c KVDot) Config(key string) string {
-	return c.Map[key]
+type DotKV struct {
+	m map[string]string
+}
+
+func (d DotKV) Value(key string) string {
+	return d.m[key]
 }

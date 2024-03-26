@@ -11,30 +11,30 @@ import (
 	"reflect"
 )
 
-type instanceDotProvider struct {
+type dotXProvider struct {
 	instance *Instance
 }
 
-func (instanceDotProvider) Type() reflect.Type { return reflect.TypeOf(InstanceDot{}) }
+func (dotXProvider) Type() reflect.Type { return reflect.TypeOf(DotX{}) }
 
-func (p instanceDotProvider) Value(log *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
-	return reflect.ValueOf(InstanceDot(p)), nil
+func (p dotXProvider) Value(log *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
+	return reflect.ValueOf(DotX(p)), nil
 }
 
-func (instanceDotProvider) Cleanup(_ reflect.Value, err error) error {
+func (dotXProvider) Cleanup(_ reflect.Value, err error) error {
 	if errors.As(err, &ReturnError{}) {
 		return nil
 	}
 	return err
 }
 
-var _ CleanupDotProvider = instanceDotProvider{}
+var _ CleanupDotProvider = dotXProvider{}
 
-type InstanceDot struct {
+type DotX struct {
 	instance *Instance
 }
 
-func (d InstanceDot) StaticFileHash(urlpath string) (string, error) {
+func (d DotX) StaticFileHash(urlpath string) (string, error) {
 	urlpath = path.Clean("/" + urlpath)
 	fileinfo, ok := d.instance.files[urlpath]
 	if !ok {
@@ -43,7 +43,7 @@ func (d InstanceDot) StaticFileHash(urlpath string) (string, error) {
 	return fileinfo.hash, nil
 }
 
-func (c InstanceDot) Template(name string, context any) (string, error) {
+func (c DotX) Template(name string, context any) (string, error) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer bufPool.Put(buf)
@@ -58,18 +58,15 @@ func (c InstanceDot) Template(name string, context any) (string, error) {
 	return buf.String(), nil
 }
 
-func (c InstanceDot) Func(name string) any {
+func (c DotX) Func(name string) any {
 	return c.instance.funcs[name]
 }
 
-// ReturnError is a sentinel value returned by the `return` template
-// func that indicates a successful/normal exit but allows the template
-// to exit early.
-//
-// If a custom func needs to stop template execution to immediately exit
-// successfully, then it can return this value in its error param.
+// ReturnError is a sentinel value that indicates a successful/normal exit but
+// causes template execution to stop immediately. Used by funcs and dot field
+// methods to perform custom actions.
 type ReturnError struct{}
 
 func (ReturnError) Error() string { return "returned" }
 
-var _ error = (*ReturnError)(nil)
+var _ error = ReturnError{}

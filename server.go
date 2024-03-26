@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,13 +30,7 @@ type Server struct {
 // Build creates a new Server from an xtemplate.Config.
 func (config Config) Server() (*Server, error) {
 	config.Defaults()
-	if config.Logger == nil {
-		config.Logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(config.LogLevel)}))
-	}
 	config.Logger = config.Logger.WithGroup("xtemplate")
-	if config.Ctx == nil {
-		config.Ctx = context.Background()
-	}
 
 	server := &Server{
 		config: config,
@@ -90,7 +83,7 @@ func (x *Server) Reload() error {
 		var err error
 		config := x.config
 		config.Ctx, newcancel = context.WithCancel(x.config.Ctx)
-		new_, err = config.Instance()
+		new_, _, _, err = config.Instance()
 		if err != nil {
 			newcancel()
 			log.Info("failed to load", slog.Any("error", err), slog.Duration("rebuild_time", time.Since(start)))

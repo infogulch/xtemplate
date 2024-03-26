@@ -16,33 +16,24 @@ import (
 )
 
 func init() {
-	xtemplate.RegisterDot(&SqlDot{})
+	xtemplate.RegisterDot(&DotDBProvider{})
 }
 
-func WithDB(name string, db *sql.DB, opts ...*sql.TxOptions) xtemplate.ConfigOverride {
-	var opt *sql.TxOptions
-	switch len(opts) {
-	case 0:
-		// nothing
-	case 1:
-		opt = opts[0]
-	default:
-		panic("too many options")
-	}
-	return xtemplate.WithProvider(name, &SqlDot{DB: db, TxOptions: opt})
+func WithDB(name string, db *sql.DB, opt *sql.TxOptions) xtemplate.ConfigOverride {
+	return xtemplate.WithProvider(name, &DotDBProvider{DB: db, TxOptions: opt})
 }
 
-type SqlDot struct {
+type DotDBProvider struct {
 	*sql.DB
 	*sql.TxOptions
 	driver, connstr string
 }
 
-func (SqlDot) New() xtemplate.DotProvider { return &SqlDot{} }
-func (SqlDot) Name() string               { return "sql" }
-func (SqlDot) Type() reflect.Type         { return reflect.TypeOf(&sqlDot{}) }
+func (DotDBProvider) New() xtemplate.DotProvider { return &DotDBProvider{} }
+func (DotDBProvider) Name() string               { return "sql" }
+func (DotDBProvider) Type() reflect.Type         { return reflect.TypeOf(&DotDB{}) }
 
-func (d *SqlDot) UnmarshalText(b []byte) error {
+func (d *DotDBProvider) UnmarshalText(b []byte) error {
 	parts := strings.SplitN(string(b), ":", 2)
 	if len(parts) < 2 {
 		return fmt.Errorf("not enough parameters to configure sql dot. Requires DRIVER:CONNSTR, got: %s", string(b))
@@ -61,23 +52,23 @@ func (d *SqlDot) UnmarshalText(b []byte) error {
 	return nil
 }
 
-func (d *SqlDot) MarshalText() ([]byte, error) {
+func (d *DotDBProvider) MarshalText() ([]byte, error) {
 	if d.driver == "" || d.connstr == "" {
 		return nil, fmt.Errorf("cannot unmarshal because SqlDot does not have the driver and connstr")
 	}
 	return []byte(d.driver + ":" + d.connstr), nil
 }
 
-var _ xtemplate.CleanupDotProvider = &SqlDot{}
-var _ encoding.TextUnmarshaler = &SqlDot{}
-var _ encoding.TextMarshaler = &SqlDot{}
+var _ xtemplate.CleanupDotProvider = &DotDBProvider{}
+var _ encoding.TextUnmarshaler = &DotDBProvider{}
+var _ encoding.TextMarshaler = &DotDBProvider{}
 
-func (d *SqlDot) Value(log *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
-	return reflect.ValueOf(&sqlDot{d.DB, log, r.Context(), d.TxOptions, nil}), nil
+func (d *DotDBProvider) Value(log *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
+	return reflect.ValueOf(&DotDB{d.DB, log, r.Context(), d.TxOptions, nil}), nil
 }
 
-func (dp *SqlDot) Cleanup(v reflect.Value, err error) error {
-	d := v.Interface().(*sqlDot)
+func (dp *DotDBProvider) Cleanup(v reflect.Value, err error) error {
+	d := v.Interface().(*DotDB)
 	if err != nil {
 		return errors.Join(err, d.rollback())
 	} else {
@@ -85,7 +76,7 @@ func (dp *SqlDot) Cleanup(v reflect.Value, err error) error {
 	}
 }
 
-type sqlDot struct {
+type DotDB struct {
 	db  *sql.DB
 	log *slog.Logger
 	ctx context.Context
@@ -93,14 +84,14 @@ type sqlDot struct {
 	tx  *sql.Tx
 }
 
-func (d *sqlDot) makeTx() (err error) {
+func (d *DotDB) makeTx() (err error) {
 	if d.tx == nil {
 		d.tx, err = d.db.BeginTx(d.ctx, d.opt)
 	}
 	return
 }
 
-func (c *sqlDot) Exec(query string, params ...any) (result sql.Result, err error) {
+func (c *DotDB) Exec(query string, params ...any) (result sql.Result, err error) {
 	if err = c.makeTx(); err != nil {
 		return
 	}
@@ -112,7 +103,7 @@ func (c *sqlDot) Exec(query string, params ...any) (result sql.Result, err error
 	return c.tx.Exec(query, params...)
 }
 
-func (c *sqlDot) QueryRows(query string, params ...any) (rows []map[string]any, err error) {
+func (c *DotDB) QueryRows(query string, params ...any) (rows []map[string]any, err error) {
 	if err = c.makeTx(); err != nil {
 		return
 	}
@@ -154,7 +145,7 @@ func (c *sqlDot) QueryRows(query string, params ...any) (rows []map[string]any, 
 	return rows, result.Err()
 }
 
-func (c *sqlDot) QueryRow(query string, params ...any) (map[string]any, error) {
+func (c *DotDB) QueryRow(query string, params ...any) (map[string]any, error) {
 	rows, err := c.QueryRows(query, params...)
 	if err != nil {
 		return nil, err
@@ -165,7 +156,7 @@ func (c *sqlDot) QueryRow(query string, params ...any) (map[string]any, error) {
 	return rows[0], nil
 }
 
-func (c *sqlDot) QueryVal(query string, params ...any) (any, error) {
+func (c *DotDB) QueryVal(query string, params ...any) (any, error) {
 	row, err := c.QueryRow(query, params...)
 	if err != nil {
 		return nil, err
@@ -179,11 +170,11 @@ func (c *sqlDot) QueryVal(query string, params ...any) (any, error) {
 	panic("impossible condition")
 }
 
-func (c *sqlDot) Commit() (string, error) {
+func (c *DotDB) Commit() (string, error) {
 	return "", c.commit()
 }
 
-func (c *sqlDot) commit() error {
+func (c *DotDB) commit() error {
 	if c.tx != nil {
 		err := c.tx.Commit()
 		c.log.Debug("commit", slog.Any("error", err))
@@ -193,11 +184,11 @@ func (c *sqlDot) commit() error {
 	return nil
 }
 
-func (c *sqlDot) Rollback() (string, error) {
+func (c *DotDB) Rollback() (string, error) {
 	return "", c.rollback()
 }
 
-func (c *sqlDot) rollback() error {
+func (c *DotDB) rollback() error {
 	if c.tx != nil {
 		err := c.tx.Rollback()
 		c.log.Debug("rollback", slog.Any("error", err))

@@ -24,6 +24,27 @@ import (
 	"github.com/tdewolff/minify/v2"
 )
 
+type builder struct {
+	*Instance
+	InstanceStats
+	m      *minify.M
+	routes []InstanceRoute
+}
+
+type InstanceStats struct {
+	Routes                        int
+	TemplateFiles                 int
+	TemplateDefinitions           int
+	TemplateInitializers          int
+	StaticFiles                   int
+	StaticFilesAlternateEncodings int
+}
+
+type InstanceRoute struct {
+	Pattern string
+	Handler http.Handler
+}
+
 type fileInfo struct {
 	identityPath, hash, contentType string
 	encodings                       []encodingInfo
@@ -41,9 +62,9 @@ var extensionContentTypes = map[string]string{
 	".csv": "text/csv",
 }
 
-func (x *Instance) addStaticFileHandler(path_ string) error {
+func (b *builder) addStaticFileHandler(path_ string) error {
 	// Open and stat the file
-	fsfile, err := x.config.FS.Open(path_)
+	fsfile, err := b.config.TemplatesFS.Open(path_)
 	if err != nil {
 		return fmt.Errorf("failed to open static file '%s': %w", path_, err)
 	}
@@ -65,7 +86,7 @@ func (x *Instance) addStaticFileHandler(path_ string) error {
 	var reader io.Reader = fsfile
 	encoding = "identity"
 	var exists bool
-	file, exists = x.files[identityPath]
+	file, exists = b.files[identityPath]
 	if exists {
 		switch ext {
 		case ".gz":
@@ -115,24 +136,24 @@ func (x *Instance) addStaticFileHandler(path_ string) error {
 		file.encodings = []encodingInfo{{encoding: encoding, path: path_, size: size, modtime: stat.ModTime()}}
 
 		pattern := "GET " + identityPath
-		handler := staticFileHandler(x.config.FS, file)
-		if err = catch("add handler to servemux", func() { x.router.HandleFunc(pattern, handler) }); err != nil {
+		handler := staticFileHandler(b.config.TemplatesFS, file)
+		if err = catch("add handler to servemux", func() { b.router.HandleFunc(pattern, handler) }); err != nil {
 			return err
 		}
-		x.stats.StaticFiles += 1
-		x.stats.Routes += 1
-		x.files[identityPath] = file
-		x.routes = append(x.routes, InstanceRoute{pattern, handler})
+		b.StaticFiles += 1
+		b.Routes += 1
+		b.files[identityPath] = file
+		b.routes = append(b.routes, InstanceRoute{pattern, handler})
 
-		x.config.Logger.Debug("added static file handler", slog.String("path", identityPath), slog.String("filepath", path_), slog.String("contenttype", file.contentType), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()), slog.String("hash", sri))
+		b.config.Logger.Debug("added static file handler", slog.String("path", identityPath), slog.String("filepath", path_), slog.String("contenttype", file.contentType), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()), slog.String("hash", sri))
 	} else {
 		if file.hash != sri {
 			return fmt.Errorf("encoded file contents did not match original file '%s': expected %s, got %s", path_, file.hash, sri)
 		}
 		file.encodings = append(file.encodings, encodingInfo{encoding: encoding, path: path_, size: size, modtime: stat.ModTime()})
 		sort.Slice(file.encodings, func(i, j int) bool { return file.encodings[i].size < file.encodings[j].size })
-		x.stats.StaticFilesAlternateEncodings += 1
-		x.config.Logger.Debug("added static file encoding", slog.String("path", identityPath), slog.String("filepath", path_), slog.String("encoding", encoding), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()))
+		b.StaticFilesAlternateEncodings += 1
+		b.config.Logger.Debug("added static file encoding", slog.String("path", identityPath), slog.String("filepath", path_), slog.String("encoding", encoding), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()))
 	}
 	return nil
 }
@@ -149,13 +170,13 @@ func catch(description string, fn func()) (err error) {
 
 var routeMatcher *regexp.Regexp = regexp.MustCompile("^(GET|POST|PUT|PATCH|DELETE|SSE) (.*)$")
 
-func (x *Instance) addTemplateHandler(path_ string, minify *minify.M) error {
-	content, err := fs.ReadFile(x.config.FS, path_)
+func (b *builder) addTemplateHandler(path_ string) error {
+	content, err := fs.ReadFile(b.config.TemplatesFS, path_)
 	if err != nil {
 		return fmt.Errorf("could not read template file '%s': %v", path_, err)
 	}
-	if minify != nil {
-		content, err = minify.Bytes("text/html", content)
+	if b.m != nil {
+		content, err = b.m.Bytes("text/html", content)
 		if err != nil {
 			return fmt.Errorf("could not minify template file '%s': %v", path_, err)
 		}
@@ -163,22 +184,22 @@ func (x *Instance) addTemplateHandler(path_ string, minify *minify.M) error {
 	path_ = path.Clean("/" + path_)
 	// parse each template file manually to have more control over its final
 	// names in the template namespace.
-	newtemplates, err := parse.Parse(path_, string(content), x.config.LDelim, x.config.RDelim, x.funcs, buliltinsSkeleton)
+	newtemplates, err := parse.Parse(path_, string(content), b.config.LDelim, b.config.RDelim, b.funcs, buliltinsSkeleton)
 	if err != nil {
 		return fmt.Errorf("could not parse template file '%s': %v", path_, err)
 	}
-	x.stats.TemplateFiles += 1
+	b.TemplateFiles += 1
 
 	// add parsed templates, register handlers
 	for name, tree := range newtemplates {
-		if x.templates.Lookup(name) != nil {
-			x.config.Logger.Debug("overriding named template '%s' with definition from file: %s", name, path_)
+		if b.templates.Lookup(name) != nil {
+			b.config.Logger.Debug("overriding named template '%s' with definition from file: %s", name, path_)
 		}
-		tmpl, err := x.templates.AddParseTree(name, tree)
+		tmpl, err := b.templates.AddParseTree(name, tree)
 		if err != nil {
 			return fmt.Errorf("could not add template '%s' from '%s': %v", name, path_, err)
 		}
-		x.stats.TemplateDefinitions += 1
+		b.TemplateDefinitions += 1
 
 		var pattern string
 		var handler http.HandlerFunc
@@ -189,7 +210,7 @@ func (x *Instance) addTemplateHandler(path_ string, minify *minify.M) error {
 				continue
 			}
 			// strip the extension from the handled path
-			routePath := strings.TrimSuffix(path_, x.config.TemplateExtension)
+			routePath := strings.TrimSuffix(path_, b.config.TemplateExtension)
 			// files named 'index' handle requests to the directory
 			if path.Base(routePath) == "index" {
 				routePath = path.Dir(routePath)
@@ -198,24 +219,24 @@ func (x *Instance) addTemplateHandler(path_ string, minify *minify.M) error {
 				routePath += "{$}"
 			}
 			pattern = "GET " + routePath
-			handler = bufferingTemplateHandler(x, tmpl)
+			handler = bufferingTemplateHandler(b.Instance, tmpl)
 		} else if matches := routeMatcher.FindStringSubmatch(name); len(matches) == 3 {
 			method, path_ := matches[1], matches[2]
 			if method == "SSE" {
 				pattern = "GET " + path_
-				handler = flushingTemplateHandler(x, tmpl)
+				handler = flushingTemplateHandler(b.Instance, tmpl)
 			} else {
 				pattern = method + " " + path_
-				handler = bufferingTemplateHandler(x, tmpl)
+				handler = bufferingTemplateHandler(b.Instance, tmpl)
 			}
 		}
 
-		if err = catch("add handler to servemux", func() { x.router.HandleFunc(pattern, handler) }); err != nil {
+		if err = catch("add handler to servemux", func() { b.router.HandleFunc(pattern, handler) }); err != nil {
 			return err
 		}
-		x.routes = append(x.routes, InstanceRoute{pattern, handler})
-		x.stats.Routes += 1
-		x.config.Logger.Debug("added template handler", "method", "GET", "pattern", pattern, "template_path", path_)
+		b.routes = append(b.routes, InstanceRoute{pattern, handler})
+		b.Routes += 1
+		b.config.Logger.Debug("added template handler", "method", "GET", "pattern", pattern, "template_path", path_)
 	}
 	return nil
 }
