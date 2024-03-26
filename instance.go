@@ -46,12 +46,12 @@ type Instance struct {
 	templates *template.Template
 	funcs     template.FuncMap
 
-	bufferDot  *dot
-	flusherDot *dot
+	bufferDot  dot
+	flusherDot dot
 }
 
-// Instance creates a new *xinstance from the given config
-func (config Config) Instance() (*Instance, InstanceStats, []InstanceRoute, error) {
+// Instance creates a new *Instance from the given config
+func (config Config) Instance() (*Instance, *InstanceStats, []InstanceRoute, error) {
 	start := time.Now()
 
 	config.Defaults()
@@ -109,7 +109,7 @@ func (config Config) Instance() (*Instance, InstanceStats, []InstanceRoute, erro
 		}
 		return err
 	}); err != nil {
-		return nil, InstanceStats{}, nil, fmt.Errorf("error scanning files: %w", err)
+		return nil, nil, nil, fmt.Errorf("error scanning files: %w", err)
 	}
 
 	initDot := makeDot(append([]DotConfig{{"X", dotXProvider{inst}}}, config.Dot...))
@@ -119,11 +119,11 @@ func (config Config) Instance() (*Instance, InstanceStats, []InstanceRoute, erro
 		if strings.HasPrefix(tmpl.Name(), "INIT ") {
 			val, err := initDot.value(inst.config.Logger, config.Ctx, nil, nil)
 			if err != nil {
-				return nil, InstanceStats{}, nil, fmt.Errorf("failed to get init dot value: %w", err)
+				return nil, nil, nil, fmt.Errorf("failed to get init dot value: %w", err)
 			}
 			err = tmpl.Execute(io.Discard, val)
 			if err = initDot.cleanup(val, err); err != nil {
-				return nil, InstanceStats{}, nil, fmt.Errorf("template initializer '%s' failed: %w", tmpl.Name(), err)
+				return nil, nil, nil, fmt.Errorf("template initializer '%s' failed: %w", tmpl.Name(), err)
 			}
 			build.TemplateInitializers += 1
 		}
@@ -140,7 +140,8 @@ func (config Config) Instance() (*Instance, InstanceStats, []InstanceRoute, erro
 			slog.Int("staticFilesAlternateEncodings", build.StaticFilesAlternateEncodings),
 		))
 
-	return inst, build.InstanceStats, build.routes, nil
+	stats := build.InstanceStats
+	return inst, &stats, build.routes, nil
 }
 
 // Counter to assign a unique id to each instance of xtemplate created when
@@ -182,7 +183,7 @@ func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		slog.String("handlerPattern", handlerPattern),
 	)
 
-	r = r.WithContext(context.WithValue(r.Context(), LoggerKey, log))
+	r = r.WithContext(context.WithValue(r.Context(), loggerKey, log))
 	metrics := httpsnoop.CaptureMetrics(handler, w, r)
 
 	log.LogAttrs(r.Context(), levelDebug2, "request served",
@@ -206,12 +207,12 @@ func getRequestId(ctx context.Context) string {
 	return ksuid.New().String()
 }
 
-// LoggerKey is the context value key used to smuggle the current logger through
+// loggerKey is the context value key used to smuggle the current logger through
 // the http.Handler interface.
-var LoggerKey = reflect.TypeOf((*slog.Logger)(nil))
+var loggerKey = reflect.TypeOf((*slog.Logger)(nil))
 
 func getCtxLogger(r *http.Request) *slog.Logger {
-	log, ok := r.Context().Value(LoggerKey).(*slog.Logger)
+	log, ok := r.Context().Value(loggerKey).(*slog.Logger)
 	if !ok {
 		return slog.Default()
 	}

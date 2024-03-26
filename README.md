@@ -6,7 +6,7 @@ hypermedia-exchange-oriented web sites by efficiently handling basic server
 tasks, enabling authors to focus on defining routes and responding to them using
 templates and configurable data sources.
 
-## 🎇 Why?
+## 🎯 Goal
 
 After bulding some sites with [htmx](https://htmx.org) and Go, I wished that
 everything would just get out of the way of the fundamentals:
@@ -15,10 +15,10 @@ everything would just get out of the way of the fundamentals:
 - Access to a backing data source
 - Executing a template to return HTML
 
-**The hypothesis of `xtemplate` is that *templates* can be the nexus of these
+🎇 **The idea of `xtemplate` is that *templates* can be the nexus of these
 fundamentals.**
 
-## 🚫 What to avoid
+## 🚫 Anti-goals
 
 `xtemplate` needs to implement some of the things that are required to make a
 good web server in a way that avoids common issues with existing web server
@@ -206,7 +206,7 @@ designs, otherwise they'll be in the way of the fundamentals:
 > ```
 </details>
 
-<details open><summary><strong>📤 Optimal static file serving</strong></summary>
+<details open><summary><strong>📤 Optimal asset serving</strong></summary>
 
 > Non-template files in the templates directory are served directly from disk
 > with appropriate caching responses, negotiating with the client to serve
@@ -349,24 +349,26 @@ runtime.
 
 ### 🧰 Template semantics
 
-xtemplate templates are based on Go's `html/template` package, with some
+`xtemplate` templates are based on Go's `html/template` package, with some
 additional features and enhancements. Here are the key things to keep in mind:
 
 - All template files are loaded recursively from the specified root directory,
-  and they are parsed and cached in memory at startup. This means you don't have
-  to worry about slow disk access or parsing overhead during request handling.
+  and they are parsed and cached in memory at startup.
 - Each template file is associated with a specific route based on its file path.
   For example, `index.html` in the root directory will handle requests to the
   `/` path, while `admin/settings.html` will handle requests to
   `/admin/settings`.
-- You can define custom routes by using a special syntax in your template files.
-  For example, `{{define "GET /custom-route"}}...{{end}}` will create a new route
-  that handles GET requests to `/custom-route`.
+- You can define custom routes by defining a template with a special name in
+  your template files. For example, `{{define "GET /custom-route"}}...{{end}}`
+  will create a new route that handles GET requests to `/custom-route`. Names
+  also support path parameters as defined by [http.ServeMux](servemux).
 - Template files can be invoked from within other templates using either their
   full path relative to the template root or by using its defined template name.
 - Templates are executed with a uniform context object, which provides access to
   request data, database connections, and other useful dynamic functionality.
 - Templates can also call functions set at startup.
+
+[servemux]: https://pkg.go.dev/net/http#ServeMux
 
 > [!note]
 >
@@ -387,82 +389,29 @@ The dot context `{{.}}` set on each template invocation provides access to
 request-specific data and response control methods, and can be modified to add
 custom fields with your own methods.
 
-#### ✏️ Access instance data with the `.X` field
+#### ✏️ Built-in dot fields
 
-All template invocations include the `.X` field with instance content
+These fields are always present in relevant template invocations:
 
-- `.X.StaticFileHash $filename` returns the `sha-384` hash of the named static
-  file to be used for integrity or caching behavior.
-- `.X.Template $templatename $dot` evaluates the template `$name` with the given
- `$dot` value, returning the result as an html string.
-- `.X.Func $name` returns a FuncMap function by name to call manually. Useful in
-  combination with the `call` and `try` funcs.
+* Access instance data with the `.X` field. See [DotX]
+* Access request details with the `.Req` field. See [DotReq]
+* Control the HTTP response in buffered template handlers with the `.Resp`
+  field. See [DotResp]
+* Control flushing behavior for flushing template handlers (i.e. SSE) with the
+  `.Flush` field. See [DotFlush]
 
-#### ✏️ Access request details with `.Req` field
+#### ✏️ Optional dot fields
 
-`.Req` contains the current HTTP request struct,
-[http.Request](https://pkg.go.dev/net/http#Request), which can be used to read
-the detailed contents of the request. Some notable methods are mentioned here:
+These optional value providers can be configured with any field name, and can be
+configured multiple times with different configurations.
 
-- `.Req.Method` The HTTP method of the request
-- `.Req.URL` The URI being requested
-  - `.Req.URL.Query` Query values as `url.Values`
-  - `.Req.URL.Host` host or host:port
-  - See also `Path`, `User`, `Scheme`, `Hostname`, `Port`
-- `.Req.Header` - Request header fields
-  - `.Req.Header "HeaderName"` Get the list of all values with the header name
-  - `.Req.Header.Get "HeaderName"` Gets the first value with the header name
-- `.Req.Cookie "cookiename"` Gets the value of a cookie by name.
-- `.Req.PathValue` is a list of path parameters extracted from the url based on the current route
-- `.Req.Host` - the Host header or :authority of the request
-- `.Req.RemoteIP` is the client's IP address
-- `.Req.ParseForm` parses the url query and request body for form content and
-  updates `Form` and `PostForm` fields. Must be called before `.Form` or `.PostForm`.
-- `.Req.Form` contains the parsed form data, including both the URL field's
-  query parameters and the PATCH, POST, or PUT form data
-- See also `RemoteAddr`, `PostForm`, `FormValue`
+* Read and list files. See [providers.DotFS]
+* Query and execute SQL statements. See [providers.DotDB]
+* Read template-level key-value map. See [providers.DotKV]
 
-#### ✏️ Control the HTTP response with `.Resp` field
+#### ✏️ Custom dot fields
 
-The `.Resp` dot field contains methods to control the buffered template response:
-
-- `.Resp.SetStatus 201` Set the status code of the current response if no error
-  occurs during template rendering.
-- `.Resp.ReturnStatus 200` Sets the status code and aborts template execution.
-- `.Resp.AddHeader "Header-Name" $val` Adds a header field to the HTTP response
-- `.Resp.SetHeader "Header-Name" $val` Sets a header field on the HTTP response,
-  replacing any existing values
-- `.Resp.DelHeader "Header-Name"` Deletes a header field on the HTTP response
-- `.Resp.ServeContent $path $modtime $content`, like `.ServeFile`, discards any
-  template content rendered so far, and responds to the request with the raw
-  string `$content`. Intended to serve rendered documents by responding with 304
-  Not Modified by coordinating with the client on `$modtime`.
-
-#### ✏️ Read and list files with the `.FS` field
-
-- `.FS.ReadFile $file` reads and returns the contents of a file, as a string.
-- `.FS.ListFiles $dir` returns a list of the files in the given directory.
-- `.FS.FileExists $file` returns true if filename can be opened successfully.
-- `.FS.StatFile $file` returns Stat of a filename.
-- `.FS.ServeFile $file` discards any template content rendered so far and
-  responds to the request with the contents of the named file
-
-#### ✏️ Query and execute SQL statements with the `.DB` field
-
-All funcs accept a query string and any number of parameters. Prefer using
-parameters over building the query string dynamically.
-
-- `.DB.Exec $querystring [...params]` executes a statment with parameters
-- `.DB.QueryRows` executes a query and returns all rows in a big `[]map[string]any`.
-- `.DB.QueryRow` executes a query, which must return one row, and returns the `map[string]any`.
-- `.DB.QueryVal` executes a query, which must return one row and one column, and
-  returns the value of the column.
-- `.DB.Commit`
-- `.DB.Rollback`
-
-#### ✏️ Read template-level config map with the `.KV` field
-
-- `.KV.Value` is a map of string keys to string values.
+You can create custom dot fields by
 
 ### 📐 Functions
 
@@ -611,17 +560,19 @@ xtemplate is split into the following packages:
   uses xtemplate's Go library API to integrate xtemplate into Caddy server as a
   Caddy module.
 
-xtemplate is tested by running [`./test/test.go`](./test/test.go) which runs
-xtemplate configured to use `test/templates` as the templates dir and
-`test/context` as the FS dot provider, and runs hurl files from the `test/tests`
-directory.
-
 > [!TIP]
 >
 > To understand how the xtemplate package works, it may be helpful to skim
 > through the files in this order: [`config.go`](./config.go),
 > [`server.go`](./server.go) [`instance.go`](./instance.go),
 > [`build.go`](./build.go), [`handlers.go`](./handlers.go).
+
+### Testing
+
+xtemplate is tested by running [`./test/test.go`](./test/test.go) which runs
+xtemplate configured to use `test/templates` as the templates dir and
+`test/context` as the FS dot provider, and runs hurl files from the `test/tests`
+directory.
 
 ### 👩‍⚕️ Writing a custom `DotProvider`
 

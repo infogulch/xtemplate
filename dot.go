@@ -24,6 +24,9 @@ func RegisterDot(r RegisteredDotProvider) {
 
 type DotProvider interface {
 	Type() reflect.Type
+
+	// Value should always return a valid instance of the provided type, even if
+	// it also returns an error.
 	Value(request_scoped_logger *slog.Logger, server_ctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error)
 }
 
@@ -88,7 +91,7 @@ func (d *DotConfig) MarshalText() ([]byte, error) {
 var _ encoding.TextUnmarshaler = &DotConfig{}
 var _ encoding.TextMarshaler = &DotConfig{}
 
-func makeDot(dcs []DotConfig) *dot {
+func makeDot(dcs []DotConfig) dot {
 	fields := make([]reflect.StructField, 0, len(dcs))
 	cleanups := []cleanup{}
 	for i, dc := range dcs {
@@ -106,7 +109,7 @@ func makeDot(dcs []DotConfig) *dot {
 		}
 	}
 	typ := reflect.StructOf(fields)
-	return &dot{dcs, cleanups, &sync.Pool{New: func() any { v := reflect.New(typ).Elem(); return &v }}}
+	return dot{dcs, cleanups, &sync.Pool{New: func() any { v := reflect.New(typ).Elem(); return &v }}}
 }
 
 type dot struct {

@@ -30,6 +30,7 @@ func (dotRespProvider) Cleanup(v reflect.Value, err error) error {
 
 var _ CleanupDotProvider = dotRespProvider{}
 
+// DotResp is used as the `.Resp` field in buffered template invocations.
 type DotResp struct {
 	http.Header
 	status int
@@ -52,7 +53,7 @@ func (d *DotResp) ServeContent(path_ string, modtime time.Time, content string) 
 // AddHeader adds a header field value, appending val to
 // existing values for that field. It returns an
 // empty string.
-func (h DotResp) AddHeader(field, val string) string {
+func (h *DotResp) AddHeader(field, val string) string {
 	h.Header.Add(field, val)
 	return ""
 }
@@ -60,13 +61,13 @@ func (h DotResp) AddHeader(field, val string) string {
 // SetHeader sets a header field value, overwriting any
 // other values for that field. It returns an
 // empty string.
-func (h DotResp) SetHeader(field, val string) string {
+func (h *DotResp) SetHeader(field, val string) string {
 	h.Header.Set(field, val)
 	return ""
 }
 
 // DelHeader deletes a header field. It returns an empty string.
-func (h DotResp) DelHeader(field string) string {
+func (h *DotResp) DelHeader(field string) string {
 	h.Header.Del(field)
 	return ""
 }

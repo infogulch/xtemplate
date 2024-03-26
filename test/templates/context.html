@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-{{debug}}{{.FS.ReadFile "foo.txt"}}
+{{.FS.ReadFile "foo.txt"}}
 
 {{define "GET /hello"}}
 {{.FS.ServeFile "hello.txt"}}

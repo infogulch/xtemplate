@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"reflect"
@@ -14,6 +15,9 @@ func init() {
 }
 
 func WithKV(name string, kv map[string]string) xtemplate.ConfigOverride {
+	if kv == nil {
+		panic(fmt.Sprintf("cannot create DotKVProvider with null map with name %s", name))
+	}
 	return xtemplate.WithProvider(name, DotKVProvider{kv})
 }
 

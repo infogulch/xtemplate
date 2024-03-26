@@ -15,14 +15,17 @@ import (
 )
 
 func main() {
+	_, file, _, _ := runtime.Caller(0)
+	testdir := filepath.Dir(file)
+	logpath := filepath.Join(testdir, "xtemplate.log")
+
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Printf("exiting because: %v\n", err)
+			fmt.Printf("Log file %s:\n", logpath)
+			fmt.Println(string(try(os.ReadFile(logpath))("read log file")))
 		}
 	}()
-
-	_, file, _, _ := runtime.Caller(0)
-	testdir := filepath.Dir(file)
 
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
@@ -48,7 +51,6 @@ func main() {
 		cmd := exec.Command(args[0], args[1:]...)
 		cmd.Dir = testdir
 
-		logpath := filepath.Join(testdir, "xtemplate.log")
 		log := try(os.Create(logpath))("open log file")
 		try(log.Seek(0, 0))("seek to beginning")
 		defer log.Close()

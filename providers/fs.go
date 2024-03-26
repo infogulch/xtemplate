@@ -22,6 +22,9 @@ func init() {
 }
 
 func WithFS(name string, fs fs.FS) xtemplate.ConfigOverride {
+	if fs == nil {
+		panic(fmt.Sprintf("cannot create DotFSProvider with null FS with name %s", name))
+	}
 	return xtemplate.WithProvider(name, DotFSProvider{FS: fs})
 }
 
@@ -57,6 +60,8 @@ func (fs DotFSProvider) Value(log *slog.Logger, sctx context.Context, w http.Res
 	return reflect.ValueOf(DotFS{fs, log, w, r}), nil
 }
 
+// DotFS is used to create a dot field value that can access files in a local
+// directory, or any [fs.FS].
 type DotFS struct {
 	fs  fs.FS
 	log *slog.Logger
@@ -70,14 +75,9 @@ var bufPool = sync.Pool{
 	},
 }
 
-// ReadFile returns the contents of a filename relative to the site root.
-// Note that included files are NOT escaped, so you should only include
-// trusted files. If it is not trusted, be sure to use escaping functions
-// in your template.
+// ReadFile returns the contents of a filename relative to the FS root as a
+// string.
 func (c *DotFS) ReadFile(filename string) (string, error) {
-	if c.fs == nil {
-		return "", fmt.Errorf("context file system is not configured")
-	}
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer bufPool.Put(buf)
@@ -99,9 +99,6 @@ func (c *DotFS) ReadFile(filename string) (string, error) {
 
 // StatFile returns Stat of a filename
 func (c *DotFS) StatFile(filename string) (fs.FileInfo, error) {
-	if c.fs == nil {
-		return nil, fmt.Errorf("context file system is not configured")
-	}
 	filename = path.Clean(filename)
 	file, err := c.fs.Open(filename)
 	if err != nil {
@@ -112,12 +109,9 @@ func (c *DotFS) StatFile(filename string) (fs.FileInfo, error) {
 	return file.Stat()
 }
 
-// ListFiles reads and returns a slice of names from the given
-// directory relative to the root of c.
+// ListFiles reads and returns a slice of names from the given directory
+// relative to the FS root.
 func (c *DotFS) ListFiles(name string) ([]string, error) {
-	if c.fs == nil {
-		return nil, fmt.Errorf("context file system is not configured")
-	}
 	entries, err := fs.ReadDir(c.fs, path.Clean(name))
 	if err != nil {
 		return nil, err
@@ -133,9 +127,6 @@ func (c *DotFS) ListFiles(name string) ([]string, error) {
 
 // FileExists returns true if filename can be opened successfully.
 func (c *DotFS) FileExists(filename string) (bool, error) {
-	if c.fs == nil {
-		return false, fmt.Errorf("context file system is not configured")
-	}
 	file, err := c.fs.Open(filename)
 	if err == nil {
 		file.Close()

@@ -1,14 +1,15 @@
 # TODO
 
 - [ ] Dot Provider system
-    - [ ] Accept configuration from JSON
-    - [ ] Accept configuration from Caddyfile
-    - [ ] Env?
-- [ ] Update documentation
-    - [ ] Readme docs
-    - [ ] Go API docs
-    - [ ] CLI docs
-- [ ] Downgrade to go 1.21
+    - [ ] Add config flag to load config from JSON file
+    - [ ] Accept configuration from JSON. Parse flags -> config file flag ->
+      parse json -> parse flags again.
+    - [ ] Update `xtemplate-caddy`. Note only caddy 2.8.0 uses Go 1.22
+        - [ ] Accept dot provider configuration from Caddyfile
+- [ ] Add/update documentation
+    - [ ] Creating a provider
+    - [ ] Using the new go-arg cli flags
+- [ ] Expose all funcmap funcs so godoc can be the primary documentation.
 - [ ] Add ServeTemplate that delays template rendering until requested by
   http.ServeContent to optimize cache behavior. Something like
   https://github.com/spatialcurrent/go-lazy ?
@@ -23,10 +24,14 @@
 - [ ] Pass Config.Ctx down to http.Server/net.Listener to allow caller to cancel
   .Serve() and associated instances.
 
-### Automation
+### Testing
 
-- [ ] Write Go api tests
-- [ ] Write CLI tests
+- [ ] Test configuration methods
+    - [ ] JSON
+    - [ ] CLI
+    - [ ] Go API
+    - [ ] Test provider configuration
+- [ ] Test all built-in and optional dot providers
 
 ### Application
 
@@ -40,6 +45,7 @@
 
 # BACKLOG
 
+- [ ] Accept Env configuration
 - [ ] Built-in CSRF handling?
 - [ ] Fine tune timeouts? https://ieftimov.com/posts/make-resilient-golang-net-http-servers-using-timeouts-deadlines-context-cancellation/
 - [ ] Idea: Add special FILE pseudo-func that is replaced with a string constant of the current filename.
@@ -52,6 +58,7 @@
     - Not until caddy releases 2.8.0 and upgrades to 1.22.
 - [ ] Add command that pre-compresses static files
 - [ ] Schema migration? https://david.rothlis.net/declarative-schema-migration-for-sqlite/
+- [ ] Schema generator: https://gitlab.com/Screwtapello/sqlite-schema-diagram/-/blob/main/sqlite-schema-diagram.sql?ref_type=heads
 - [ ] Add a way to register additional routes dynamically during init
 - [ ] Organize docs according to https://diataxis.fr/
 
@@ -59,10 +66,15 @@
 
 ## v0.5 beta - Mar 2024
 
+- [-] Downgrade to go 1.21 - Cannot due to using 1.22 ServeMux
+- Add/update documentation
+    - [x] Readme
+    - [x] Provider Go API docs
 - Dot Provider system
     - [x] Create system for customizing template dot value
     - [x] Convert existing modules
     - [x] Accept configuration from cli
+    - [x] Figure out how to document providers: Use go docs
 - [x] Get rid of Server/Instance interfaces, expose structs directly
 - [x] Catch servemux addhandler panics and return an error instead
 - [x] Use go-arg library for arg parsing

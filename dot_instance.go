@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html/template"
 	"log/slog"
 	"net/http"
 	"path"
@@ -30,10 +31,13 @@ func (dotXProvider) Cleanup(_ reflect.Value, err error) error {
 
 var _ CleanupDotProvider = dotXProvider{}
 
+// DotX is used as the field at `.X` in all template invocations.
 type DotX struct {
 	instance *Instance
 }
 
+// StaticFileHash returns the `sha-384` hash of the named asset file to be used
+// for integrity or caching behavior.
 func (d DotX) StaticFileHash(urlpath string) (string, error) {
 	urlpath = path.Clean("/" + urlpath)
 	fileinfo, ok := d.instance.files[urlpath]
@@ -43,7 +47,9 @@ func (d DotX) StaticFileHash(urlpath string) (string, error) {
 	return fileinfo.hash, nil
 }
 
-func (c DotX) Template(name string, context any) (string, error) {
+// Template invokes the template `name` with the given `dot` value, returning
+// the result as a html string.
+func (c DotX) Template(name string, dot any) (template.HTML, error) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer bufPool.Put(buf)
@@ -52,12 +58,14 @@ func (c DotX) Template(name string, context any) (string, error) {
 	if t == nil {
 		return "", fmt.Errorf("failed to lookup template name: '%s'", name)
 	}
-	if err := t.Execute(buf, context); err != nil {
+	if err := t.Execute(buf, dot); err != nil {
 		return "", fmt.Errorf("failed to execute template '%s': %w", name, err)
 	}
-	return buf.String(), nil
+	return template.HTML(buf.String()), nil
 }
 
+// Func returns a function by name to call manually. Useful in combination with
+// the `call` and `try` funcs.
 func (c DotX) Func(name string) any {
 	return c.instance.funcs[name]
 }
