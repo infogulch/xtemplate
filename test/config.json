@@ -1,0 +1,9 @@
+{
+    "dot": [
+        {
+            "type": "fs",
+            "name": "FSTemplates",
+            "path": "./templates"
+        }
+    ]
+}

@@ -1,13 +1,18 @@
 # TODO
 
+- [ ] Accept JSON
+    - [x] Add config flag to load config from JSON file
+    - [x] Allow raw config with --config and config file with --config-file
+    - [x] Parse args -> decode config files in args to args -> decode config
+      values in args to args -> parse args again
+    - [ ] Test that everything can be configured, load config -> dump back
+    - [ ] Validate that your type is correct on call to Value
 - [ ] Dot Provider system
-    - [ ] Add config flag to load config from JSON file
-        - [ ] Parse flags -> config file flag -> parse json -> parse flags again
-    - [ ] Accept configuration from JSON.
-        - [ ] Figure out how to parse json dynamically dispatching to the  unmarshaller
-        - [ ] Try
+    - [ ] Accept configuration from JSON
     - [ ] Update `xtemplate-caddy`. Note only caddy 2.8.0 uses Go 1.22
+        - [ ] Must test on caddy head?
         - [ ] Accept dot provider configuration from Caddyfile
+    - [ ]
 - [ ] Add/update documentation
     - [ ] Creating a provider
     - [ ] Using the new go-arg cli flags
@@ -66,8 +71,10 @@
 
 # DONE
 
-## v0.5 beta - Mar 2024
+## Next
 
+- Accept JSON configuration
+    - [x] Implement Json Unmarshaller https://pkg.go.dev/encoding/json
 - [-] Downgrade to go 1.21 - Cannot due to using 1.22 ServeMux
 - Add/update documentation
     - [x] Readme

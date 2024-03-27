@@ -3,3 +3,4 @@ xtemplate
 xtemplate.*
 caddy
 dist
+__debug_bin*

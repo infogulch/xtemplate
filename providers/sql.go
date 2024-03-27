@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -25,45 +26,61 @@ func WithDB(name string, db *sql.DB, opt *sql.TxOptions) xtemplate.ConfigOverrid
 }
 
 type DotDBProvider struct {
-	*sql.DB
-	*sql.TxOptions
-	driver, connstr string
+	*sql.DB        `json:"-"`
+	*sql.TxOptions `json:"-"`
+	Driver         string `json:"driver"`
+	Connstr        string `json:"connstr"`
+}
+type emptyDotDBProvider DotDBProvider
+
+var _ encoding.TextMarshaler = &DotDBProvider{}
+
+func (d *DotDBProvider) MarshalText() ([]byte, error) {
+	if d.Driver == "" || d.Connstr == "" {
+		return nil, fmt.Errorf("cannot unmarshal because SqlDot does not have the driver and connstr")
+	}
+	return []byte(d.Driver + ":" + d.Connstr), nil
 }
 
-func (DotDBProvider) New() xtemplate.DotProvider { return &DotDBProvider{} }
-func (DotDBProvider) Name() string               { return "sql" }
+var _ encoding.TextUnmarshaler = &DotDBProvider{}
 
 func (d *DotDBProvider) UnmarshalText(b []byte) error {
 	parts := strings.SplitN(string(b), ":", 2)
 	if len(parts) < 2 {
 		return fmt.Errorf("not enough parameters to configure sql dot. Requires DRIVER:CONNSTR, got: %s", string(b))
 	}
-	db, err := sql.Open(parts[0], parts[1])
-	if err != nil {
-		return fmt.Errorf("failed to open database with driver name %s: %w", parts[0], err)
-	}
-	err = db.Ping()
-	if err != nil {
-		return fmt.Errorf("failed to ping database on open: %w", err)
-	}
-	d.DB = db
-	d.driver = parts[0]
-	d.connstr = parts[1]
+	d.Driver = parts[0]
+	d.Connstr = parts[1]
 	return nil
 }
 
-func (d *DotDBProvider) MarshalText() ([]byte, error) {
-	if d.driver == "" || d.connstr == "" {
-		return nil, fmt.Errorf("cannot unmarshal because SqlDot does not have the driver and connstr")
-	}
-	return []byte(d.driver + ":" + d.connstr), nil
+var _ json.Marshaler = &DotDBProvider{}
+
+func (d *DotDBProvider) MarshalJSON() ([]byte, error) {
+	return json.Marshal((*emptyDotDBProvider)(d))
+}
+
+var _ json.Unmarshaler = &DotDBProvider{}
+
+func (d *DotDBProvider) UnmarshalJSON(b []byte) error {
+	return json.Unmarshal(b, (*emptyDotDBProvider)(d))
 }
 
 var _ xtemplate.CleanupDotProvider = &DotDBProvider{}
-var _ encoding.TextUnmarshaler = &DotDBProvider{}
-var _ encoding.TextMarshaler = &DotDBProvider{}
 
+func (DotDBProvider) New() xtemplate.DotProvider { return &DotDBProvider{} }
+func (DotDBProvider) Type() string               { return "sql" }
 func (d *DotDBProvider) Value(r xtemplate.Request) (any, error) {
+	if d.DB == nil {
+		db, err := sql.Open(d.Driver, d.Connstr)
+		if err != nil {
+			return &DotDB{}, fmt.Errorf("failed to open database with driver name '%s': %w", d.Driver, err)
+		}
+		if err := db.Ping(); err != nil {
+			return &DotDB{}, fmt.Errorf("failed to ping database on open: %w", err)
+		}
+		d.DB = db
+	}
 	return &DotDB{d.DB, xtemplate.GetCtxLogger(r.R), r.R.Context(), d.TxOptions, nil}, nil
 }
 

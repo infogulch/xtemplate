@@ -28,8 +28,12 @@ type Server struct {
 }
 
 // Build creates a new Server from an xtemplate.Config.
-func (config Config) Server() (*Server, error) {
+func (config Config) Server(cfgs ...ConfigOverride) (*Server, error) {
 	config.Defaults()
+	for _, c := range cfgs {
+		c(&config)
+	}
+
 	config.Logger = config.Logger.WithGroup("xtemplate")
 
 	server := &Server{
@@ -65,7 +69,7 @@ func (x *Server) Handler() http.Handler {
 
 // Reload creates a new Instance from the config and swaps it with the
 // current instance if successful, otherwise returns the error.
-func (x *Server) Reload() error {
+func (x *Server) Reload(cfgs ...ConfigOverride) error {
 	start := time.Now()
 
 	x.mutex.Lock()
@@ -83,7 +87,7 @@ func (x *Server) Reload() error {
 		var err error
 		config := x.config
 		config.Ctx, newcancel = context.WithCancel(x.config.Ctx)
-		new_, _, _, err = config.Instance()
+		new_, _, _, err = config.Instance(cfgs...)
 		if err != nil {
 			newcancel()
 			log.Info("failed to load", slog.Any("error", err), slog.Duration("rebuild_time", time.Since(start)))

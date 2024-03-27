@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,7 +16,7 @@ import (
 var registrations map[string]RegisteredDotProvider = make(map[string]RegisteredDotProvider)
 
 func RegisterDot(r RegisteredDotProvider) {
-	name := r.Name()
+	name := r.Type()
 	if old, ok := registrations[name]; ok {
 		panic(fmt.Sprintf("DotProvider name already registered: %s (%v)", name, old))
 	}
@@ -23,9 +24,9 @@ func RegisterDot(r RegisteredDotProvider) {
 }
 
 type DotConfig struct {
-	Name string
-	Type string
-	DotProvider
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	DotProvider `json:"-"`
 }
 
 type Request struct {
@@ -44,7 +45,7 @@ type DotProvider interface {
 
 type RegisteredDotProvider interface {
 	DotProvider
-	Name() string
+	Type() string
 	New() DotProvider
 }
 
@@ -53,35 +54,12 @@ type CleanupDotProvider interface {
 	Cleanup(any, error) error
 }
 
-func (d *DotConfig) UnmarshalText(b []byte) error {
-	parts := bytes.SplitN(b, []byte{':'}, 3)
-	if len(parts) < 2 {
-		return fmt.Errorf("failed to parse DotConfig not enough sections. required format: NAME:PROVIDER_NAME[:PROVIDER_CONFIG]")
-	}
-	name, providerName := string(parts[0]), string(parts[1])
-	reg, ok := registrations[providerName]
-	if !ok {
-		return fmt.Errorf("dot provider with name '%s' is not registered", providerName)
-	}
-	d.Name = name
-	d.DotProvider = reg.New()
-	if unm, ok := d.DotProvider.(encoding.TextUnmarshaler); ok {
-		var rest []byte
-		if len(parts) == 3 {
-			rest = parts[2]
-		}
-		err := unm.UnmarshalText(rest)
-		if err != nil {
-			return fmt.Errorf("failed to configure provider %s: %w", providerName, err)
-		}
-	}
-	return nil
-}
+var _ encoding.TextMarshaler = &DotConfig{}
 
 func (d *DotConfig) MarshalText() ([]byte, error) {
 	var parts [][]byte
 	if r, ok := d.DotProvider.(RegisteredDotProvider); ok {
-		parts = [][]byte{[]byte(d.Name), {':'}, []byte(r.Name())}
+		parts = [][]byte{[]byte(d.Name), {':'}, []byte(r.Type())}
 	} else {
 		return nil, fmt.Errorf("dot provider cannot be marshalled: %v (%T)", d.DotProvider, d.DotProvider)
 	}
@@ -96,7 +74,66 @@ func (d *DotConfig) MarshalText() ([]byte, error) {
 }
 
 var _ encoding.TextUnmarshaler = &DotConfig{}
-var _ encoding.TextMarshaler = &DotConfig{}
+
+func (d *DotConfig) UnmarshalText(b []byte) error {
+	parts := bytes.SplitN(b, []byte{':'}, 3)
+	if len(parts) < 2 {
+		return fmt.Errorf("failed to parse DotConfig not enough sections. required format: NAME:PROVIDER_NAME[:PROVIDER_CONFIG]")
+	}
+	name, providerType := string(parts[0]), string(parts[1])
+	reg, ok := registrations[providerType]
+	if !ok {
+		return fmt.Errorf("dot provider with name '%s' is not registered", providerType)
+	}
+	d.Name = name
+	d.Type = providerType
+	d.DotProvider = reg.New()
+	if unm, ok := d.DotProvider.(encoding.TextUnmarshaler); ok {
+		var rest []byte
+		if len(parts) == 3 {
+			rest = parts[2]
+		}
+		err := unm.UnmarshalText(rest)
+		if err != nil {
+			return fmt.Errorf("failed to configure provider %s: %w", providerType, err)
+		}
+	}
+	return nil
+}
+
+var _ json.Marshaler = &DotConfig{}
+
+func (d *DotConfig) MarshalJSON() ([]byte, error) {
+	b := new(bytes.Buffer)
+	if err := json.NewEncoder(b).Encode(d); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+
+var _ json.Unmarshaler = &DotConfig{}
+
+func (d *DotConfig) UnmarshalJSON(b []byte) error {
+	var dc = struct {
+		Name string `json:"name"`
+		Type string `json:"type"`
+	}{}
+	if err := json.NewDecoder(bytes.NewBuffer(b)).Decode(&dc); err != nil {
+		return err
+	}
+	r, ok := registrations[dc.Type]
+	if !ok {
+		return fmt.Errorf("no provider registered with the type '%s': %+v", dc.Type, dc)
+	}
+	p := r.New()
+	if err := json.NewDecoder(bytes.NewBuffer(b)).Decode(p); err != nil {
+		return fmt.Errorf("failed to decode provider %s (%v): %w", dc.Type, p, err)
+	}
+	d.Name = dc.Name
+	d.Type = dc.Type
+	d.DotProvider = p
+	return nil
+}
 
 func makeDot(dcs []DotConfig) dot {
 	fields := make([]reflect.StructField, 0, len(dcs))

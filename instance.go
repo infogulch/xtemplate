@@ -51,10 +51,14 @@ type Instance struct {
 }
 
 // Instance creates a new *Instance from the given config
-func (config Config) Instance() (*Instance, *InstanceStats, []InstanceRoute, error) {
+func (config Config) Instance(cfgs ...ConfigOverride) (*Instance, *InstanceStats, []InstanceRoute, error) {
 	start := time.Now()
 
 	config.Defaults()
+	for _, c := range cfgs {
+		c(&config)
+	}
+
 	inst := &Instance{
 		config: config,
 		id:     nextInstanceIdentity.Add(1),

@@ -3,6 +3,7 @@ package providers
 import (
 	"bytes"
 	"encoding"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -23,16 +24,25 @@ func WithFS(name string, fs fs.FS) xtemplate.ConfigOverride {
 	if fs == nil {
 		panic(fmt.Sprintf("cannot create DotFSProvider with null FS with name %s", name))
 	}
-	return xtemplate.WithProvider(name, DotFSProvider{FS: fs})
+	return xtemplate.WithProvider(name, &DotFSProvider{FS: fs})
 }
 
 type DotFSProvider struct {
-	fs.FS
-	dir string
+	fs.FS `json:"-"`
+	Path  string `json:"path"`
+}
+type emptyDotFSProvider DotFSProvider
+
+var _ encoding.TextMarshaler = &DotFSProvider{}
+
+func (fs *DotFSProvider) MarshalText() ([]byte, error) {
+	if fs.Path == "" {
+		return nil, fmt.Errorf("FSDir cannot be marhsaled")
+	}
+	return []byte(fs.Path), nil
 }
 
-func (DotFSProvider) New() xtemplate.DotProvider { return &DotFSProvider{} }
-func (DotFSProvider) Name() string               { return "fs" }
+var _ encoding.TextUnmarshaler = &DotFSProvider{}
 
 func (fs *DotFSProvider) UnmarshalText(b []byte) error {
 	dir := string(b)
@@ -43,18 +53,33 @@ func (fs *DotFSProvider) UnmarshalText(b []byte) error {
 	return nil
 }
 
-func (fs *DotFSProvider) MarshalText() ([]byte, error) {
-	if fs.dir == "" {
-		return nil, fmt.Errorf("FSDir cannot be marhsaled")
-	}
-	return []byte(fs.dir), nil
+var _ json.Marshaler = &DotFSProvider{}
+
+func (d *DotFSProvider) MarshalJSON() ([]byte, error) {
+	return json.Marshal((*emptyDotFSProvider)(d))
 }
 
-var _ encoding.TextUnmarshaler = &DotFSProvider{}
-var _ encoding.TextMarshaler = &DotFSProvider{}
+var _ json.Unmarshaler = &DotFSProvider{}
 
-func (fs DotFSProvider) Value(r xtemplate.Request) (any, error) {
-	return &DotFS{fs, xtemplate.GetCtxLogger(r.R), r.W, r.R}, nil
+func (d *DotFSProvider) UnmarshalJSON(b []byte) error {
+	return json.Unmarshal(b, (*emptyDotFSProvider)(d))
+}
+
+var _ xtemplate.DotProvider = &DotFSProvider{}
+
+func (DotFSProvider) New() xtemplate.DotProvider { return &DotFSProvider{} }
+func (DotFSProvider) Type() string               { return "fs" }
+func (p *DotFSProvider) Value(r xtemplate.Request) (any, error) {
+	if p.FS == nil {
+		newfs := os.DirFS(p.Path)
+		if _, err := newfs.(interface {
+			Stat(string) (fs.FileInfo, error)
+		}).Stat("."); err != nil {
+			return &DotFS{}, fmt.Errorf("failed to stat working directory '%s': %w", p.Path, err)
+		}
+		p.FS = newfs
+	}
+	return &DotFS{p.FS, xtemplate.GetCtxLogger(r.R), r.W, r.R}, nil
 }
 
 // DotFS is used to create a dot field value that can access files in a local

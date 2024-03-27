@@ -14,18 +14,21 @@ func WithKV(name string, kv map[string]string) xtemplate.ConfigOverride {
 	if kv == nil {
 		panic(fmt.Sprintf("cannot create DotKVProvider with null map with name %s", name))
 	}
-	return xtemplate.WithProvider(name, DotKVProvider{kv})
+	return xtemplate.WithProvider(name, &DotKVProvider{kv})
 }
 
 type DotKVProvider struct {
-	Map map[string]string
+	Values map[string]string `json:"values"`
 }
 
 func (DotKVProvider) New() xtemplate.DotProvider { return &DotKVProvider{} }
-func (DotKVProvider) Name() string               { return "kv" }
+func (DotKVProvider) Type() string               { return "kv" }
 
-func (c DotKVProvider) Value(xtemplate.Request) (any, error) {
-	return DotKV{c.Map}, nil
+func (c *DotKVProvider) Value(xtemplate.Request) (any, error) {
+	if c.Values == nil {
+		c.Values = make(map[string]string)
+	}
+	return DotKV{c.Values}, nil
 }
 
 type DotKV struct {

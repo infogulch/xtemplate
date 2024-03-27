@@ -36,7 +36,7 @@ type Config struct {
 
 	// A list of additional custom fields to add to the template dot value
 	// `{{.}}`.
-	Dot []DotConfig `json:"dot_config" arg:"-d,--dot,separate"`
+	Dot []DotConfig `json:"dot" arg:"-d,--dot,separate"`
 
 	// Additional functions to add to the template execution context.
 	FuncMaps []template.FuncMap `json:"-" arg:"-"`
@@ -100,6 +100,14 @@ func WithFuncMaps(fm ...template.FuncMap) ConfigOverride {
 
 func WithProvider(name string, p DotProvider) ConfigOverride {
 	return func(c *Config) {
+		for _, d := range c.Dot {
+			if d.Name == name {
+				if d.DotProvider != p {
+					c.Logger.Warn("tried to assign different providers the same name", slog.String("name", d.Name), slog.Any("old", d.DotProvider), slog.Any("new", p))
+				}
+				return
+			}
+		}
 		c.Dot = append(c.Dot, DotConfig{Name: name, DotProvider: p})
 	}
 }
