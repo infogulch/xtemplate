@@ -21,21 +21,23 @@ import (
 )
 
 var xtemplateFuncs template.FuncMap = template.FuncMap{
-	"sanitizeHtml":     funcSanitizeHtml,
-	"markdown":         funcMarkdown,
-	"splitFrontMatter": funcSplitFrontMatter,
-	"return":           funcReturn,
-	"humanize":         funcHumanize,
-	"trustHtml":        funcTrustHtml,
-	"trustAttr":        funcTrustAttr,
-	"trustJS":          funcTrustJS,
-	"trustJSStr":       funcTrustJSStr,
-	"trustSrcSet":      funcTrustSrcSet,
-	"ksuid":            funcKsuid,
-	"idx":              funcIdx,
-	"try":              funcTry,
+	"sanitizeHtml":     FuncSanitizeHtml,
+	"markdown":         FuncMarkdown,
+	"splitFrontMatter": FuncSplitFrontMatter,
+	"return":           FuncReturn,
+	"humanize":         FuncHumanize,
+	"trustHtml":        FuncTrustHtml,
+	"trustAttr":        FuncTrustAttr,
+	"trustJS":          FuncTrustJS,
+	"trustJSStr":       FuncTrustJSStr,
+	"trustSrcSet":      FuncTrustSrcSet,
+	"ksuid":            FuncKsuid,
+	"idx":              FuncIdx,
+	"try":              FuncTry,
 }
 
+// blueMondayPolicies is the map of names of bluemonday policies available to
+// templates.
 var blueMondayPolicies map[string]*bluemonday.Policy = map[string]*bluemonday.Policy{
 	"strict": bluemonday.StrictPolicy(),
 	"ugc":    bluemonday.UGCPolicy(),
@@ -44,7 +46,18 @@ var blueMondayPolicies map[string]*bluemonday.Policy = map[string]*bluemonday.Po
 		AllowRelativeURLs(false),
 }
 
-func funcSanitizeHtml(policyName string, html string) (template.HTML, error) {
+// AddBlueMondayPolicy adds a bluemonday policy to the global policy list available to all
+// xtemplate instances.
+func AddBlueMondayPolicy(name string, policy *bluemonday.Policy) {
+	if old, ok := blueMondayPolicies[name]; ok {
+		panic(fmt.Sprintf("bluemonday policy with name %s already exists: %v", name, old))
+	}
+	blueMondayPolicies[name] = policy
+}
+
+// `sanitizeHtml` Uses the BlueMonday library to sanitize strings with html content.
+// First parameter is the name of the chosen sanitization policy.
+func FuncSanitizeHtml(policyName string, html string) (template.HTML, error) {
 	policy, ok := blueMondayPolicies[policyName]
 	if !ok {
 		return "", fmt.Errorf("failed to find policy name '%s'", policyName)
@@ -52,26 +65,55 @@ func funcSanitizeHtml(policyName string, html string) (template.HTML, error) {
 	return template.HTML(policy.Sanitize(html)), nil
 }
 
-// funcMarkdown renders the markdown body as HTML. The resulting
-// HTML is NOT escaped so that it can be rendered as HTML.
-func funcMarkdown(input string) (template.HTML, error) {
-	md := goldmark.New(
-		goldmark.WithExtensions(
-			extension.GFM,
-			extension.Footnote,
-			highlighting.NewHighlighting(
-				highlighting.WithFormatOptions(
-					chromahtml.WithClasses(true),
-				),
+var mdOpts = []goldmark.Option{
+	goldmark.WithExtensions(
+		extension.GFM,
+		extension.Footnote,
+		highlighting.NewHighlighting(
+			highlighting.WithFormatOptions(
+				chromahtml.WithClasses(true),
 			),
 		),
-		goldmark.WithParserOptions(
-			parser.WithAutoHeadingID(),
-		),
-		goldmark.WithRendererOptions(
-			gmhtml.WithUnsafe(), // TODO: this is not awesome, maybe should be configurable?
-		),
-	)
+	),
+	goldmark.WithParserOptions(
+		parser.WithAutoHeadingID(),
+	),
+}
+
+var markdownConfigs map[string]goldmark.Markdown = map[string]goldmark.Markdown{
+	"default": goldmark.New(mdOpts...),
+	"unsafe": goldmark.New(append(mdOpts,
+		goldmark.WithRendererOptions(gmhtml.WithUnsafe()),
+	)...),
+}
+
+// AddMarkdownConifg adds a custom markdown configuration to xtemplate's
+// markdown config map, available to all xtemplate instances.
+func AddMarkdownConifg(name string, md goldmark.Markdown) {
+	if old, ok := markdownConfigs[name]; ok {
+		panic(fmt.Sprintf("markdown policy with name %s already exists: %v", name, old))
+	}
+	markdownConfigs[name] = md
+}
+
+// `markdown` renders the given Markdown text as HTML and returns it. This uses
+// the Goldmark library, which is CommonMark compliant. If an alternative
+// markdown policy is not named, it uses the default policy which has these
+// extensions enabled: Github Flavored Markdown, Footnote, and syntax
+// highlighting provided by Chroma.
+func FuncMarkdown(input string, configName ...string) (template.HTML, error) {
+	config := "default"
+	switch len(configName) {
+	case 0:
+	case 1:
+		config = configName[0]
+	default:
+		return "", fmt.Errorf("too many configName arguments provided: %v", configName)
+	}
+	md, ok := markdownConfigs[config]
+	if !ok {
+		return "", fmt.Errorf("unknown markdown config name: %s", config)
+	}
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
@@ -85,10 +127,10 @@ func funcMarkdown(input string) (template.HTML, error) {
 	return template.HTML(buf.String()), nil
 }
 
-// splitFrontMatter parses front matter out from the beginning of input,
+// `splitFrontMatter` parses front matter out from the beginning of input,
 // and returns the separated key-value pairs and the body/content. input
 // must be a "stringy" value.
-func funcSplitFrontMatter(input string) (parsedMarkdownDoc, error) {
+func FuncSplitFrontMatter(input string) (parsedMarkdownDoc, error) {
 	meta, body, err := extractFrontMatter(input)
 	if err != nil {
 		return parsedMarkdownDoc{}, err
@@ -96,58 +138,65 @@ func funcSplitFrontMatter(input string) (parsedMarkdownDoc, error) {
 	return parsedMarkdownDoc{Meta: meta, Body: body}, nil
 }
 
-// funcReturn causes the template to exit early
-func funcReturn() (string, error) {
+// `return` causes the template to exit early with a success status.
+func FuncReturn() (string, error) {
 	return "", ReturnError{}
 }
 
-// funcTrustHtml marks the string s as safe and does not escape its contents in
+// `trustHtml` marks the string s as safe and does not escape its contents in
 // html node context.
-func funcTrustHtml(s string) template.HTML {
+func FuncTrustHtml(s string) template.HTML {
 	return template.HTML(s)
 }
 
-// funcTrustHtml marks the string s as safe and does not escape its contents in
-// html attribute context. For example, ` dir="ltr"`.
-func funcTrustAttr(s string) template.HTMLAttr {
+// `trustAttr` marks the string s as safe and does not escape its contents in
+// html attribute context. For example, `dir="ltr"`.
+func FuncTrustAttr(s string) template.HTMLAttr {
 	return template.HTMLAttr(s)
 }
 
-// funcTrustJS marks the string s as safe and does not escape its contents in
+// `trustJS` marks the string s as safe and does not escape its contents in
 // script tag context.
-func funcTrustJS(s string) template.JS {
+func FuncTrustJS(s string) template.JS {
 	return template.JS(s)
 }
 
-// funcTrustJSStr marks the string s as safe and does not escape its contents in
+// `trustJSStr` marks the string s as safe and does not escape its contents in
 // script expression context.
-func funcTrustJSStr(s string) template.JSStr {
+func FuncTrustJSStr(s string) template.JSStr {
 	return template.JSStr(s)
 }
 
-// funcTrustSrcSet marks the string s as safe and does not escape its contents in
+// `trustSrcSet` marks the string s as safe and does not escape its contents in
 // script tag context.
-func funcTrustSrcSet(s string) template.Srcset {
+func FuncTrustSrcSet(s string) template.Srcset {
 	return template.Srcset(s)
 }
 
-func funcIdx(idx int, arr any) any {
+// `idx` gets an item from a list, similar to the built-in `index`, but with
+// reversed args: index first, then array. This is useful to use index in a
+// pipeline, for example: `{{generate-list | idx 5}}`
+func FuncIdx(idx int, arr any) any {
 	return reflect.ValueOf(arr).Index(idx).Interface()
 }
 
-func funcKsuid() ksuid.KSUID {
+// `kusid` returns a new ksuid value
+func FuncKsuid() ksuid.KSUID {
 	return ksuid.New()
 }
 
-// funcHumanize transforms size and time inputs to a human readable format.
+// `humanize` transforms size and time inputs to a human readable format using
+// the go-humanize library.
 //
-// Size inputs are expected to be integers, and are formatted as a
-// byte size, such as "83 MB".
+// Call with two parameters: format type and value to format. Supported format
+// types are:
 //
-// Time inputs are parsed using the given layout (default layout is RFC1123Z)
-// and are formatted as a relative time, such as "2 weeks ago".
-// See https://pkg.go.dev/time#pkg-constants for time layout docs.
-func funcHumanize(formatType, data string) (string, error) {
+// `"size"` which turns an integer amount of bytes into a string like `2.3 MB`,
+// for example: `{{humanize "size" "2048000"}}`
+//
+// `"time"` which turns a time string into a relative time string like `2 weeks
+// ago`, for example: `{{humanize "time" "Fri, 05 May 2022 15:04:05 +0200"}}`
+func FuncHumanize(formatType, data string) (string, error) {
 	// The format type can optionally be followed
 	// by a colon to provide arguments for the format
 	parts := strings.Split(formatType, ":")
@@ -176,7 +225,13 @@ func funcHumanize(formatType, data string) (string, error) {
 	return "", fmt.Errorf("no know function was given")
 }
 
-func funcTry(fn any, args ...any) (*result, error) {
+// The `try` template func accepts a fallible function object and calls it with
+// the provided args. If the function and args are valid, try returns the result
+// wrapped in a `result` object that exposes the return value and error to
+// templates. Useful if you want to call a function and handle its error in a
+// template. If the function value is invalid or the args cannot be used to call
+// it then try raises an error that stops template execution.
+func FuncTry(fn any, args ...any) (*result, error) {
 	if fn == nil {
 		return nil, fmt.Errorf("nil func")
 	}

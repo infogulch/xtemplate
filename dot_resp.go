@@ -1,26 +1,27 @@
 package xtemplate
 
 import (
-	"context"
 	"log/slog"
 	"maps"
 	"net/http"
 	"path"
-	"reflect"
 	"strings"
 	"time"
 )
 
 type dotRespProvider struct{}
 
-func (dotRespProvider) Type() reflect.Type { return reflect.TypeOf(DotResp{}) }
-
-func (dotRespProvider) Value(log *slog.Logger, _ context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
-	return reflect.ValueOf(DotResp{Header: make(http.Header), status: http.StatusOK, w: w, r: r, log: log}), nil
+func (dotRespProvider) Value(r Request) (any, error) {
+	return DotResp{
+		Header: make(http.Header),
+		status: http.StatusOK,
+		w:      r.W, r: r.R,
+		log: GetCtxLogger(r.R),
+	}, nil
 }
 
-func (dotRespProvider) Cleanup(v reflect.Value, err error) error {
-	d := v.Interface().(DotResp)
+func (dotRespProvider) Cleanup(v any, err error) error {
+	d := v.(DotResp)
 	if err == nil {
 		maps.Copy(d.w.Header(), d.Header)
 		d.w.WriteHeader(d.status)

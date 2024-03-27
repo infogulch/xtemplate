@@ -2,27 +2,21 @@ package xtemplate
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"html/template"
-	"log/slog"
-	"net/http"
 	"path"
-	"reflect"
 )
 
 type dotXProvider struct {
 	instance *Instance
 }
 
-func (dotXProvider) Type() reflect.Type { return reflect.TypeOf(DotX{}) }
-
-func (p dotXProvider) Value(log *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
-	return reflect.ValueOf(DotX(p)), nil
+func (p dotXProvider) Value(Request) (any, error) {
+	return DotX(p), nil
 }
 
-func (dotXProvider) Cleanup(_ reflect.Value, err error) error {
+func (dotXProvider) Cleanup(_ any, err error) error {
 	if errors.As(err, &ReturnError{}) {
 		return nil
 	}

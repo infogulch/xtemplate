@@ -3,32 +3,29 @@ package xtemplate
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"math"
 	"net/http"
-	"reflect"
 	"time"
 )
 
 type dotFlushProvider struct{}
 
-func (dotFlushProvider) Type() reflect.Type { return reflect.TypeOf(&DotFlush{}) }
-
-func (dotFlushProvider) Value(_ *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
-	f, ok := w.(http.Flusher)
+func (dotFlushProvider) Value(r Request) (any, error) {
+	f, ok := r.W.(http.Flusher)
 	if !ok {
-		return reflect.Value{}, fmt.Errorf("response writer could not cast to http.Flusher")
+		return &DotFlush{}, fmt.Errorf("response writer could not cast to http.Flusher")
 	}
-	return reflect.ValueOf(&DotFlush{flusher: f, serverCtx: sctx, requestCtx: r.Context()}), nil
+	return &DotFlush{flusher: f, serverCtx: r.ServerCtx, requestCtx: r.R.Context()}, nil
 }
 
-func (dotFlushProvider) Cleanup(v reflect.Value, err error) {
+func (dotFlushProvider) Cleanup(v any, err error) error {
 	if err == nil {
-		v.Interface().(DotFlush).flusher.Flush()
+		v.(*DotFlush).flusher.Flush()
 	}
+	return err
 }
 
-var _ DotProvider = dotFlushProvider{}
+var _ CleanupDotProvider = dotFlushProvider{}
 
 // DotFlush is used as the `.Flush` field for flushing template handlers (SSE).
 type DotFlush struct {

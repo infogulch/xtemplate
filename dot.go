@@ -5,8 +5,8 @@ import (
 	"context"
 	"encoding"
 	"fmt"
-	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"slices"
 	"sync"
@@ -22,12 +22,24 @@ func RegisterDot(r RegisteredDotProvider) {
 	registrations[name] = r
 }
 
-type DotProvider interface {
-	Type() reflect.Type
+type DotConfig struct {
+	Name string
+	Type string
+	DotProvider
+}
 
-	// Value should always return a valid instance of the provided type, even if
-	// it also returns an error.
-	Value(request_scoped_logger *slog.Logger, server_ctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error)
+type Request struct {
+	DotConfig
+	ServerCtx context.Context
+	W         http.ResponseWriter
+	R         *http.Request
+}
+
+type DotProvider interface {
+	// Value must always return a valid instance of the same type, even if it
+	// also returns an error. Value will be called with mock values at least
+	// once and still must not panic.
+	Value(Request) (any, error)
 }
 
 type RegisteredDotProvider interface {
@@ -38,12 +50,7 @@ type RegisteredDotProvider interface {
 
 type CleanupDotProvider interface {
 	DotProvider
-	Cleanup(reflect.Value, error) error
-}
-
-type DotConfig struct {
-	Name string
-	DotProvider
+	Cleanup(any, error) error
 }
 
 func (d *DotConfig) UnmarshalText(b []byte) error {
@@ -94,10 +101,17 @@ var _ encoding.TextMarshaler = &DotConfig{}
 func makeDot(dcs []DotConfig) dot {
 	fields := make([]reflect.StructField, 0, len(dcs))
 	cleanups := []cleanup{}
+	mockHttpRequest := httptest.NewRequest("GET", "/", nil)
 	for i, dc := range dcs {
+		mockRequest := Request{dc, context.Background(), mockResponseWriter{}, mockHttpRequest}
+		a, _ := dc.DotProvider.Value(mockRequest)
+		t := reflect.TypeOf(a)
+		if t.Kind() == reflect.Interface && t.NumMethod() == 0 {
+			t = t.Elem()
+		}
 		f := reflect.StructField{
 			Name:      dc.Name,
-			Type:      dc.DotProvider.Type(),
+			Type:      t,
 			Anonymous: false, // alas
 		}
 		if f.Name == "" {
@@ -123,29 +137,41 @@ type cleanup struct {
 	CleanupDotProvider
 }
 
-func (d *dot) value(log *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (val *reflect.Value, err error) {
+func (d *dot) value(sctx context.Context, w http.ResponseWriter, r *http.Request) (val *reflect.Value, err error) {
 	val = d.pool.Get().(*reflect.Value)
 	val.SetZero()
 	for i, dc := range d.dcs {
-		var v reflect.Value
-		v, err = dc.Value(log, sctx, w, r)
+		var a any
+		a, err = dc.Value(Request{dc, sctx, w, r})
 		if err != nil {
 			err = fmt.Errorf("failed to construct dot value for %s (%v): %w", dc.Name, dc.DotProvider, err)
-			v.SetZero()
+			val.SetZero()
 			d.pool.Put(val)
 			val = nil
 			return
 		}
-		val.Field(i).Set(v)
+		val.Field(i).Set(reflect.ValueOf(a))
 	}
 	return
 }
 
 func (d *dot) cleanup(v *reflect.Value, err error) error {
 	for _, cleanup := range d.cleanups {
-		err = cleanup.Cleanup(v.Field(cleanup.idx), err)
+		err = cleanup.Cleanup(v.Field(cleanup.idx).Interface(), err)
 	}
 	v.SetZero()
 	d.pool.Put(v)
 	return err
 }
+
+type mockResponseWriter struct{}
+
+var _ http.ResponseWriter = mockResponseWriter{}
+
+func (mockResponseWriter) Header() http.Header { return http.Header{} }
+
+func (m mockResponseWriter) Write(b []byte) (int, error) {
+	return 0, fmt.Errorf("this is a mock http.ResponseWriter")
+}
+
+func (m mockResponseWriter) WriteHeader(statusCode int) {}

@@ -18,7 +18,7 @@ everything would just get out of the way of the fundamentals:
 🎇 **The idea of `xtemplate` is that *templates* can be the nexus of these
 fundamentals.**
 
-## 🚫 Anti-goals
+<details><summary>🚫 Anti-goals</summary>
 
 `xtemplate` needs to implement some of the things that are required to make a
 good web server in a way that avoids common issues with existing web server
@@ -44,6 +44,8 @@ designs, otherwise they'll be in the way of the fundamentals:
   negotiated content encoding. Most designs don't give templates access to the
   hash of asset files, depriving clients of enough information to optimize
   caching behavior and check resource integrity.
+
+</details>
 
 ## ✨ Features
 
@@ -411,7 +413,8 @@ configured multiple times with different configurations.
 
 #### ✏️ Custom dot fields
 
-You can create custom dot fields by
+You can create custom dot fields that expose arbitrary Go functionality to your
+templates. See [👩‍⚕️ Writing a custom `DotProvider`](#-writing-a-custom-dotprovider).
 
 ### 📐 Functions
 
@@ -420,123 +423,21 @@ depend on request context or mutate state. There are three sets by default:
 functions that come by default in the go template library, functions from the
 sprig library, and custom functions added by xtemplate.
 
-You can custom FuncMaps by setting `config.FuncMaps = myFuncMap` or calling
-`xtemplate.Main(xtemplate.WithFuncMaps(myFuncMap))`.
+You can custom FuncMaps by configuring the `Config.FuncMaps` field.
 
-<details><summary><strong>xtemplate functions</strong></summary>
+* 📏 `xtemplate` includes funcs to render markdown, sanitize html, convert
+  values to human-readable forms, and to try to call a function to handle an
+  error within the template. See the free functions named `FuncXYZ(...)` in
+  xtemplate's Go docs for details.
+* 📏 Sprig publishes a library of useful template funcs that enable templates to
+  manipulate strings, integers, floating point numbers, and dates, as well as
+  perform encoding tasks, manipulate lists and dicts, converting types,
+  and manipulate file paths See [Sprig Function Documentation](sprig).
+* 📏 Go's built in functions add logic and basic printing functionality.
+  See: [text/template#Functions](gofuncs).
 
-See [funcs.go](/funcs.go) for details.
-
-- `markdown` Renders the given Markdown text as HTML and returns it. This uses the [Goldmark](https://github.com/yuin/goldmark) library, which is CommonMark compliant. It also has these extensions enabled: Github Flavored Markdown, Footnote, and syntax highlighting provided by [Chroma](https://github.com/alecthomas/chroma).
-- `splitFrontMatter` Splits front matter out from the body. Front matter is metadata that appears at the very beginning of a file or string. Front matter can be in YAML, TOML, or JSON formats.
-  - `.Meta` to access the metadata fields, for example: `{{$parsed.Meta.title}}`
-  - `.Body` to access the body after the front matter, for example: `{{markdown $parsed.Body}}`
-- `sanitizeHtml` Uses [bluemonday](https://github.com/microcosm-cc/bluemonday/) to sanitize strings with html content. `{{sanitizeHtml "strict" "Shows <b>only</b> text content"}}`
-  - First parameter is the name of the chosen sanitization policy. `"strict"` = [`StrictPolicy()`](https://github.com/microcosm-cc/bluemonday/blob/main/policies.go#L38C6-L38C20), `"ugc"` = [`UGCPolicy()`](https://github.com/microcosm-cc/bluemonday/blob/main/policies.go#L54C6-L54C17) for 'user generated content', `"externalugc"` = `UGCPolicy()` + disallow relative urls + add target=_blank to urls.
-  - Second parameter is the content to sanitize.
-  - Returns the string as a `template.HTML` type which can be output directly into the document without `trustHtml`.
-- `humanize` Transforms size and time inputs to a human readable format using the [go-humanize](https://github.com/dustin/go-humanize) library. Call with two parameters, the format type and the value to format. Format types are:
-  - **size** which turns an integer amount of bytes into a string like `2.3 MB`, for example: `{{humanize "size" "2048000"}}`
-  - **time** which turns a time string into a relative time string like `2 weeks ago`, for example: `{{humanize "time" "Fri, 05 May 2022 15:04:05 +0200"}}`
-- `ksuid` returns a 'K-Sortable Globally Unique ID' using [segmentio/ksuid](https://github.com/segmentio/ksuid)
-- `idx` gets an item from a list, similar to the built-in `index`, but with reversed args: index first, then array. This is useful to use index in a pipeline, for example: `{{generate-list | idx 5}}`
-- `try` takes a function that returns an error in the first argument and calls it with the values from the remaining arguments, and returns the result including any error as struct fields. This enables template authors to handle funcs that return errors within the template definition. Example: `{{ $result := try .QueryVal "SELECT 'oops' WHERE 1=0" }}{{if $result.OK}}{{$result.Value}}{{else}}QueryVal requires exactly one row. Error: {{$result.Error}}{{end}}`
-
-</details>
-
-<details><summary><strong>Go stdlib template functions</strong></summary>
-
-
-See [text/template#Functions](https://pkg.go.dev/text/template#hdr-Functions).
-
-- `and`
-  Returns the boolean AND of its arguments by returning the
-  first empty argument or the last argument. That is,
-  "and x y" behaves as "if x then y else x."
-  Evaluation proceeds through the arguments left to right
-  and returns when the result is determined.
-- `call`
-  Returns the result of calling the first argument, which
-  must be a function, with the remaining arguments as parameters.
-  Thus "call .X.Y 1 2" is, in Go notation, dot.X.Y(1, 2) where
-  Y is a func-valued field, map entry, or the like.
-  The first argument must be the result of an evaluation
-  that yields a value of function type (as distinct from
-  a predefined function such as print). The function must
-  return either one or two result values, the second of which
-  is of type error. If the arguments don't match the function
-  or the returned error value is non-nil, execution stops.
-- `html`
-  Returns the escaped HTML equivalent of the textual
-  representation of its arguments. This function is unavailable
-  in html/template, with a few exceptions.
-- `index`
-  Returns the result of indexing its first argument by the
-  following arguments. Thus "index x 1 2 3" is, in Go syntax,
-  x[1][2][3]. Each indexed item must be a map, slice, or array.
-- `slice`
-  slice returns the result of slicing its first argument by the
-  remaining arguments. Thus "slice x 1 2" is, in Go syntax, x[1:2],
-  while "slice x" is x[:], "slice x 1" is x[1:], and "slice x 1 2 3"
-  is x[1:2:3]. The first argument must be a string, slice, or array.
-- `js`
-  Returns the escaped JavaScript equivalent of the textual
-  representation of its arguments.
-- `len`
-  Returns the integer length of its argument.
-- `not`
-  Returns the boolean negation of its single argument.
-- `or`
-  Returns the boolean OR of its arguments by returning the
-  first non-empty argument or the last argument, that is,
-  "or x y" behaves as "if x then x else y".
-  Evaluation proceeds through the arguments left to right
-  and returns when the result is determined.
-- `print`
-  An alias for fmt.Sprint
-- `printf`
-  An alias for fmt.Sprintf
-- `println`
-  An alias for fmt.Sprintln
-- `urlquery`
-  Returns the escaped value of the textual representation of
-  its arguments in a form suitable for embedding in a URL query.
-  This function is unavailable in html/template, with a few
-  exceptions.
-
-</details>
-
-<details><summary><strong>Sprig library template functions</strong></summary>
-
-See the Sprig documentation for details: [Sprig Function Documentation](https://masterminds.github.io/sprig/).
-
-- [String Functions](https://masterminds.github.io/sprig/strings.html):
-  - `trim`, `trimAll`, `trimSuffix`, `trimPrefix`, `repeat`, `substr`, `replace`, `shuffle`, `nospace`, `trunc`, `abbrev`, `abbrevboth`, `wrap`, `wrapWith`, `quote`, `squote`, `cat`, `indent`, `nindent`
-  - `upper`, `lower`, `title`, `untitle`, `camelcase`, `kebabcase`, `swapcase`, `snakecase`, `initials`, `plural`
-  - `contains`, `hasPrefix`, `hasSuffix`
-  - `randAlphaNum`, `randAlpha`, `randNumeric`, `randAscii`
-  - `regexMatch`, `mustRegexMatch`, `regexFindAll`, `mustRegexFindAll`, `regexFind`, `mustRegexFind`, `regexReplaceAll`, `mustRegexReplaceAll`, `regexReplaceAllLiteral`, `mustRegexReplaceAllLiteral`, `regexSplit`, `mustRegexSplit`, `regexQuoteMeta`
-  * [String List Functions](https://masterminds.github.io/sprig/strings.html): `splitList`, `sortAlpha`, etc.
-- [Integer Math Functions](https://masterminds.github.io/sprig/math.html): `add`, `max`, `mul`, etc.
-  - [Integer Slice Functions](https://masterminds.github.io/sprig/integer_slice.html): `until`, `untilStep`
-- [Float Math Functions](https://masterminds.github.io/sprig/mathf.html): `addf`, `maxf`, `mulf`, etc.
-- [Date Functions](https://masterminds.github.io/sprig/date.html): `now`, `date`, etc.
-- [Defaults Functions](https://masterminds.github.io/sprig/defaults.html): `default`, `empty`, `coalesce`, `fromJson`, `toJson`, `toPrettyJson`, `toRawJson`, `ternary`
-- [Encoding Functions](https://masterminds.github.io/sprig/encoding.html): `b64enc`, `b64dec`, etc.
-- [Lists and List Functions](https://masterminds.github.io/sprig/lists.html): `list`, `first`, `uniq`, etc.
-- [Dictionaries and Dict Functions](https://masterminds.github.io/sprig/dicts.html): `get`, `set`, `dict`, `hasKey`, `pluck`, `dig`, `deepCopy`, etc.
-- [Type Conversion Functions](https://masterminds.github.io/sprig/conversion.html): `atoi`, `int64`, `toString`, etc.
-- [Path and Filepath Functions](https://masterminds.github.io/sprig/paths.html): `base`, `dir`, `ext`, `clean`, `isAbs`, `osBase`, `osDir`, `osExt`, `osClean`, `osIsAbs`
-- [Flow Control Functions](https://masterminds.github.io/sprig/flow_control.html): `fail`
-- Advanced Functions
-  - [UUID Functions](https://masterminds.github.io/sprig/uuid.html): `uuidv4`
-  - [OS Functions](https://masterminds.github.io/sprig/os.html): `env`, `expandenv`
-  - [Version Comparison Functions](https://masterminds.github.io/sprig/semver.html): `semver`, `semverCompare`
-  - [Reflection](https://masterminds.github.io/sprig/reflection.html): `typeOf`, `kindIs`, `typeIsLike`, etc.
-  - [Cryptographic and Security Functions](https://masterminds.github.io/sprig/crypto.html): `derivePassword`, `sha256sum`, `genPrivateKey`, etc.
-  - [Network](https://masterminds.github.io/sprig/network.html): `getHostByName`
-
-</details>
+[sprig]: https://masterminds.github.io/sprig/
+[gofuncs]: https://pkg.go.dev/text/template#hdr-Functions
 
 ## 🏆 Users
 

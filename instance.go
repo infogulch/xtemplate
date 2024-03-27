@@ -95,8 +95,13 @@ func (config Config) Instance() (*Instance, *InstanceStats, []InstanceRoute, err
 		build.m = m
 	}
 
-	inst.bufferDot = makeDot(slices.Concat([]DotConfig{{"X", dotXProvider{inst}}, {"Req", dotReqProvider{}}}, config.Dot, []DotConfig{{"Resp", dotRespProvider{}}}))
-	inst.flusherDot = makeDot(slices.Concat([]DotConfig{{"X", dotXProvider{inst}}, {"Req", dotReqProvider{}}}, config.Dot, []DotConfig{{"Flush", dotFlushProvider{}}}))
+	dcInstance := DotConfig{"X", "instance", dotXProvider{inst}}
+	dcReq := DotConfig{"Req", "req", dotReqProvider{}}
+	dcResp := DotConfig{"Resp", "resp", dotRespProvider{}}
+	dcFlush := DotConfig{"Flush", "flush", dotFlushProvider{}}
+
+	inst.bufferDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, config.Dot, []DotConfig{dcResp}))
+	inst.flusherDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, config.Dot, []DotConfig{dcFlush}))
 
 	if err := fs.WalkDir(inst.config.TemplatesFS, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -112,12 +117,11 @@ func (config Config) Instance() (*Instance, *InstanceStats, []InstanceRoute, err
 		return nil, nil, nil, fmt.Errorf("error scanning files: %w", err)
 	}
 
-	initDot := makeDot(append([]DotConfig{{"X", dotXProvider{inst}}}, config.Dot...))
-
 	// Invoke all initilization templates, aka any template whose name starts with "INIT ".
+	initDot := makeDot(append([]DotConfig{dcInstance}, config.Dot...))
 	for _, tmpl := range inst.templates.Templates() {
 		if strings.HasPrefix(tmpl.Name(), "INIT ") {
-			val, err := initDot.value(inst.config.Logger, config.Ctx, nil, nil)
+			val, err := initDot.value(config.Ctx, nil, nil)
 			if err != nil {
 				return nil, nil, nil, fmt.Errorf("failed to get init dot value: %w", err)
 			}
@@ -183,7 +187,7 @@ func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		slog.String("handlerPattern", handlerPattern),
 	)
 
-	r = r.WithContext(context.WithValue(r.Context(), loggerKey, log))
+	r = r.WithContext(context.WithValue(r.Context(), LoggerKey, log))
 	metrics := httpsnoop.CaptureMetrics(handler, w, r)
 
 	log.LogAttrs(r.Context(), levelDebug2, "request served",
@@ -207,12 +211,12 @@ func getRequestId(ctx context.Context) string {
 	return ksuid.New().String()
 }
 
-// loggerKey is the context value key used to smuggle the current logger through
+// LoggerKey is the context value key used to smuggle the current logger through
 // the http.Handler interface.
-var loggerKey = reflect.TypeOf((*slog.Logger)(nil))
+var LoggerKey = reflect.TypeOf((*slog.Logger)(nil))
 
-func getCtxLogger(r *http.Request) *slog.Logger {
-	log, ok := r.Context().Value(loggerKey).(*slog.Logger)
+func GetCtxLogger(r *http.Request) *slog.Logger {
+	log, ok := r.Context().Value(LoggerKey).(*slog.Logger)
 	if !ok {
 		return slog.Default()
 	}

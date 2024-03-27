@@ -2,8 +2,10 @@
 
 - [ ] Dot Provider system
     - [ ] Add config flag to load config from JSON file
-    - [ ] Accept configuration from JSON. Parse flags -> config file flag ->
-      parse json -> parse flags again.
+        - [ ] Parse flags -> config file flag -> parse json -> parse flags again
+    - [ ] Accept configuration from JSON.
+        - [ ] Figure out how to parse json dynamically dispatching to the  unmarshaller
+        - [ ] Try
     - [ ] Update `xtemplate-caddy`. Note only caddy 2.8.0 uses Go 1.22
         - [ ] Accept dot provider configuration from Caddyfile
 - [ ] Add/update documentation

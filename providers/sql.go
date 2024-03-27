@@ -7,8 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
-	"reflect"
 	"strings"
 	"time"
 
@@ -34,7 +32,6 @@ type DotDBProvider struct {
 
 func (DotDBProvider) New() xtemplate.DotProvider { return &DotDBProvider{} }
 func (DotDBProvider) Name() string               { return "sql" }
-func (DotDBProvider) Type() reflect.Type         { return reflect.TypeOf(&DotDB{}) }
 
 func (d *DotDBProvider) UnmarshalText(b []byte) error {
 	parts := strings.SplitN(string(b), ":", 2)
@@ -66,12 +63,12 @@ var _ xtemplate.CleanupDotProvider = &DotDBProvider{}
 var _ encoding.TextUnmarshaler = &DotDBProvider{}
 var _ encoding.TextMarshaler = &DotDBProvider{}
 
-func (d *DotDBProvider) Value(log *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
-	return reflect.ValueOf(&DotDB{d.DB, log, r.Context(), d.TxOptions, nil}), nil
+func (d *DotDBProvider) Value(r xtemplate.Request) (any, error) {
+	return &DotDB{d.DB, xtemplate.GetCtxLogger(r.R), r.R.Context(), d.TxOptions, nil}, nil
 }
 
-func (dp *DotDBProvider) Cleanup(v reflect.Value, err error) error {
-	d := v.Interface().(*DotDB)
+func (dp *DotDBProvider) Cleanup(v any, err error) error {
+	d := v.(*DotDB)
 	if err != nil {
 		return errors.Join(err, d.rollback())
 	} else {

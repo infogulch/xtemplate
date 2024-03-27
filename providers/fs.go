@@ -2,7 +2,6 @@ package providers
 
 import (
 	"bytes"
-	"context"
 	"encoding"
 	"fmt"
 	"io"
@@ -11,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"reflect"
 	"sync"
 
 	"github.com/infogulch/xtemplate"
@@ -35,7 +33,6 @@ type DotFSProvider struct {
 
 func (DotFSProvider) New() xtemplate.DotProvider { return &DotFSProvider{} }
 func (DotFSProvider) Name() string               { return "fs" }
-func (DotFSProvider) Type() reflect.Type         { return reflect.TypeOf(DotFS{}) }
 
 func (fs *DotFSProvider) UnmarshalText(b []byte) error {
 	dir := string(b)
@@ -56,8 +53,8 @@ func (fs *DotFSProvider) MarshalText() ([]byte, error) {
 var _ encoding.TextUnmarshaler = &DotFSProvider{}
 var _ encoding.TextMarshaler = &DotFSProvider{}
 
-func (fs DotFSProvider) Value(log *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
-	return reflect.ValueOf(DotFS{fs, log, w, r}), nil
+func (fs DotFSProvider) Value(r xtemplate.Request) (any, error) {
+	return &DotFS{fs, xtemplate.GetCtxLogger(r.R), r.W, r.R}, nil
 }
 
 // DotFS is used to create a dot field value that can access files in a local

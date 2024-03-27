@@ -1,11 +1,7 @@
 package providers
 
 import (
-	"context"
 	"fmt"
-	"log/slog"
-	"net/http"
-	"reflect"
 
 	"github.com/infogulch/xtemplate"
 )
@@ -27,10 +23,9 @@ type DotKVProvider struct {
 
 func (DotKVProvider) New() xtemplate.DotProvider { return &DotKVProvider{} }
 func (DotKVProvider) Name() string               { return "kv" }
-func (DotKVProvider) Type() reflect.Type         { return reflect.TypeOf(DotKV{}) }
 
-func (c DotKVProvider) Value(log *slog.Logger, sctx context.Context, w http.ResponseWriter, r *http.Request) (reflect.Value, error) {
-	return reflect.ValueOf(DotKV{c.Map}), nil
+func (c DotKVProvider) Value(xtemplate.Request) (any, error) {
+	return DotKV{c.Map}, nil
 }
 
 type DotKV struct {

@@ -25,9 +25,9 @@ var bufPool = sync.Pool{
 
 func bufferingTemplateHandler(server *Instance, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log := getCtxLogger(r)
+		log := GetCtxLogger(r)
 
-		dot, err := server.bufferDot.value(log, server.config.Ctx, w, r)
+		dot, err := server.bufferDot.value(server.config.Ctx, w, r)
 		if err != nil {
 			log.Error("failed to initialize dot value: %w", err)
 			http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -52,7 +52,7 @@ func bufferingTemplateHandler(server *Instance, tmpl *template.Template) http.Ha
 
 func flushingTemplateHandler(server *Instance, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log := getCtxLogger(r)
+		log := GetCtxLogger(r)
 
 		if r.Header.Get("Accept") != "text/event-stream" {
 			http.Error(w, "SSE endpoint", http.StatusNotAcceptable)
@@ -63,7 +63,7 @@ func flushingTemplateHandler(server *Instance, tmpl *template.Template) http.Han
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
 
-		dot, err := server.flusherDot.value(log, server.config.Ctx, w, r)
+		dot, err := server.flusherDot.value(server.config.Ctx, w, r)
 		if err != nil {
 			log.Error("failed to initialize dot value: %w", err)
 			http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -82,7 +82,7 @@ func flushingTemplateHandler(server *Instance, tmpl *template.Template) http.Han
 
 func staticFileHandler(fs fs.FS, fileinfo *fileInfo) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log := getCtxLogger(r)
+		log := GetCtxLogger(r)
 
 		urlpath := path.Clean(r.URL.Path)
 		if urlpath != fileinfo.identityPath {
