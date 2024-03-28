@@ -9,10 +9,15 @@ GOOS=linux   GOARCH=amd64 go build -buildmode exe -o ./dist/xtemplate-amd64-linu
 GOOS=darwin  GOARCH=amd64 go build -buildmode exe -o ./dist/xtemplate-amd64-darwin/xtemplate      ./cmd
 GOOS=windows GOARCH=amd64 go build -buildmode exe -o ./dist/xtemplate-amd64-windows/xtemplate.exe ./cmd
 
-printf '%s\n' dist/* | while read D; do
-    cp README.md LICENSE "$D"
+cd dist
+
+printf '%s\n' * | while read D; do
+    cp ../README.md ../LICENSE "$D"
     tar czvf "$D.tar.gz" "$D/"
+    zip -r0 "$D.zip" "$D/"
     rm -r "$D"
 done
+
+cd -
 
 ls -lh dist/*
