@@ -1,22 +1,12 @@
 # TODO
 
-- [ ] Accept JSON
-    - [x] Add config flag to load config from JSON file
-    - [x] Allow raw config with --config and config file with --config-file
-    - [x] Parse args -> decode config files in args to args -> decode config
-      values in args to args -> parse args again
-    - [ ] Test that everything can be configured, load config -> dump back
-    - [ ] Validate that your type is correct on call to Value
 - [ ] Dot Provider system
-    - [ ] Accept configuration from JSON
     - [ ] Update `xtemplate-caddy`. Note only caddy 2.8.0 uses Go 1.22
         - [ ] Must test on caddy head?
         - [ ] Accept dot provider configuration from Caddyfile
-    - [ ]
 - [ ] Add/update documentation
     - [ ] Creating a provider
     - [ ] Using the new go-arg cli flags
-- [ ] Expose all funcmap funcs so godoc can be the primary documentation.
 - [ ] Add ServeTemplate that delays template rendering until requested by
   http.ServeContent to optimize cache behavior. Something like
   https://github.com/spatialcurrent/go-lazy ?
@@ -73,12 +63,20 @@
 
 ## Next
 
-- Accept JSON configuration
-    - [x] Implement Json Unmarshaller https://pkg.go.dev/encoding/json
+- Tests
+  - [x] Reorganize tests so hurl files correspond with directories in templates
+- [x] Accept JSON configuration
+  - [x] Implement Json Unmarshaller https://pkg.go.dev/encoding/json
+  - [x] Add config flag to load config from JSON file
+  - [x] Allow raw config with --config and config file with --config-file
+  - [x] Parse args -> decode config files in args to args -> decode config
+    values in args to args -> parse args again
+  - [x] Test that everything can be configured, load config -> dump back
 - [-] Downgrade to go 1.21 - Cannot due to using 1.22 ServeMux
-- Add/update documentation
-    - [x] Readme
-    - [x] Provider Go API docs
+- Documentation
+  - [x] Streamline readme
+  - [x] Provider Go API docs
+  - [x] Expose all funcmap funcs so godoc can be the primary documentation.
 - Dot Provider system
     - [x] Create system for customizing template dot value
     - [x] Convert existing modules

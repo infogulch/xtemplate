@@ -21,9 +21,10 @@ type DotKVProvider struct {
 	Values map[string]string `json:"values"`
 }
 
+var _ xtemplate.DotProvider = &DotKVProvider{}
+
 func (DotKVProvider) New() xtemplate.DotProvider { return &DotKVProvider{} }
 func (DotKVProvider) Type() string               { return "kv" }
-
 func (c *DotKVProvider) Value(xtemplate.Request) (any, error) {
 	if c.Values == nil {
 		c.Values = make(map[string]string)

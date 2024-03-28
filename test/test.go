@@ -22,8 +22,7 @@ func main() {
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Printf("exiting because: %v\n", err)
-			fmt.Printf("Log file %s:\n", logpath)
-			fmt.Println(string(try(os.ReadFile(logpath))("read log file")))
+			fmt.Printf("server logs: %s\n", logpath)
 		}
 	}()
 
@@ -47,7 +46,7 @@ func main() {
 
 	// Run xtemplate, wait until its ready, exit test if it fails early
 	{
-		args := split(`./xtemplate --loglevel -4 -d DB:sql:sqlite:file:test.sqlite -d FS:fs:./context`)
+		args := split(`./xtemplate --loglevel -4 -d DB:sql:sqlite:file:test.sqlite -d FS:fs:./data --config-file config.json`)
 		cmd := exec.Command(args[0], args[1:]...)
 		cmd.Dir = testdir
 
@@ -73,12 +72,13 @@ func main() {
 
 hurl:
 	{
-		files := try(fs.Glob(os.DirFS(testdir), "tests/*.hurl"))("glob files")
-		args := split("hurl --continue-on-error --test --report-html report")
-		cmd := exec.Command(args[0], append(args[1:], files...)...)
+		dir := filepath.Join(testdir, "tests")
+		files := try(fs.Glob(os.DirFS(dir), "*.hurl"))("glob files")
+		args := append(split("hurl --continue-on-error --test --report-html report"), files...)
+		cmd := exec.Command(args[0], args[1:]...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		cmd.Dir = testdir
+		cmd.Dir = dir
 		defer kill(cmd)
 		try0(cmd.Run(), "run hurl")
 		fmt.Println("~ Run hurl ~")

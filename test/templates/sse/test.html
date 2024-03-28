@@ -7,7 +7,7 @@
 	with every SSE message received from the event stream
 </div>
 
-{{- define "SSE /events"}}
+{{- define "SSE /sse/events"}}
 {{- $count := .Req.URL.Query.Get `count` | default `100` | atoi}}
 {{- $delay := .Req.URL.Query.Get `delay` | default `100` | atoi}}
 {{- range .Flush.Repeat $count }}

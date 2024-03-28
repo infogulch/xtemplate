@@ -2,8 +2,17 @@
     "dot": [
         {
             "type": "fs",
-            "name": "FSTemplates",
-            "path": "./templates"
+            "name": "FS2",
+            "path": "./data"
+        },
+        {
+            "type": "kv",
+            "name": "KV",
+            "values": {
+                "a": "1",
+                "b": "2",
+                "hello": "world"
+            }
         }
     ]
 }
