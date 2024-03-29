@@ -2,8 +2,8 @@
     "dot": [
         {
             "type": "fs",
-            "name": "FS2",
-            "path": "./data"
+            "name": "FSW",
+            "path": "./dataw"
         },
         {
             "type": "kv",

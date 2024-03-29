@@ -1,0 +1,12 @@
+<!DOCTYPE html> <!-- servecontent ignores previously rendered content -->
+
+You can serve a file by opening it and using .Resp.ServeContent.
+
+You can still set headers that are added to the response.
+{{.Resp.AddHeader "Content-Type" "text/customcontenttype; charset=utf-8"}}
+
+{{$file := .FS.Open "foo.txt"}}
+{{$stat := $file.Stat}}
+{{.Resp.ServeContent $stat.Name $stat.ModTime $file}}
+
+Opened files are automatically closed when the request completes.

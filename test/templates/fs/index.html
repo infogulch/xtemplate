@@ -1,8 +1,11 @@
 <!DOCTYPE html>
-{{.FS.ReadFile "foo.txt"}}
 
-{{.FS2.ReadFile "foo.txt"}}
+You can read files:
 
-{{define "GET /hello"}}
-{{.FS.ServeFile "hello.txt"}}
-{{end}}
+{{.FS.Read "foo.txt"}}
+
+You can use the 'fs' provider multiple times to read from different directories
+at the same time. (Though in this case it's the same dir twice, which is
+admittedly not as useful.)
+
+{{.FSW.List "."}}

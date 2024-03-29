@@ -1,18 +1,24 @@
 # TODO
 
+- [ ] Add fs methods to write files, save file upload
+  - https://github.com/golang/go/issues/45757#issuecomment-1675157698
+  - https://github.com/hack-pad/hackpadfs
+  - https://github.com/jarxorg/wfs
+  - Add separate "wfs" for writable fs?
 - [ ] Update `xtemplate-caddy`. Note only caddy 2.8.0 uses Go 1.22
-  - [ ] Figure out how to run caddy
+  - [ ] Figure out how to run caddy with xtemplate
   - [ ] Must test on caddy head?
   - [ ] Accept dot provider configuration from Caddyfile
-- [ ] Add ServeTemplate that delays template rendering until requested by
-  http.ServeContent to optimize cache behavior. Something like
-  https://github.com/spatialcurrent/go-lazy ?
+- [ ] Add .TemplateLazy that renders a template to a io.ReadSeeker after the
+  first call to a method. Can be used for mail, servecontent, etc
+  - https://github.com/spatialcurrent/go-lazy ?
 - [ ] Add NATS module:
   - [ ] Subscribe to subject, loop on receive to send via open SSE connection
   - [ ] Publish message to subject
   - [ ] Request-Reply
 - [ ] Add mail module:
   - [ ] Send mail, send mail by rendering template
+  - https://github.com/Shopify/gomail
 - [ ] Use https://github.com/abhinav/goldmark-frontmatter
 - [ ] Publish docker image, document docker usage
 - [ ] Pass Config.Ctx down to http.Server/net.Listener to allow caller to cancel
@@ -30,6 +36,9 @@
 ### Documentation
 
 - [ ] Documentation
+  - [x] Fix readme to include links to the godoc page
+  - [ ] Remove markdown `code` sections from godoc comments since they are not supported
+  - [ ] Fix godoc formatting in general: https://pkg.go.dev/github.com/fluhus/godoc-tricks
   - [ ] Using different databases
     - Should be documented with DotDBProvider go docs (?)
   - [ ] Using the new go-arg cli flags
@@ -48,6 +57,8 @@
 
 # BACKLOG
 
+- [ ] Review https://github.com/hairyhenderson/gomplate for data source ideas
+- [ ] Fix `superfluous response.WriteHeader call from github.com/felixge/httpsnoop.(*Metrics).CaptureMetrics` https://go.dev/play/p/spBB4w7nBCZ
 - [ ] Accept Env configuration
 - [ ] Built-in CSRF handling?
 - [ ] Fine tune timeouts? https://ieftimov.com/posts/make-resilient-golang-net-http-servers-using-timeouts-deadlines-context-cancellation/
@@ -66,6 +77,12 @@
 - [ ] Organize docs according to https://diataxis.fr/
 
 # DONE
+
+## next
+
+- Documentation
+  - [x] Fix formatting; see https://pkg.go.dev/github.com/fluhus/godoc-tricks
+- [x] Have .Resp handle response serving for fs files.
 
 ## v0.5 - Mar 2024
 

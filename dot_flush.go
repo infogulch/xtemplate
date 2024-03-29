@@ -27,7 +27,7 @@ func (dotFlushProvider) Cleanup(v any, err error) error {
 
 var _ CleanupDotProvider = dotFlushProvider{}
 
-// DotFlush is used as the `.Flush` field for flushing template handlers (SSE).
+// DotFlush is used as the .Flush field for flushing template handlers (SSE).
 type DotFlush struct {
 	flusher               http.Flusher
 	serverCtx, requestCtx context.Context
@@ -79,8 +79,8 @@ func (f *DotFlush) Sleep(ms int) (string, error) {
 	return "", nil
 }
 
-// Block blocks execution until the request is canceled by the client or until
-// the server closes.
+// WaitForServerStop blocks execution until the request is canceled by the
+// client or until the server closes.
 func (f *DotFlush) WaitForServerStop() (string, error) {
 	select {
 	case <-f.requestCtx.Done():

@@ -329,6 +329,8 @@ Examples:
 
 ### 3. 📦 As a Go library
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/infogulch/xtemplate.svg)](https://pkg.go.dev/github.com/infogulch/xtemplate)
+
 xtemplate's public Go API starts with a [`xtemplate.Config`](./config.go),
 from which you can get either an [`xtemplate.Instance`](./instance.go) interface
 or a [`xtemplate.Server`](./server.go) interface, with the methods
@@ -402,14 +404,23 @@ These fields are always present in relevant template invocations:
 * Control flushing behavior for flushing template handlers (i.e. SSE) with the
   `.Flush` field. See [DotFlush]
 
+[DotX]: https://pkg.go.dev/github.com/infogulch/xtemplate#DotX
+[DotReq]: https://pkg.go.dev/github.com/infogulch/xtemplate#DotReq
+[DotResp]: https://pkg.go.dev/github.com/infogulch/xtemplate#DotResp
+[DotFlush]: https://pkg.go.dev/github.com/infogulch/xtemplate#DotFlush
+
 #### ✏️ Optional dot fields
 
 These optional value providers can be configured with any field name, and can be
 configured multiple times with different configurations.
 
-* Read and list files. See [providers.DotFS]
-* Query and execute SQL statements. See [providers.DotDB]
-* Read template-level key-value map. See [providers.DotKV]
+* Read and list files. See [DotFS]
+* Query and execute SQL statements. See [DotDB]
+* Read template-level key-value map. See [DotKV]
+
+[DotFS]: https://pkg.go.dev/github.com/infogulch/xtemplate/providers#DotFS
+[DotDB]: https://pkg.go.dev/github.com/infogulch/xtemplate/providers#DotDB
+[DotKV]: https://pkg.go.dev/github.com/infogulch/xtemplate/providers#DotKV
 
 #### ✏️ Custom dot fields
 
@@ -427,8 +438,8 @@ You can custom FuncMaps by configuring the `Config.FuncMaps` field.
 
 * 📏 `xtemplate` includes funcs to render markdown, sanitize html, convert
   values to human-readable forms, and to try to call a function to handle an
-  error within the template. See the free functions named `FuncXYZ(...)` in
-  xtemplate's Go docs for details.
+  error within the template. See the free functions named [`FuncXYZ(...)` in
+  xtemplate's Go docs](funcgodoc) for details.
 * 📏 Sprig publishes a library of useful template funcs that enable templates to
   manipulate strings, integers, floating point numbers, and dates, as well as
   perform encoding tasks, manipulate lists and dicts, converting types,
@@ -438,6 +449,7 @@ You can custom FuncMaps by configuring the `Config.FuncMaps` field.
 
 [sprig]: https://masterminds.github.io/sprig/
 [gofuncs]: https://pkg.go.dev/text/template#hdr-Functions
+[funcgodoc]: https://pkg.go.dev/github.com/infogulch/xtemplate#FuncHumanize
 
 ## 🏆 Users
 

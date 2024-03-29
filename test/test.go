@@ -18,6 +18,16 @@ func main() {
 	_, file, _, _ := runtime.Caller(0)
 	testdir := filepath.Dir(file)
 	logpath := filepath.Join(testdir, "xtemplate.log")
+	log := try(os.Create(logpath))("open log file")
+	try(log.Seek(0, 0))("seek to beginning")
+	defer log.Close()
+
+	// recreate the rw directory
+	{
+		path := filepath.Join(testdir, "dataw")
+		try0(os.RemoveAll(path), "delete dataw dir")
+		try0(os.Mkdir(path, os.ModeDir|os.ModePerm), "create dataw dir")
+	}
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -50,9 +60,6 @@ func main() {
 		cmd := exec.Command(args[0], args[1:]...)
 		cmd.Dir = testdir
 
-		log := try(os.Create(logpath))("open log file")
-		try(log.Seek(0, 0))("seek to beginning")
-		defer log.Close()
 		cmd.Stdout = log
 		cmd.Stderr = log
 
@@ -96,9 +103,7 @@ func kill(c *exec.Cmd) {
 
 func try[T any](t T, err error) func(string) T {
 	return func(desc string) T {
-		if err != nil {
-			panic(fmt.Sprintf("failed to %s: %v", desc, err))
-		}
+		try0(err, desc)
 		return t
 	}
 }

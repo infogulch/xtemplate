@@ -55,7 +55,7 @@ func AddBlueMondayPolicy(name string, policy *bluemonday.Policy) {
 	blueMondayPolicies[name] = policy
 }
 
-// `sanitizeHtml` Uses the BlueMonday library to sanitize strings with html content.
+// sanitizeHtml Uses the BlueMonday library to sanitize strings with html content.
 // First parameter is the name of the chosen sanitization policy.
 func FuncSanitizeHtml(policyName string, html string) (template.HTML, error) {
 	policy, ok := blueMondayPolicies[policyName]
@@ -96,7 +96,7 @@ func AddMarkdownConifg(name string, md goldmark.Markdown) {
 	markdownConfigs[name] = md
 }
 
-// `markdown` renders the given Markdown text as HTML and returns it. This uses
+// markdown renders the given Markdown text as HTML and returns it. This uses
 // the Goldmark library, which is CommonMark compliant. If an alternative
 // markdown policy is not named, it uses the default policy which has these
 // extensions enabled: Github Flavored Markdown, Footnote, and syntax
@@ -127,7 +127,7 @@ func FuncMarkdown(input string, configName ...string) (template.HTML, error) {
 	return template.HTML(buf.String()), nil
 }
 
-// `splitFrontMatter` parses front matter out from the beginning of input,
+// splitFrontMatter parses front matter out from the beginning of input,
 // and returns the separated key-value pairs and the body/content. input
 // must be a "stringy" value.
 func FuncSplitFrontMatter(input string) (parsedMarkdownDoc, error) {
@@ -138,64 +138,70 @@ func FuncSplitFrontMatter(input string) (parsedMarkdownDoc, error) {
 	return parsedMarkdownDoc{Meta: meta, Body: body}, nil
 }
 
-// `return` causes the template to exit early with a success status.
+// return causes the template to exit early with a success status.
 func FuncReturn() (string, error) {
 	return "", ReturnError{}
 }
 
-// `trustHtml` marks the string s as safe and does not escape its contents in
+// trustHtml marks the string s as safe and does not escape its contents in
 // html node context.
 func FuncTrustHtml(s string) template.HTML {
 	return template.HTML(s)
 }
 
-// `trustAttr` marks the string s as safe and does not escape its contents in
-// html attribute context. For example, `dir="ltr"`.
+// trustAttr marks the string s as safe and does not escape its contents in
+// html attribute context.
 func FuncTrustAttr(s string) template.HTMLAttr {
 	return template.HTMLAttr(s)
 }
 
-// `trustJS` marks the string s as safe and does not escape its contents in
+// trustJS marks the string s as safe and does not escape its contents in
 // script tag context.
 func FuncTrustJS(s string) template.JS {
 	return template.JS(s)
 }
 
-// `trustJSStr` marks the string s as safe and does not escape its contents in
+// trustJSStr marks the string s as safe and does not escape its contents in
 // script expression context.
 func FuncTrustJSStr(s string) template.JSStr {
 	return template.JSStr(s)
 }
 
-// `trustSrcSet` marks the string s as safe and does not escape its contents in
+// trustSrcSet marks the string s as safe and does not escape its contents in
 // script tag context.
 func FuncTrustSrcSet(s string) template.Srcset {
 	return template.Srcset(s)
 }
 
-// `idx` gets an item from a list, similar to the built-in `index`, but with
+// idx gets an item from a list, similar to the built-in index, but with
 // reversed args: index first, then array. This is useful to use index in a
-// pipeline, for example: `{{generate-list | idx 5}}`
+// pipeline, for example:
+//
+//	{{generate-list | idx 5}}
 func FuncIdx(idx int, arr any) any {
 	return reflect.ValueOf(arr).Index(idx).Interface()
 }
 
-// `kusid` returns a new ksuid value
+// kusid returns a new ksuid value
 func FuncKsuid() ksuid.KSUID {
 	return ksuid.New()
 }
 
-// `humanize` transforms size and time inputs to a human readable format using
+// humanize transforms size and time inputs to a human readable format using
 // the go-humanize library.
 //
 // Call with two parameters: format type and value to format. Supported format
 // types are:
 //
-// `"size"` which turns an integer amount of bytes into a string like `2.3 MB`,
-// for example: `{{humanize "size" "2048000"}}`
+// "size" which turns an integer amount of bytes into a string like "2.3 MB",
+// for example:
 //
-// `"time"` which turns a time string into a relative time string like `2 weeks
-// ago`, for example: `{{humanize "time" "Fri, 05 May 2022 15:04:05 +0200"}}`
+//	{{humanize "size" "2048000"}}
+//
+// "time" which turns a time string into a relative time string like "2 weeks
+// ago", for example:
+//
+//	{{humanize "time" "Fri, 05 May 2022 15:04:05 +0200"}}
 func FuncHumanize(formatType, data string) (string, error) {
 	// The format type can optionally be followed
 	// by a colon to provide arguments for the format
@@ -225,9 +231,9 @@ func FuncHumanize(formatType, data string) (string, error) {
 	return "", fmt.Errorf("no know function was given")
 }
 
-// The `try` template func accepts a fallible function object and calls it with
+// The try template func accepts a fallible function object and calls it with
 // the provided args. If the function and args are valid, try returns the result
-// wrapped in a `result` object that exposes the return value and error to
+// wrapped in a result object that exposes the return value and error to
 // templates. Useful if you want to call a function and handle its error in a
 // template. If the function value is invalid or the args cannot be used to call
 // it then try raises an error that stops template execution.

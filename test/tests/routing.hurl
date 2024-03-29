@@ -25,13 +25,6 @@ HTTP 200
 [Asserts]
 body contains "<p>You can't see me"
 
-# reading files from context, define a handler inline
-GET http://localhost:8080/hello
-
-HTTP 200
-[Asserts]
-body contains "world"
-
 # nonexistent file should not be routable
 GET http://localhost:8080/routing/_hidden.html
 

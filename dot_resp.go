@@ -1,6 +1,7 @@
 package xtemplate
 
 import (
+	"io"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -31,7 +32,7 @@ func (dotRespProvider) Cleanup(v any, err error) error {
 
 var _ CleanupDotProvider = dotRespProvider{}
 
-// DotResp is used as the `.Resp` field in buffered template invocations.
+// DotResp is used as the .Resp field in buffered template invocations.
 type DotResp struct {
 	http.Header
 	status int
@@ -43,11 +44,18 @@ type DotResp struct {
 // ServeContent aborts execution of the template and instead responds to the
 // request with content with any headers set by AddHeader and SetHeader so far
 // but ignoring SetStatus.
-func (d *DotResp) ServeContent(path_ string, modtime time.Time, content string) (string, error) {
+func (d *DotResp) ServeContent(path_ string, modtime time.Time, content any) (string, error) {
+	var reader io.ReadSeeker
+	switch c := content.(type) {
+	case string:
+		reader = strings.NewReader(c)
+	case io.ReadSeeker:
+		reader = c
+	}
 	path_ = path.Clean(path_)
 	d.log.Debug("serving content response", slog.String("path", path_))
 	maps.Copy(d.w.Header(), d.Header)
-	http.ServeContent(d.w, d.r, path_, modtime, strings.NewReader(content))
+	http.ServeContent(d.w, d.r, path_, modtime, reader)
 	return "", ReturnError{}
 }
 

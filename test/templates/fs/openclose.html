@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+
+You can open a file and close it manually:
+
+{{$file := .FS.Open "foo.txt"}}
+{{$file.Close}}
+
+Any opened files are automatically closed at the end of the request, but if you
+open many files in the same request it may be necessary to close them manually
+to conserve resources.

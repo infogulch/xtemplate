@@ -130,7 +130,7 @@ func (c *DotDB) Exec(query string, params ...any) (result sql.Result, err error)
 	return c.tx.Exec(query, params...)
 }
 
-// QueryRows executes a query and returns all rows in a big `[]map[string]any`.
+// QueryRows executes a query and buffers all rows into a []map[string]any object.
 func (c *DotDB) QueryRows(query string, params ...any) (rows []map[string]any, err error) {
 	if err = c.makeTx(); err != nil {
 		return
@@ -174,7 +174,7 @@ func (c *DotDB) QueryRows(query string, params ...any) (rows []map[string]any, e
 }
 
 // QueryRow executes a query, which must return one row, and returns it as a
-// `map[string]any`.
+// map[string]any.
 func (c *DotDB) QueryRow(query string, params ...any) (map[string]any, error) {
 	rows, err := c.QueryRows(query, params...)
 	if err != nil {
