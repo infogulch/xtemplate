@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"maps"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -121,11 +122,13 @@ func (config Config) Instance(cfgs ...ConfigOverride) (*Instance, *InstanceStats
 		return nil, nil, nil, fmt.Errorf("error scanning files: %w", err)
 	}
 
-	// Invoke all initilization templates, aka any template whose name starts with "INIT ".
+	// Invoke all initilization templates, aka any template whose name starts
+	// with "INIT ".
 	initDot := makeDot(append([]DotConfig{dcInstance}, config.Dot...))
 	for _, tmpl := range inst.templates.Templates() {
 		if strings.HasPrefix(tmpl.Name(), "INIT ") {
-			val, err := initDot.value(config.Ctx, nil, nil)
+			w, r := httptest.NewRecorder(), httptest.NewRequest("", "/", nil)
+			val, err := initDot.value(config.Ctx, w, r)
 			if err != nil {
 				return nil, nil, nil, fmt.Errorf("failed to get init dot value: %w", err)
 			}
