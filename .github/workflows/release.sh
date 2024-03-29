@@ -14,7 +14,7 @@ cd dist
 printf '%s\n' * | while read D; do
     cp ../README.md ../LICENSE "$D"
     tar czvf "$D.tar.gz" "$D/"
-    zip -r0 "$D.zip" "$D/"
+    zip -r9 "$D.zip" "$D/"
     rm -r "$D"
 done
 
