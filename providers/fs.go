@@ -31,7 +31,6 @@ type DotFSProvider struct {
 	fs.FS `json:"-"`
 	Path  string `json:"path"`
 }
-type emptyDotFSProvider DotFSProvider
 
 var _ encoding.TextMarshaler = &DotFSProvider{}
 
@@ -56,13 +55,15 @@ func (fs *DotFSProvider) UnmarshalText(b []byte) error {
 var _ json.Marshaler = &DotFSProvider{}
 
 func (d *DotFSProvider) MarshalJSON() ([]byte, error) {
-	return json.Marshal((*emptyDotFSProvider)(d))
+	type T DotFSProvider
+	return json.Marshal((*T)(d))
 }
 
 var _ json.Unmarshaler = &DotFSProvider{}
 
 func (d *DotFSProvider) UnmarshalJSON(b []byte) error {
-	return json.Unmarshal(b, (*emptyDotFSProvider)(d))
+	type T DotFSProvider
+	return json.Unmarshal(b, (*T)(d))
 }
 
 var _ xtemplate.DotProvider = &DotFSProvider{}

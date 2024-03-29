@@ -31,7 +31,6 @@ type DotDBProvider struct {
 	Driver         string `json:"driver"`
 	Connstr        string `json:"connstr"`
 }
-type emptyDotDBProvider DotDBProvider
 
 var _ encoding.TextMarshaler = &DotDBProvider{}
 
@@ -57,13 +56,15 @@ func (d *DotDBProvider) UnmarshalText(b []byte) error {
 var _ json.Marshaler = &DotDBProvider{}
 
 func (d *DotDBProvider) MarshalJSON() ([]byte, error) {
-	return json.Marshal((*emptyDotDBProvider)(d))
+	type T DotDBProvider
+	return json.Marshal((*T)(d))
 }
 
 var _ json.Unmarshaler = &DotDBProvider{}
 
 func (d *DotDBProvider) UnmarshalJSON(b []byte) error {
-	return json.Unmarshal(b, (*emptyDotDBProvider)(d))
+	type T DotDBProvider
+	return json.Unmarshal(b, (*T)(d))
 }
 
 var _ xtemplate.CleanupDotProvider = &DotDBProvider{}
