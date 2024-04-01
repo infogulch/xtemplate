@@ -5,7 +5,8 @@ go tool dist list
 
 rm -rf dist
 
-VERSION="$(go list -f '{{.Version}}' -m github.com/infogulch/xtemplate@`git rev-parse HEAD`)"
+GITVER="$(git describe --exact-match --tags 2> /dev/null || git rev-parse --short HEAD)"
+VERSION="$(go list -f '{{.Version}}' -m github.com/infogulch/xtemplate@$GITVER)"
 LDFLAGS="-X 'github.com/infogulch/xtemplate/app.version=$VERSION'"
 
 GOOS=linux   GOARCH=amd64 go build -ldflags="$LDFLAGS" -buildmode exe -o ./dist/xtemplate-amd64-linux/xtemplate       ./app/cmd
