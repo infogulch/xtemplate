@@ -2,6 +2,8 @@ FROM golang:1-alpine AS builder
 
 RUN apk add --no-cache build-base
 
+ARG LDFLAGS
+
 ENV USER=appuser
 ENV UID=10001
 RUN adduser \
@@ -13,16 +15,17 @@ RUN adduser \
     --uid "${UID}" \
     "${USER}"
 
-WORKDIR /build
-COPY go.mod go.sum ./
+WORKDIR /build/app
+COPY app/go.mod app/go.sum /build/app/
+COPY go.mod go.sum /build/
 RUN go mod download
 
-COPY . .
+COPY . /build/
 RUN CGO_ENABLED=1 \
     GOFLAGS='-tags="sqlite_json"' \
     GOOS=linux \
     GOARCH=amd64 \
-    go build -ldflags="-w -s" -o /dist/xtemplate ./cmd
+    go build -ldflags="${LDFLAGS}" -o /dist/xtemplate ./cmd
 RUN ldd /dist/xtemplate | tr -s [:blank:] '\n' | grep ^/ | xargs -I % install -D % /dist/%
 RUN ln -s ld-musl-x86_64.so.1 /dist/lib/libc.musl-x86_64.so.1
 

@@ -1,6 +1,4 @@
-// Default CLI package. To customize, copy this file to a new unique package and
-// import dbs and provide config overrides.
-package main
+package app
 
 import (
 	"bytes"
@@ -15,14 +13,9 @@ import (
 	"github.com/infogulch/watch"
 
 	_ "github.com/infogulch/xtemplate/providers"
-	_ "modernc.org/sqlite"
 )
 
-func main() {
-	Main()
-}
-
-type configt struct {
+type Args struct {
 	xtemplate.Config
 	Watch          []string `json:"watch_dirs" arg:",separate"`
 	WatchTemplates bool     `json:"watch_templates" default:"true"`
@@ -32,11 +25,19 @@ type configt struct {
 	ConfigFiles    []string `json:"-" arg:"-f,--config-file,separate"`
 }
 
+var version = "development"
+
+func (Args) Version() string {
+	return version
+}
+
 // Main can be called from your func main() if you want your program to act like
 // the default xtemplate cli, or use it as a reference for making your own.
-// Provide configs to override the defaults like: `xtemplate.Main(xtemplate.WithFooConfig())`
+// Provide configs to override the defaults like:
+//
+//	app.Main(xtemplate.WithFooConfig())
 func Main(overrides ...xtemplate.ConfigOverride) {
-	var config configt
+	var config Args
 	var log *slog.Logger
 
 	{
@@ -46,7 +47,7 @@ func Main(overrides ...xtemplate.ConfigOverride) {
 		level := config.LogLevel
 		log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(level)}))
 
-		var jsonConfig configt
+		var jsonConfig Args
 		var decoded bool
 		for _, name := range config.ConfigFiles {
 			func() {
@@ -96,7 +97,7 @@ func Main(overrides ...xtemplate.ConfigOverride) {
 		os.Exit(2)
 	}
 
-	if config.WatchTemplates {
+	if config.WatchTemplates && config.TemplatesFS == nil {
 		config.Watch = append(config.Watch, config.TemplatesDir)
 	}
 	if len(config.Watch) != 0 {

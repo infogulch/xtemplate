@@ -80,6 +80,9 @@
 
 ## next
 
+- [x] Add version information to binaries
+- [x] Fix docker build, add to ci
+- [x] Expose Main() so Go lib users can use it, moving cmd to app/cmd
 - Documentation
   - [x] Fix formatting; see https://pkg.go.dev/github.com/fluhus/godoc-tricks
 - [x] Have .Resp handle response serving for fs files.

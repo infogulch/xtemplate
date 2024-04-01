@@ -26,7 +26,7 @@ import (
 
 type builder struct {
 	*Instance
-	InstanceStats
+	*InstanceStats
 	m      *minify.M
 	routes []InstanceRoute
 }

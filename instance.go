@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"slices"
@@ -60,59 +59,50 @@ func (config Config) Instance(cfgs ...ConfigOverride) (*Instance, *InstanceStats
 		c(&config)
 	}
 
-	inst := &Instance{
-		config: config,
-		id:     nextInstanceIdentity.Add(1),
-	}
-
 	build := &builder{
-		Instance: inst,
+		Instance: &Instance{
+			config: config,
+			id:     nextInstanceIdentity.Add(1),
+		},
+		InstanceStats: &InstanceStats{},
 	}
 
-	inst.config.Logger = inst.config.Logger.With(slog.Int64("instance", inst.id))
-	inst.config.Logger.Info("initializing")
+	build.config.Logger = build.config.Logger.With(slog.Int64("instance", build.id))
+	build.config.Logger.Info("initializing")
 
-	if inst.config.TemplatesFS == nil {
-		inst.config.TemplatesFS = os.DirFS(inst.config.TemplatesDir)
+	if build.config.TemplatesFS == nil {
+		build.config.TemplatesFS = os.DirFS(build.config.TemplatesDir)
 	}
 
 	{
-		inst.funcs = template.FuncMap{}
-		maps.Copy(inst.funcs, xtemplateFuncs)
-		maps.Copy(inst.funcs, sprig.HtmlFuncMap())
-		for _, extra := range inst.config.FuncMaps {
-			maps.Copy(inst.funcs, extra)
+		build.funcs = template.FuncMap{}
+		maps.Copy(build.funcs, xtemplateFuncs)
+		maps.Copy(build.funcs, sprig.HtmlFuncMap())
+		for _, extra := range build.config.FuncMaps {
+			maps.Copy(build.funcs, extra)
 		}
 	}
 
-	inst.files = make(map[string]*fileInfo)
-	inst.router = http.NewServeMux()
-	inst.templates = template.New(".").Delims(inst.config.LDelim, inst.config.RDelim).Funcs(inst.funcs)
+	build.files = make(map[string]*fileInfo)
+	build.router = http.NewServeMux()
+	build.templates = template.New(".").Delims(build.config.LDelim, build.config.RDelim).Funcs(build.funcs)
 
 	if config.Minify {
 		m := minify.New()
 		m.Add("text/css", &css.Minifier{})
 		m.Add("image/svg+xml", &svg.Minifier{})
 		m.Add("text/html", &html.Minifier{
-			TemplateDelims: [...]string{inst.config.LDelim, inst.config.RDelim},
+			TemplateDelims: [...]string{build.config.LDelim, build.config.RDelim},
 		})
 		m.AddRegexp(regexp.MustCompile("^(application|text)/(x-)?(java|ecma)script$"), &js.Minifier{})
 		build.m = m
 	}
 
-	dcInstance := DotConfig{"X", "instance", dotXProvider{inst}}
-	dcReq := DotConfig{"Req", "req", dotReqProvider{}}
-	dcResp := DotConfig{"Resp", "resp", dotRespProvider{}}
-	dcFlush := DotConfig{"Flush", "flush", dotFlushProvider{}}
-
-	inst.bufferDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, config.Dot, []DotConfig{dcResp}))
-	inst.flusherDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, config.Dot, []DotConfig{dcFlush}))
-
-	if err := fs.WalkDir(inst.config.TemplatesFS, ".", func(path string, d fs.DirEntry, err error) error {
+	if err := fs.WalkDir(build.config.TemplatesFS, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
-		if ext := filepath.Ext(path); ext == inst.config.TemplateExtension {
+		if strings.HasSuffix(path, build.config.TemplateExtension) {
 			err = build.addTemplateHandler(path)
 		} else {
 			err = build.addStaticFileHandler(path)
@@ -122,15 +112,29 @@ func (config Config) Instance(cfgs ...ConfigOverride) (*Instance, *InstanceStats
 		return nil, nil, nil, fmt.Errorf("error scanning files: %w", err)
 	}
 
+	dcInstance := DotConfig{"X", "instance", dotXProvider{build.Instance}}
+	dcReq := DotConfig{"Req", "req", dotReqProvider{}}
+	dcResp := DotConfig{"Resp", "resp", dotRespProvider{}}
+	dcFlush := DotConfig{"Flush", "flush", dotFlushProvider{}}
+
+	build.bufferDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, config.Dot, []DotConfig{dcResp}))
+	build.flusherDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, config.Dot, []DotConfig{dcFlush}))
+	initDot := makeDot(append([]DotConfig{dcInstance}, config.Dot...))
+
 	// Invoke all initilization templates, aka any template whose name starts
 	// with "INIT ".
-	initDot := makeDot(append([]DotConfig{dcInstance}, config.Dot...))
-	for _, tmpl := range inst.templates.Templates() {
+	makeInitDot := func() (*reflect.Value, error) {
+		w, r := httptest.NewRecorder(), httptest.NewRequest("", "/", nil)
+		return initDot.value(config.Ctx, w, r)
+	}
+	if _, err := makeInitDot(); err != nil { // run at least once
+		return nil, nil, nil, fmt.Errorf("failed to initialize dot value: %w", err)
+	}
+	for _, tmpl := range build.templates.Templates() {
 		if strings.HasPrefix(tmpl.Name(), "INIT ") {
-			w, r := httptest.NewRecorder(), httptest.NewRequest("", "/", nil)
-			val, err := initDot.value(config.Ctx, w, r)
+			val, err := makeInitDot()
 			if err != nil {
-				return nil, nil, nil, fmt.Errorf("failed to get init dot value: %w", err)
+				return nil, nil, nil, fmt.Errorf("failed to initialize dot value: %w", err)
 			}
 			err = tmpl.Execute(io.Discard, val)
 			if err = initDot.cleanup(val, err); err != nil {
@@ -140,7 +144,7 @@ func (config Config) Instance(cfgs ...ConfigOverride) (*Instance, *InstanceStats
 		}
 	}
 
-	inst.config.Logger.Info("instance loaded",
+	build.config.Logger.Info("instance loaded",
 		slog.Duration("load_time", time.Since(start)),
 		slog.Group("stats",
 			slog.Int("routes", build.Routes),
@@ -151,8 +155,7 @@ func (config Config) Instance(cfgs ...ConfigOverride) (*Instance, *InstanceStats
 			slog.Int("staticFilesAlternateEncodings", build.StaticFilesAlternateEncodings),
 		))
 
-	stats := build.InstanceStats
-	return inst, &stats, build.routes, nil
+	return build.Instance, build.InstanceStats, build.routes, nil
 }
 
 // Counter to assign a unique id to each instance of xtemplate created when

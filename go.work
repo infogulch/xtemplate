@@ -2,6 +2,6 @@ go 1.22.1
 
 use (
 	.
-	./cmd
+	./app
 	./test
 )
