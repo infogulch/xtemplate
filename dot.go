@@ -114,11 +114,9 @@ func (d *DotConfig) MarshalJSON() ([]byte, error) {
 var _ json.Unmarshaler = &DotConfig{}
 
 func (d *DotConfig) UnmarshalJSON(b []byte) error {
-	var dc = struct {
-		Name string `json:"name"`
-		Type string `json:"type"`
-	}{}
-	if err := json.NewDecoder(bytes.NewBuffer(b)).Decode(&dc); err != nil {
+	type T DotConfig
+	dc := T{}
+	if err := json.Unmarshal(b, &dc); err != nil {
 		return err
 	}
 	r, ok := registrations[dc.Type]
@@ -126,7 +124,7 @@ func (d *DotConfig) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("no provider registered with the type '%s': %+v", dc.Type, dc)
 	}
 	p := r.New()
-	if err := json.NewDecoder(bytes.NewBuffer(b)).Decode(p); err != nil {
+	if err := json.Unmarshal(b, p); err != nil {
 		return fmt.Errorf("failed to decode provider %s (%v): %w", dc.Type, p, err)
 	}
 	d.Name = dc.Name

@@ -36,9 +36,6 @@
 ### Documentation
 
 - [ ] Documentation
-  - [x] Fix readme to include links to the godoc page
-  - [ ] Remove markdown `code` sections from godoc comments since they are not supported
-  - [ ] Fix godoc formatting in general: https://pkg.go.dev/github.com/fluhus/godoc-tricks
   - [ ] Using different databases
     - Should be documented with DotDBProvider go docs (?)
   - [ ] Using the new go-arg cli flags
@@ -80,6 +77,13 @@
 
 ## next
 
+
+## v0.5.2 - Mar 2024
+
+- Documentation
+  - [x] Fix readme to include links to the godoc page
+  - [x] Remove markdown `code` sections from godoc comments since they are not supported
+  - [x] Fix godoc formatting in general: https://pkg.go.dev/github.com/fluhus/godoc-tricks
 - [x] Add version information to binaries
 - [x] Fix docker build, add to ci
 - [x] Expose Main() so Go lib users can use it, moving cmd to app/cmd
