@@ -25,7 +25,7 @@ var bufPool = sync.Pool{
 
 func bufferingTemplateHandler(server *Instance, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log := GetCtxLogger(r)
+		log := GetLogger(r.Context())
 
 		dot, err := server.bufferDot.value(server.config.Ctx, w, r)
 		if err != nil {
@@ -52,7 +52,7 @@ func bufferingTemplateHandler(server *Instance, tmpl *template.Template) http.Ha
 
 func flushingTemplateHandler(server *Instance, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log := GetCtxLogger(r)
+		log := GetLogger(r.Context())
 
 		if r.Header.Get("Accept") != "text/event-stream" {
 			http.Error(w, "SSE endpoint", http.StatusNotAcceptable)
@@ -82,7 +82,7 @@ func flushingTemplateHandler(server *Instance, tmpl *template.Template) http.Han
 
 func staticFileHandler(fs fs.FS, fileinfo *fileInfo) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log := GetCtxLogger(r)
+		log := GetLogger(r.Context())
 
 		urlpath := path.Clean(r.URL.Path)
 		if urlpath != fileinfo.identityPath {

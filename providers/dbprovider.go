@@ -79,7 +79,7 @@ func (d *DotDBProvider) Value(r xtemplate.Request) (any, error) {
 		}
 		d.DB = db
 	}
-	return &DotDB{d.DB, xtemplate.GetCtxLogger(r.R), r.R.Context(), d.TxOptions, nil}, nil
+	return &DotDB{d.DB, xtemplate.GetLogger(r.R.Context()), r.R.Context(), d.TxOptions, nil}, nil
 }
 
 func (dp *DotDBProvider) Cleanup(v any, err error) error {

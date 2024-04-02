@@ -83,7 +83,7 @@ func (p *DotFSProvider) Value(r xtemplate.Request) (any, error) {
 		}
 		p.FS = newfs
 	}
-	return &DotFS{p.FS, xtemplate.GetCtxLogger(r.R), r.W, r.R, make(map[fs.File]struct{})}, nil
+	return &DotFS{p.FS, xtemplate.GetLogger(r.R.Context()), r.W, r.R, make(map[fs.File]struct{})}, nil
 }
 func (p *DotFSProvider) Cleanup(a any, err error) error {
 	v := a.(*DotFS)

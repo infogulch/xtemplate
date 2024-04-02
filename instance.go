@@ -184,11 +184,18 @@ func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 	}
 
+	ctx := r.Context()
+	rid := GetRequestId(ctx)
+	if rid == "" {
+		rid = uuid.NewString()
+		ctx = context.WithValue(ctx, requestIdKey, rid)
+	}
+
 	// See handlers.go
 	handler, handlerPattern := instance.router.Handler(r)
 
 	log := instance.config.Logger.With(slog.Group("serve",
-		slog.String("requestid", getRequestId(r.Context())),
+		slog.String("requestid", rid),
 	))
 	log.LogAttrs(r.Context(), slog.LevelDebug, "serving request",
 		slog.String("user-agent", r.Header.Get("User-Agent")),
@@ -197,7 +204,7 @@ func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		slog.String("handlerPattern", handlerPattern),
 	)
 
-	r = r.WithContext(context.WithValue(r.Context(), LoggerKey, log))
+	r = r.WithContext(context.WithValue(ctx, loggerKey, log))
 	metrics := httpsnoop.CaptureMetrics(handler, w, r)
 
 	log.LogAttrs(r.Context(), levelDebug2, "request served",
@@ -207,7 +214,17 @@ func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			slog.Int64("bytes", metrics.Written)))
 }
 
-func getRequestId(ctx context.Context) string {
+type requestIdType struct{}
+
+var requestIdKey = requestIdType{}
+
+func GetRequestId(ctx context.Context) string {
+	// xtemplate request id
+	if av := ctx.Value(requestIdKey); av != nil {
+		if v, ok := av.(string); ok {
+			return v
+		}
+	}
 	// caddy request id
 	if v := ctx.Value("vars"); v != nil {
 		if mv, ok := v.(map[string]any); ok {
@@ -218,15 +235,15 @@ func getRequestId(ctx context.Context) string {
 			}
 		}
 	}
-	return uuid.NewString()
+	return ""
 }
 
-// LoggerKey is the context value key used to smuggle the current logger through
-// the http.Handler interface.
-var LoggerKey = reflect.TypeOf((*slog.Logger)(nil))
+type loggerType struct{}
 
-func GetCtxLogger(r *http.Request) *slog.Logger {
-	log, ok := r.Context().Value(LoggerKey).(*slog.Logger)
+var loggerKey = loggerType{}
+
+func GetLogger(ctx context.Context) *slog.Logger {
+	log, ok := ctx.Value(loggerKey).(*slog.Logger)
 	if !ok {
 		return slog.Default()
 	}

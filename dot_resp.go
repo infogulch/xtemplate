@@ -1,6 +1,7 @@
 package xtemplate
 
 import (
+	"errors"
 	"io"
 	"log/slog"
 	"maps"
@@ -17,13 +18,17 @@ func (dotRespProvider) Value(r Request) (any, error) {
 		Header: make(http.Header),
 		status: http.StatusOK,
 		w:      r.W, r: r.R,
-		log: GetCtxLogger(r.R),
+		log: GetLogger(r.R.Context()),
 	}, nil
 }
 
 func (dotRespProvider) Cleanup(v any, err error) error {
 	d := v.(DotResp)
-	if err == nil {
+	var errSt ErrorStatus
+	if errors.As(err, &errSt) {
+		// headers?
+		d.w.WriteHeader(int(errSt))
+	} else if err == nil {
 		maps.Copy(d.w.Header(), d.Header)
 		d.w.WriteHeader(d.status)
 	}
@@ -92,4 +97,10 @@ func (h *DotResp) SetStatus(status int) string {
 func (h *DotResp) ReturnStatus(status int) (string, error) {
 	h.status = status
 	return "", ReturnError{}
+}
+
+type ErrorStatus int
+
+func (e ErrorStatus) Error() string {
+	return http.StatusText(int(e))
 }
