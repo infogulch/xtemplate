@@ -20,7 +20,7 @@ import (
 
 	"github.com/Masterminds/sprig/v3"
 	"github.com/felixge/httpsnoop"
-	"github.com/segmentio/ksuid"
+	"github.com/google/uuid"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/css"
 	"github.com/tdewolff/minify/v2/html"
@@ -218,7 +218,7 @@ func getRequestId(ctx context.Context) string {
 			}
 		}
 	}
-	return ksuid.New().String()
+	return uuid.NewString()
 }
 
 // LoggerKey is the context value key used to smuggle the current logger through

@@ -12,7 +12,6 @@ import (
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/dustin/go-humanize"
 	"github.com/microcosm-cc/bluemonday"
-	"github.com/segmentio/ksuid"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/extension"
@@ -31,7 +30,6 @@ var xtemplateFuncs template.FuncMap = template.FuncMap{
 	"trustJS":          FuncTrustJS,
 	"trustJSStr":       FuncTrustJSStr,
 	"trustSrcSet":      FuncTrustSrcSet,
-	"ksuid":            FuncKsuid,
 	"idx":              FuncIdx,
 	"try":              FuncTry,
 }
@@ -180,11 +178,6 @@ func FuncTrustSrcSet(s string) template.Srcset {
 //	{{generate-list | idx 5}}
 func FuncIdx(idx int, arr any) any {
 	return reflect.ValueOf(arr).Index(idx).Interface()
-}
-
-// kusid returns a new ksuid value
-func FuncKsuid() ksuid.KSUID {
-	return ksuid.New()
 }
 
 // humanize transforms size and time inputs to a human readable format using
