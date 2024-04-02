@@ -5,10 +5,12 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/Hellseher/go-shellquote"
@@ -36,11 +38,12 @@ func main() {
 		}
 	}()
 
+	command := ""
 	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "hurl":
-			goto hurl
-		}
+		command = os.Args[0]
+	}
+	if command == "hurl" {
+		goto hurl
 	}
 
 	// Build xtemplate
@@ -89,6 +92,13 @@ hurl:
 		defer kill(cmd)
 		try0(cmd.Run(), "run hurl")
 		fmt.Println("~ Run hurl ~")
+	}
+
+	if command == "start" {
+		// block until ^C or xtemplate exits
+		sigs := make(chan os.Signal, 1)
+		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+		<-sigs
 	}
 }
 
