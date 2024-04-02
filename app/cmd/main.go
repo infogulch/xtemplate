@@ -6,6 +6,8 @@ import (
 	"github.com/infogulch/xtemplate/app"
 
 	_ "github.com/infogulch/xtemplate/providers"
+	_ "github.com/infogulch/xtemplate/providers/wfs"
+
 	_ "github.com/mattn/go-sqlite3"
 )
 

@@ -1,0 +1,5 @@
+{{define "POST /wfs"}}
+Receiving uploaded files:
+{{$meta := .WFS.ReceiveFiles "." 2 (mul 20 1024 1024) }}
+{{$meta}}
+{{end}}

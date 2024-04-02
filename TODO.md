@@ -1,10 +1,5 @@
 # TODO
 
-- [ ] Add fs methods to write files, save file upload
-  - https://github.com/golang/go/issues/45757#issuecomment-1675157698
-  - https://github.com/hack-pad/hackpadfs
-  - https://github.com/jarxorg/wfs
-  - Add separate "wfs" for writable fs?
 - [ ] Update `xtemplate-caddy`. Note only caddy 2.8.0 uses Go 1.22
   - [ ] Figure out how to run caddy with xtemplate
   - [ ] Must test on caddy head?
@@ -57,7 +52,10 @@
 - [ ] Review https://github.com/hairyhenderson/gomplate for data source ideas
 - [ ] Fix `superfluous response.WriteHeader call from github.com/felixge/httpsnoop.(*Metrics).CaptureMetrics` https://go.dev/play/p/spBB4w7nBCZ
 - [ ] Accept Env configuration
-- [ ] Built-in CSRF handling?
+- [ ] Built-in CSRF token handling
+  * https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
+  * https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS
+  * https://en.wikipedia.org/wiki/Cross-site_request_forgery
 - [ ] Fine tune timeouts? https://ieftimov.com/posts/make-resilient-golang-net-http-servers-using-timeouts-deadlines-context-cancellation/
 - [ ] Idea: Add special FILE pseudo-func that is replaced with a string constant of the current filename.
   - Potentially useful for invoking a template file with a relative path. (Add
@@ -67,7 +65,7 @@
   - Should be fine?
 - [ ] See if its possible to implement sql queryrows with https://go.dev/wiki/RangefuncExperiment
   - Not until caddy releases 2.8.0 and upgrades to 1.22.
-- [ ] Add command that pre-compresses static files
+- [ ] Add command that pre-compresses static files?
 - [ ] Schema migration? https://david.rothlis.net/declarative-schema-migration-for-sqlite/
 - [ ] Schema generator: https://gitlab.com/Screwtapello/sqlite-schema-diagram/-/blob/main/sqlite-schema-diagram.sql?ref_type=heads
 - [ ] Add a way to register additional routes dynamically during init
@@ -77,6 +75,15 @@
 
 ## next
 
+- [x] Add fs methods to write files, save file upload
+  - Use https://github.com/hack-pad/hackpadfs See also:
+    - https://github.com/golang/go/issues/45757#issuecomment-1675157698
+    - https://github.com/jarxorg/wfs
+  - [x] Add separate "wfs" for writable fs
+  - [x] Write
+  - [x] MkdirAll
+  - [x] Create
+  - [ ] ReceiveUpload
 
 ## v0.5.2 - Mar 2024
 
