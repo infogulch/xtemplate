@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<script src="https://unpkg.com/htmx.org@1.9.6/dist/htmx.js"></script>
+<script src="https://unpkg.com/htmx.org@1.9.6/dist/ext/sse.js"></script>
+
+<form hx-post="/nats/messages" hx-swap="none">
+    <input type="text" name="message">
+    <button>Send</button>
+</form>
+
+<p>Messages:</p>
+
+<ul hx-ext="sse" sse-connect="/nats/messages" sse-swap="message" hx-swap="afterbegin">
+</ul>
+
+{{define "SSE /nats/messages"}}{{range .Nats.Subscribe "messages"}}data: <li>{{.Data | toString}}</li>{{printf "\n\n"}}{{$.Flush.Flush}}{{end}}{{end}}
+
+{{define "POST /nats/messages"}}{{.Req.ParseForm}}{{.Nats.Publish "messages" (.Req.FormValue "message")}}{{end}}

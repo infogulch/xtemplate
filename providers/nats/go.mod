@@ -1,22 +1,14 @@
-module github.com/infogulch/xtemplate/app
+module github.com/infogulch/xtemplate/providers/nats
 
 go 1.22.1
 
-require github.com/infogulch/xtemplate v0.5.2
-
-require github.com/infogulch/xtemplate/providers/nats v0.0.0-local
-
-replace github.com/infogulch/xtemplate => ../
-
-replace github.com/infogulch/xtemplate/providers/nats => ../providers/nats
-
 require (
-	github.com/alexflint/go-arg v1.4.3
-	github.com/infogulch/watch v0.2.0
-	github.com/mattn/go-sqlite3 v1.14.22
+	github.com/infogulch/xtemplate v0.5.2
+	github.com/nats-io/nats-server/v2 v2.10.12
+	github.com/nats-io/nats.go v1.34.1
 )
 
-replace github.com/imdario/mergo => github.com/imdario/mergo v0.3.16
+replace github.com/infogulch/xtemplate => ../../
 
 require (
 	github.com/BurntSushi/toml v1.3.2 // indirect
@@ -24,13 +16,11 @@ require (
 	github.com/Masterminds/semver/v3 v3.2.1 // indirect
 	github.com/Masterminds/sprig/v3 v3.2.3 // indirect
 	github.com/alecthomas/chroma/v2 v2.13.0 // indirect
-	github.com/alexflint/go-scalar v1.2.0 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/dlclark/regexp2 v1.11.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
@@ -41,8 +31,6 @@ require (
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/nats-io/jwt/v2 v2.5.5 // indirect
-	github.com/nats-io/nats-server/v2 v2.10.12 // indirect
-	github.com/nats-io/nats.go v1.34.1 // indirect
 	github.com/nats-io/nkeys v0.4.7 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/shopspring/decimal v1.3.1 // indirect

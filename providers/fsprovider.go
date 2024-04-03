@@ -16,14 +16,16 @@ func init() {
 	xtemplate.RegisterDot(&DotFSProvider{})
 }
 
-// WithFS creates an [xtemplate.ConfigOverride] that can be used with
+// WithFS creates an [xtemplate.Option] that can be used with
 // [xtemplate.Config.Server], [xtemplate.Config.Instance], or [xtemplate.Main]
 // to add an fs dot provider to the config.
-func WithFS(name string, fs fs.FS) xtemplate.ConfigOverride {
-	if fs == nil {
-		panic(fmt.Sprintf("cannot create DotFSProvider with null FS with name %s", name))
+func WithFS(name string, fs fs.FS) xtemplate.Option {
+	return func(c *xtemplate.Config) error {
+		if fs == nil {
+			return fmt.Errorf("cannot create DotFSProvider with null FS with name %s", name)
+		}
+		return xtemplate.WithProvider(name, &DotFSProvider{FS: fs})(c)
 	}
-	return xtemplate.WithProvider(name, &DotFSProvider{FS: fs})
 }
 
 // DotFSProvider can configure an xtemplate dot field to provide file system

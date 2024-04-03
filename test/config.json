@@ -13,6 +13,10 @@
                 "b": "2",
                 "hello": "world"
             }
+        },
+        {
+            "type": "nats",
+            "name": "Nats"
         }
     ]
 }

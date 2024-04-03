@@ -36,7 +36,7 @@ func (Args) Version() string {
 // Provide configs to override the defaults like:
 //
 //	app.Main(xtemplate.WithFooConfig())
-func Main(overrides ...xtemplate.ConfigOverride) {
+func Main(overrides ...xtemplate.Option) {
 	var config Args
 	var log *slog.Logger
 

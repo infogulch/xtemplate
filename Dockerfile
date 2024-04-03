@@ -16,8 +16,9 @@ RUN adduser \
     "${USER}"
 
 WORKDIR /build/app
-COPY app/go.mod app/go.sum /build/app/
 COPY go.mod go.sum /build/
+COPY app/go.mod app/go.sum /build/app/
+COPY providers/nats/go.mod providers/nats/go.sum /build/providers/nats/
 RUN go mod download
 
 COPY . /build/

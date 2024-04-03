@@ -15,11 +15,13 @@ func init() {
 	xtemplate.RegisterDot(&DotDBProvider{})
 }
 
-func WithDB(name string, db *sql.DB, opt *sql.TxOptions) xtemplate.ConfigOverride {
-	if db == nil {
-		panic(fmt.Sprintf("cannot to create DotDBProvider with null DB with name %s", name))
+func WithDB(name string, db *sql.DB, opt *sql.TxOptions) xtemplate.Option {
+	return func(c *xtemplate.Config) error {
+		if db == nil {
+			return fmt.Errorf("cannot to create DotDBProvider with null DB with name %s", name)
+		}
+		return xtemplate.WithProvider(name, &DotDBProvider{DB: db, TxOptions: opt})(c)
 	}
-	return xtemplate.WithProvider(name, &DotDBProvider{DB: db, TxOptions: opt})
 }
 
 type DotDBProvider struct {

@@ -10,11 +10,13 @@ func init() {
 	xtemplate.RegisterDot(&DotKVProvider{})
 }
 
-func WithKV(name string, kv map[string]string) xtemplate.ConfigOverride {
-	if kv == nil {
-		panic(fmt.Sprintf("cannot create DotKVProvider with null map with name %s", name))
+func WithKV(name string, kv map[string]string) xtemplate.Option {
+	return func(c *xtemplate.Config) error {
+		if kv == nil {
+			return fmt.Errorf("cannot create DotKVProvider with null map with name %s", name)
+		}
+		return xtemplate.WithProvider(name, &DotKVProvider{kv})(c)
 	}
-	return xtemplate.WithProvider(name, &DotKVProvider{kv})
 }
 
 type DotKVProvider struct {

@@ -12,10 +12,9 @@
 - [ ] Add .TemplateLazy that renders a template to a io.ReadSeeker after the
   first call to a method. Can be used for mail, servecontent, etc
   - https://github.com/spatialcurrent/go-lazy ?
-- [ ] Add NATS module:
-  - [ ] Subscribe to subject, loop on receive to send via open SSE connection
-  - [ ] Publish message to subject
+- [ ] Add NATS provider:
   - [ ] Request-Reply
+  - [ ] KV
 - [ ] Add mail module:
   - [ ] Send mail, send mail by rendering template
   - https://github.com/Shopify/gomail
@@ -54,6 +53,7 @@
 
 # BACKLOG
 
+- [ ] Look into https://github.com/42atomys/sprout
 - [ ] Review https://github.com/hairyhenderson/gomplate for data source ideas
 - [ ] Fix `superfluous response.WriteHeader call from github.com/felixge/httpsnoop.(*Metrics).CaptureMetrics` https://go.dev/play/p/spBB4w7nBCZ
 - [ ] Accept Env configuration
@@ -77,6 +77,10 @@
 
 ## next
 
+- Add NATS provider:
+  - [x] Subscribe to subject, loop on receive to send via open SSE connection
+  - [x] Publish message to subject
+  - [x] Add basic IM demo
 
 ## v0.5.2 - Mar 2024
 

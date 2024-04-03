@@ -104,11 +104,8 @@ func (d *DotConfig) UnmarshalText(b []byte) error {
 var _ json.Marshaler = &DotConfig{}
 
 func (d *DotConfig) MarshalJSON() ([]byte, error) {
-	b := new(bytes.Buffer)
-	if err := json.NewEncoder(b).Encode(d); err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
+	type T DotConfig
+	return json.Marshal((*T)(d))
 }
 
 var _ json.Unmarshaler = &DotConfig{}

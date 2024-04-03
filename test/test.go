@@ -40,7 +40,7 @@ func main() {
 
 	command := ""
 	if len(os.Args) > 1 {
-		command = os.Args[0]
+		command = os.Args[1]
 	}
 	if command == "hurl" {
 		goto hurl
@@ -98,6 +98,7 @@ hurl:
 		// block until ^C or xtemplate exits
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+		fmt.Println("waiting for signal")
 		<-sigs
 	}
 }

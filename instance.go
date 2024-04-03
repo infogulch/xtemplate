@@ -51,12 +51,14 @@ type Instance struct {
 }
 
 // Instance creates a new *Instance from the given config
-func (config Config) Instance(cfgs ...ConfigOverride) (*Instance, *InstanceStats, []InstanceRoute, error) {
+func (config Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []InstanceRoute, error) {
 	start := time.Now()
 
 	config.Defaults()
 	for _, c := range cfgs {
-		c(&config)
+		if err := c(&config); err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to configure instance: %w", err)
+		}
 	}
 
 	build := &builder{

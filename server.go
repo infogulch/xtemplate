@@ -2,6 +2,7 @@ package xtemplate
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -28,10 +29,12 @@ type Server struct {
 }
 
 // Build creates a new Server from an xtemplate.Config.
-func (config Config) Server(cfgs ...ConfigOverride) (*Server, error) {
+func (config Config) Server(cfgs ...Option) (*Server, error) {
 	config.Defaults()
 	for _, c := range cfgs {
-		c(&config)
+		if err := c(&config); err != nil {
+			return nil, fmt.Errorf("failed to configure server: %w", err)
+		}
 	}
 
 	config.Logger = config.Logger.WithGroup("xtemplate")
@@ -69,7 +72,7 @@ func (x *Server) Handler() http.Handler {
 
 // Reload creates a new Instance from the config and swaps it with the
 // current instance if successful, otherwise returns the error.
-func (x *Server) Reload(cfgs ...ConfigOverride) error {
+func (x *Server) Reload(cfgs ...Option) error {
 	start := time.Now()
 
 	x.mutex.Lock()

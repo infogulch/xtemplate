@@ -4,6 +4,7 @@ package xtemplate
 
 import (
 	"context"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log/slog"
@@ -78,36 +79,46 @@ func (config *Config) Defaults() *Config {
 	return config
 }
 
-type ConfigOverride func(*Config)
+type Option func(*Config) error
 
-func WithTemplateFS(fs fs.FS) ConfigOverride {
-	return func(c *Config) {
+func WithTemplateFS(fs fs.FS) Option {
+	return func(c *Config) error {
+		if fs == nil {
+			return fmt.Errorf("nil fs")
+		}
 		c.TemplatesFS = fs
+		return nil
 	}
 }
 
-func WithLogger(logger *slog.Logger) ConfigOverride {
-	return func(c *Config) {
+func WithLogger(logger *slog.Logger) Option {
+	return func(c *Config) error {
+		if logger == nil {
+			return fmt.Errorf("nil logger")
+		}
 		c.Logger = logger
+		return nil
 	}
 }
 
-func WithFuncMaps(fm ...template.FuncMap) ConfigOverride {
-	return func(c *Config) {
+func WithFuncMaps(fm ...template.FuncMap) Option {
+	return func(c *Config) error {
 		c.FuncMaps = append(c.FuncMaps, fm...)
+		return nil
 	}
 }
 
-func WithProvider(name string, p DotProvider) ConfigOverride {
-	return func(c *Config) {
+func WithProvider(name string, p DotProvider) Option {
+	return func(c *Config) error {
 		for _, d := range c.Dot {
 			if d.Name == name {
 				if d.DotProvider != p {
-					c.Logger.Warn("tried to assign different providers the same name", slog.String("name", d.Name), slog.Any("old", d.DotProvider), slog.Any("new", p))
+					return fmt.Errorf("tried to assign different providers the same name. name: %s; old: %v; new: %v", d.Name, d.DotProvider, p)
 				}
-				return
+				return nil
 			}
 		}
 		c.Dot = append(c.Dot, DotConfig{Name: name, DotProvider: p})
+		return nil
 	}
 }
