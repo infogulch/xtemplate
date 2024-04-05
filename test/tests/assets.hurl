@@ -120,3 +120,8 @@ HTTP 200
 [Asserts]
 xpath "string(//link[@rel='stylesheet']/@integrity)" startsWith "sha384-5rcfZ"
 xpath "string(//link[@rel='stylesheet']/@href)" contains "?hash=sha384-5rcfZ"
+
+# get favicon
+GET http://localhost:8080/favicon.ico
+
+HTTP 200

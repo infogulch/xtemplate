@@ -137,7 +137,7 @@ func (b *builder) addStaticFileHandler(path_ string) error {
 
 		pattern := "GET " + identityPath
 		handler := staticFileHandler(b.config.TemplatesFS, file)
-		if err = catch("add handler to servemux", func() { b.router.HandleFunc(pattern, handler) }); err != nil {
+		if err = catch(fmt.Sprintf("add handler to servemux '%s'", pattern), func() { b.router.HandleFunc(pattern, handler) }); err != nil {
 			return err
 		}
 		b.StaticFiles += 1
@@ -229,9 +229,11 @@ func (b *builder) addTemplateHandler(path_ string) error {
 				pattern = method + " " + path_
 				handler = bufferingTemplateHandler(b.Instance, tmpl)
 			}
+		} else {
+			continue
 		}
 
-		if err = catch("add handler to servemux", func() { b.router.HandleFunc(pattern, handler) }); err != nil {
+		if err = catch(fmt.Sprintf("add handler to servemux '%s'", pattern), func() { b.router.HandleFunc(pattern, handler) }); err != nil {
 			return err
 		}
 		b.routes = append(b.routes, InstanceRoute{pattern, handler})

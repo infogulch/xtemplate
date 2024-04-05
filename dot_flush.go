@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 )
 
 type dotFlushProvider struct{}
 
 func (dotFlushProvider) Value(r Request) (any, error) {
-	f, ok := r.W.(http.Flusher)
+	f, ok := r.W.(flusher)
 	if !ok {
 		return &DotFlush{}, fmt.Errorf("response writer could not cast to http.Flusher")
 	}
@@ -27,10 +28,61 @@ func (dotFlushProvider) Cleanup(v any, err error) error {
 
 var _ CleanupDotProvider = dotFlushProvider{}
 
+type flusher interface {
+	http.ResponseWriter
+	http.Flusher
+}
+
 // DotFlush is used as the .Flush field for flushing template handlers (SSE).
 type DotFlush struct {
-	flusher               http.Flusher
+	flusher               flusher
 	serverCtx, requestCtx context.Context
+}
+
+// SendSSE sends an sse message by formatting the provided args as an sse event:
+//
+// Requires 1-4 args: event, data, id, retry
+func (f *DotFlush) SendSSE(args ...string) error {
+	var event, data, id, retry string
+	switch len(args) {
+	case 4:
+		retry = args[3]
+		fallthrough
+	case 3:
+		id = args[2]
+		fallthrough
+	case 2:
+		data = args[1]
+		fallthrough
+	case 1:
+		event = args[0]
+	default:
+		return fmt.Errorf("wrong number of args provided. got %d, need 1-4", len(args))
+	}
+	written := false
+	if event != "" {
+		fmt.Fprintf(f.flusher, "event: %s\n", strings.SplitN(event, "\n", 2)[0])
+		written = true
+	}
+	if data != "" {
+		for _, line := range strings.Split(data, "\n") {
+			fmt.Fprintf(f.flusher, "data: %s\n", line)
+			written = true
+		}
+	}
+	if id != "" {
+		fmt.Fprintf(f.flusher, "id: %s\n", strings.SplitN(id, "\n", 2)[0])
+		written = true
+	}
+	if retry != "" {
+		fmt.Fprintf(f.flusher, "retry: %s\n", strings.SplitN(retry, "\n", 2)[0])
+		written = true
+	}
+	if written {
+		fmt.Fprintf(f.flusher, "\n\n")
+		f.flusher.Flush()
+	}
+	return nil
 }
 
 // Flush flushes any content waiting to written to the client.

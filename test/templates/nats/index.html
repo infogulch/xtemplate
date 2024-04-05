@@ -2,16 +2,15 @@
 <script src="https://unpkg.com/htmx.org@1.9.6/dist/htmx.js"></script>
 <script src="https://unpkg.com/htmx.org@1.9.6/dist/ext/sse.js"></script>
 
-<form hx-post="/nats/messages" hx-swap="none">
-    <input type="text" name="message">
+<p>This is a fully-functional (albeit very basic) multi-user realtime chat powered by htmx, sse, and nats.</p>
+<form hx-post="/nats/messages" hx-target="find input" hx-swap="outerHTML" hx-disabled-elt="input,button">
+    {{block "messageinput" .}}<input autofocus type="text" name="msg" required="required">{{end}}
     <button>Send</button>
 </form>
-
 <p>Messages:</p>
-
 <ul hx-ext="sse" sse-connect="/nats/messages" sse-swap="message" hx-swap="afterbegin">
+    {{- define "listitem"}}<li>{{.Data | toString}}</li>{{end}}
 </ul>
 
-{{define "SSE /nats/messages"}}{{range .Nats.Subscribe "messages"}}data: <li>{{.Data | toString}}</li>{{printf "\n\n"}}{{$.Flush.Flush}}{{end}}{{end}}
-
-{{define "POST /nats/messages"}}{{.Req.ParseForm}}{{.Nats.Publish "messages" (.Req.FormValue "message")}}{{end}}
+{{define "SSE /nats/messages"}}{{range .Nats.Subscribe "messages"}}{{$.Flush.SendSSE "" ($.X.Template "listitem" . | toString)}}{{end}}{{end}}
+{{define "POST /nats/messages"}}{{.Req.ParseForm}}{{.Nats.Publish "messages" (.Req.FormValue "msg")}}{{template "messageinput" .}}{{end}}
