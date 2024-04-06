@@ -5,7 +5,7 @@ go tool dist list
 
 rm -rf dist
 
-GITVER="$(git describe --exact-match --tags 2> /dev/null || git rev-parse --short HEAD)"
+GITVER="$(git describe --exact-match --tags --match="v*" 2> /dev/null || git rev-parse --short HEAD)"
 VERSION="$(go list -f '{{.Version}}' -m github.com/infogulch/xtemplate@$GITVER)"
 LDFLAGS="-X 'github.com/infogulch/xtemplate/app.version=$VERSION'"
 
