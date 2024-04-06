@@ -3,7 +3,7 @@ module github.com/infogulch/xtemplate/cmd
 go 1.22.1
 
 require (
-	github.com/infogulch/xtemplate v0.0.0-local
+	github.com/infogulch/xtemplate v0.6.1
 	github.com/infogulch/xtemplate/app v0.0.0-local
 	github.com/infogulch/xtemplate/providers/nats v0.0.0-local
 	github.com/mattn/go-sqlite3 v1.14.22
