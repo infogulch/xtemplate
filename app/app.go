@@ -11,8 +11,6 @@ import (
 
 	"github.com/alexflint/go-arg"
 	"github.com/infogulch/watch"
-
-	_ "github.com/infogulch/xtemplate/providers"
 )
 
 type Args struct {

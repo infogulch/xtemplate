@@ -15,9 +15,10 @@ RUN adduser \
     --uid "${UID}" \
     "${USER}"
 
-WORKDIR /build/app
+WORKDIR /build/cmd
 COPY go.mod go.sum /build/
 COPY app/go.mod app/go.sum /build/app/
+COPY cmd/go.mod cmd/go.sum /build/cmd/
 COPY providers/nats/go.mod providers/nats/go.sum /build/providers/nats/
 RUN go mod download
 
@@ -26,7 +27,7 @@ RUN CGO_ENABLED=1 \
     GOFLAGS='-tags="sqlite_json"' \
     GOOS=linux \
     GOARCH=amd64 \
-    go build -ldflags="${LDFLAGS}" -o /dist/xtemplate ./cmd
+    go build -ldflags="${LDFLAGS}" -o /dist/xtemplate .
 RUN ldd /dist/xtemplate | tr -s [:blank:] '\n' | grep ^/ | xargs -I % install -D % /dist/%
 RUN ln -s ld-musl-x86_64.so.1 /dist/lib/libc.musl-x86_64.so.1
 
@@ -45,4 +46,4 @@ EXPOSE 80
 
 ENTRYPOINT ["/app/xtemplate"]
 
-CMD ["-template-path", "/app/templates", "-watch-template", "false", "-log", "0", "-listen", ":80"]
+CMD ["--template-dir", "./templates", "--watch-templates", "false", "--listen", ":80"]

@@ -9,9 +9,9 @@ GITVER="$(git describe --exact-match --tags 2> /dev/null || git rev-parse --shor
 VERSION="$(go list -f '{{.Version}}' -m github.com/infogulch/xtemplate@$GITVER)"
 LDFLAGS="-X 'github.com/infogulch/xtemplate/app.version=$VERSION'"
 
-GOOS=linux   GOARCH=amd64 go build -ldflags="$LDFLAGS" -buildmode exe -o ./dist/xtemplate-amd64-linux/xtemplate       ./app/cmd
-GOOS=darwin  GOARCH=amd64 go build -ldflags="$LDFLAGS" -buildmode exe -o ./dist/xtemplate-amd64-darwin/xtemplate      ./app/cmd
-GOOS=windows GOARCH=amd64 go build -ldflags="$LDFLAGS" -buildmode exe -o ./dist/xtemplate-amd64-windows/xtemplate.exe ./app/cmd
+GOOS=linux   GOARCH=amd64 go build -ldflags="$LDFLAGS" -buildmode exe -o ./dist/xtemplate-amd64-linux/xtemplate       ./cmd
+GOOS=darwin  GOARCH=amd64 go build -ldflags="$LDFLAGS" -buildmode exe -o ./dist/xtemplate-amd64-darwin/xtemplate      ./cmd
+GOOS=windows GOARCH=amd64 go build -ldflags="$LDFLAGS" -buildmode exe -o ./dist/xtemplate-amd64-windows/xtemplate.exe ./cmd
 
 docker build -t "xtemplate:$VERSION" --build-arg LDFLAGS="$LDFLAGS" .
 
