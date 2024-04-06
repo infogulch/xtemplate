@@ -4,7 +4,7 @@ go 1.22.1
 
 require (
 	github.com/infogulch/xtemplate v0.6.1
-	github.com/infogulch/xtemplate/providers/nats v0.0.0-20240405225825-ca4842e58f05
+	github.com/infogulch/xtemplate/providers/nats v0.1.0
 )
 
 require (
