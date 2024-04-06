@@ -13,10 +13,14 @@ require (
 	github.com/klauspost/compress v1.17.7
 	github.com/microcosm-cc/bluemonday v1.0.26
 	github.com/tdewolff/minify/v2 v2.20.19
-	github.com/yuin/goldmark v1.7.0
+	github.com/yuin/goldmark v1.7.1
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
 	gopkg.in/yaml.v3 v3.0.1
 )
+
+// Don't drink and drive, and don't change your repo's import path, kids.
+// https://github.com/darccio/mergo/issues/244 🙄
+replace github.com/imdario/mergo => github.com/imdario/mergo v0.3.16
 
 require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
@@ -33,7 +37,7 @@ require (
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/stretchr/testify v1.8.4 // indirect
 	github.com/tdewolff/parse/v2 v2.7.12 // indirect
-	golang.org/x/crypto v0.21.0 // indirect
-	golang.org/x/net v0.22.0 // indirect
+	golang.org/x/crypto v0.22.0 // indirect
+	golang.org/x/net v0.24.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
