@@ -3,12 +3,10 @@ module github.com/infogulch/xtemplate/providers/nats
 go 1.22.1
 
 require (
-	github.com/infogulch/xtemplate v0.5.2
+	github.com/infogulch/xtemplate v0.6.0
 	github.com/nats-io/nats-server/v2 v2.10.12
 	github.com/nats-io/nats.go v1.34.1
 )
-
-replace github.com/infogulch/xtemplate => ../../
 
 require (
 	github.com/BurntSushi/toml v1.3.2 // indirect
