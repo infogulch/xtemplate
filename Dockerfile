@@ -15,11 +15,8 @@ RUN adduser \
     --uid "${UID}" \
     "${USER}"
 
-WORKDIR /build/cmd
+WORKDIR /build
 COPY go.mod go.sum /build/
-COPY app/go.mod app/go.sum /build/app/
-COPY cmd/go.mod cmd/go.sum /build/cmd/
-COPY providers/nats/go.mod providers/nats/go.sum /build/providers/nats/
 RUN go mod download
 
 COPY . /build/
@@ -27,7 +24,7 @@ RUN CGO_ENABLED=1 \
     GOFLAGS='-tags="sqlite_json"' \
     GOOS=linux \
     GOARCH=amd64 \
-    go build -ldflags="${LDFLAGS}" -o /dist/xtemplate .
+    go build -ldflags="${LDFLAGS}" -o /dist/xtemplate ./cmd
 RUN ldd /dist/xtemplate | tr -s [:blank:] '\n' | grep ^/ | xargs -I % install -D % /dist/%
 RUN ln -s ld-musl-x86_64.so.1 /dist/lib/libc.musl-x86_64.so.1
 
