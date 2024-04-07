@@ -22,7 +22,8 @@ jobs:
       run: go test -v ./...
 
     - name: Run Integration Tests
-      run: go run ./test
+      run: go run .
+      working-directory: ./test
 
     - name: Build binaries for all platforms
       run: .github/workflows/release.sh
