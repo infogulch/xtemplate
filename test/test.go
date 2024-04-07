@@ -48,7 +48,7 @@ func main() {
 
 	// Build xtemplate
 	{
-		args := split(`go build -o xtemplate ../app/cmd`)
+		args := split(`go build -o xtemplate ../cmd`)
 		cmd := exec.Command(args[0], args[1:]...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stdout
