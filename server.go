@@ -2,7 +2,6 @@ package xtemplate
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -30,11 +29,8 @@ type Server struct {
 
 // Build creates a new Server from an xtemplate.Config.
 func (config Config) Server(cfgs ...Option) (*Server, error) {
-	config.Defaults()
-	for _, c := range cfgs {
-		if err := c(&config); err != nil {
-			return nil, fmt.Errorf("failed to configure server: %w", err)
-		}
+	if _, err := config.Defaults().Options(cfgs...); err != nil {
+		return nil, err
 	}
 
 	config.Logger = config.Logger.WithGroup("xtemplate")
@@ -106,4 +102,15 @@ func (x *Server) Reload(cfgs ...Option) error {
 
 	log.Info("rebuild succeeded", slog.Int64("new_id", new_.id), slog.Duration("rebuild_time", time.Since(start)))
 	return nil
+}
+
+func (x *Server) Stop() {
+	x.mutex.Lock()
+	defer x.mutex.Unlock()
+
+	if x.cancel != nil {
+		x.cancel()
+	}
+	x.cancel = nil
+	x.instance.Store(nil)
 }

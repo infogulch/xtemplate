@@ -79,6 +79,15 @@ func (config *Config) Defaults() *Config {
 	return config
 }
 
+func (c *Config) Options(options ...Option) (*Config, error) {
+	for _, o := range options {
+		if err := o(c); err != nil {
+			return nil, fmt.Errorf("failed to apply xtemplate config option: %w", err)
+		}
+	}
+	return c, nil
+}
+
 type Option func(*Config) error
 
 func WithTemplateFS(fs fs.FS) Option {

@@ -54,11 +54,8 @@ type Instance struct {
 func (config Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []InstanceRoute, error) {
 	start := time.Now()
 
-	config.Defaults()
-	for _, c := range cfgs {
-		if err := c(&config); err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to configure instance: %w", err)
-		}
+	if _, err := config.Defaults().Options(cfgs...); err != nil {
+		return nil, nil, nil, err
 	}
 
 	build := &builder{

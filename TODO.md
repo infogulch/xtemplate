@@ -71,6 +71,9 @@
 - [ ] Schema generator: https://gitlab.com/Screwtapello/sqlite-schema-diagram/-/blob/main/sqlite-schema-diagram.sql?ref_type=heads
 - [ ] Add a way to register additional routes dynamically during init
 - [ ] Organize docs according to https://diataxis.fr/
+- [ ] Research alternative template loading strategies:
+  - https://github.com/claceio/clace/blob/898932c1766d3e063c67caf1b9a744777fa437c3/internal/app/app.go#L261
+  - https://github.com/unrolled/render
 
 # DONE
 
