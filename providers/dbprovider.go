@@ -29,6 +29,7 @@ type DotDBProvider struct {
 	*sql.TxOptions `json:"-"`
 	Driver         string `json:"driver"`
 	Connstr        string `json:"connstr"`
+	MaxOpenConns   int    `json:"max_open_conns"`
 }
 
 var _ encoding.TextMarshaler = &DotDBProvider{}
@@ -76,6 +77,7 @@ func (d *DotDBProvider) Value(r xtemplate.Request) (any, error) {
 		if err != nil {
 			return &DotDB{}, fmt.Errorf("failed to open database with driver name '%s': %w", d.Driver, err)
 		}
+		db.SetMaxOpenConns(d.MaxOpenConns)
 		if err := db.Ping(); err != nil {
 			return &DotDB{}, fmt.Errorf("failed to ping database on open: %w", err)
 		}
