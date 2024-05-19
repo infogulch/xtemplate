@@ -236,7 +236,20 @@ func FuncTry(fn any, args ...any) (*result, error) {
 	}
 	fnv := reflect.ValueOf(fn)
 	if fnv.Kind() != reflect.Func {
-		return nil, fmt.Errorf("not a function")
+		if len(args) == 0 {
+			return nil, fmt.Errorf("not callable (no method name provided)")
+		}
+		methodName, ok := args[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("not callable (non-string method name)")
+		}
+		method := fnv.MethodByName(methodName)
+		if method.IsValid() {
+			fnv = method
+			args = args[1:]
+		} else {
+			return nil, fmt.Errorf("not callable (method not found)")
+		}
 	}
 	n := fnv.Type().NumOut()
 	if n != 1 && n != 2 {
