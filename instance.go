@@ -190,9 +190,6 @@ func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ctx = context.WithValue(ctx, requestIdKey, rid)
 	}
 
-	// See handlers.go
-	handler, handlerPattern := instance.router.Handler(r)
-
 	log := instance.config.Logger.With(slog.Group("serve",
 		slog.String("requestid", rid),
 	))
@@ -200,17 +197,20 @@ func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		slog.String("user-agent", r.Header.Get("User-Agent")),
 		slog.String("method", r.Method),
 		slog.String("requestPath", r.URL.Path),
-		slog.String("handlerPattern", handlerPattern),
 	)
+	ctx = context.WithValue(ctx, loggerKey, log)
 
-	r = r.WithContext(context.WithValue(ctx, loggerKey, log))
-	metrics := httpsnoop.CaptureMetrics(handler, w, r)
+	r = r.WithContext(ctx)
+	metrics := httpsnoop.CaptureMetrics(instance.router, w, r)
 
 	log.LogAttrs(r.Context(), levelDebug2, "request served",
 		slog.Group("response",
 			slog.Duration("duration", metrics.Duration),
 			slog.Int("statusCode", metrics.Code),
-			slog.Int64("bytes", metrics.Written)))
+			slog.Int64("bytes", metrics.Written),
+			// Uncomment after release with this commit: https://github.com/golang/go/commit/a523152ea1df8d39d923ed90d19662896eff0607
+			// slog.String("pattern", r.Pattern),
+		))
 }
 
 type requestIdType struct{}
