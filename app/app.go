@@ -16,8 +16,8 @@ import (
 type Args struct {
 	xtemplate.Config
 	Watch          []string `json:"watch_dirs" arg:",separate"`
-	WatchTemplates bool     `json:"watch_templates" default:"true"`
-	Listen         string   `json:"listen" arg:"-l" default:"0.0.0.0:8080"`
+	WatchTemplates bool     `json:"watch_templates"`
+	Listen         string   `json:"listen" arg:"-l"`
 	LogLevel       int      `json:"log_level" default:"-2"`
 	Configs        []string `json:"-" arg:"-c,--config,separate"`
 	ConfigFiles    []string `json:"-" arg:"-f,--config-file,separate"`
@@ -29,13 +29,17 @@ func (Args) Version() string {
 	return version
 }
 
+var defaultWatchTemplates = "true"
+var defaultListenAddress = "0.0.0.0:8080"
+var defaultArgs = Args{WatchTemplates: defaultWatchTemplates == "true", Listen: defaultListenAddress}
+
 // Main can be called from your func main() if you want your program to act like
 // the default xtemplate cli, or use it as a reference for making your own.
 // Provide configs to override the defaults like:
 //
 //	app.Main(xtemplate.WithFooConfig())
 func Main(overrides ...xtemplate.Option) {
-	var config Args
+	var config Args = defaultArgs
 	var log *slog.Logger
 
 	{
@@ -45,7 +49,7 @@ func Main(overrides ...xtemplate.Option) {
 		level := config.LogLevel
 		log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(level)}))
 
-		var jsonConfig Args
+		var jsonConfig Args = defaultArgs
 		var decoded bool
 		for _, name := range config.ConfigFiles {
 			func() {
