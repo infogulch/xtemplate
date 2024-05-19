@@ -98,7 +98,7 @@ designs, otherwise they'll be in the way of the fundamentals:
 
 <details><summary><strong>🔱 Add custom routes to handle any method and path pattern</strong></summary>
 
-> Handle any [Go 1.22 ServeMux](servemux) pattern by **defining a template with
+> Handle any [Go 1.22 ServeMux][servemux] pattern by **defining a template with
 > that pattern as its name**. Path placeholders are available during template
 > execution with the `.Req.PathValue` method.
 >
@@ -365,14 +365,12 @@ additional features and enhancements. Here are the key things to keep in mind:
 - You can define custom routes by defining a template with a special name in
   your template files. For example, `{{define "GET /custom-route"}}...{{end}}`
   will create a new route that handles GET requests to `/custom-route`. Names
-  also support path parameters as defined by [http.ServeMux](servemux).
+  also support path parameters as defined by [http.ServeMux][servemux].
 - Template files can be invoked from within other templates using either their
   full path relative to the template root or by using its defined template name.
 - Templates are executed with a uniform context object, which provides access to
   request data, database connections, and other useful dynamic functionality.
 - Templates can also call functions set at startup.
-
-[servemux]: https://pkg.go.dev/net/http#ServeMux
 
 > [!note]
 >
@@ -439,17 +437,17 @@ You can custom FuncMaps by configuring the `Config.FuncMaps` field.
 * 📏 `xtemplate` includes funcs to render markdown, sanitize html, convert
   values to human-readable forms, and to try to call a function to handle an
   error within the template. See the free functions named [`FuncXYZ(...)` in
-  xtemplate's Go docs](funcgodoc) for details.
+  xtemplate's Go docs][funcgodoc] for details.
 * 📏 Sprig publishes a library of useful template funcs that enable templates to
   manipulate strings, integers, floating point numbers, and dates, as well as
   perform encoding tasks, manipulate lists and dicts, converting types,
-  and manipulate file paths See [Sprig Function Documentation](sprig).
+  and manipulate file paths See [Sprig Function Documentation][sprig].
 * 📏 Go's built in functions add logic and basic printing functionality.
-  See: [text/template#Functions](gofuncs).
+  See: [text/template#Functions][gofuncs].
 
+[funcgodoc]: https://pkg.go.dev/github.com/infogulch/xtemplate#FuncHumanize
 [sprig]: https://masterminds.github.io/sprig/
 [gofuncs]: https://pkg.go.dev/text/template#hdr-Functions
-[funcgodoc]: https://pkg.go.dev/github.com/infogulch/xtemplate#FuncHumanize
 
 ## 🏆 Users
 
