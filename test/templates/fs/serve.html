@@ -1,9 +1,10 @@
 <!DOCTYPE html> <!-- servecontent ignores previously rendered content -->
 
-You can serve a file by opening it and using .Resp.ServeContent.
+You can serve a file by opening it and using .Resp.ServeContent, which discards
+any content rendered so far and responds with the contents of the file instead.
 
 You can still set headers that are added to the response.
-{{.Resp.AddHeader "Content-Type" "text/customcontenttype; charset=utf-8"}}
+{{.Resp.AddHeader "Content-Type" "text/plain; charset=utf-8"}}
 
 {{$file := .FS.Open "foo.txt"}}
 {{$stat := $file.Stat}}

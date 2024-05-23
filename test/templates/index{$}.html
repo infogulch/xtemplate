@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+{{- with $hash := .X.StaticFileHash `/assets/reset.css`}}
+<link rel="stylesheet" href="/assets/reset.css?hash={{$hash}}" integrity="{{$hash}}">
+{{- end}}
+<p>Hello world!</p>
+
+<div>
+    Navigate to different tests:
+    <ul>
+        <li><a href="/fs/">FS</a></li>
+        <li><a href="/kv/">KV</a></li>
+        <li><a href="/nats/">Nats</a></li>
+        <li><a href="/routing/">Routing</a></li>
+        <li><a href="/sse/">SSE</a></li>
+    </ul>
+</div>

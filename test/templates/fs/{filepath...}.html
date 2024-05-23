@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+{{$path := .Req.PathValue "filepath"}}
+{{if ne $path ""}}<p><a href="/fs/{{dir $path}}">Go up</a></p>{{else}}{{$path = "."}}{{end}}
+{{$result := try .FS "Stat" $path}}
+{{if not $result.OK}}
+<p>Path <code>{{$path}}</code>&nbsp;doesn't exist</p>
+{{.Resp.ReturnStatus 404}}
+{{end}}
+{{$stat := $result.Value}}
+{{if $stat.IsDir}}
+File listing for <code>{{$path}}</code>&nbsp;({{$stat.Mode}} {{printf "%+v" $stat.Sys}}):
+<ul>
+    {{range .FS.List $path}}
+    {{$lpath := list $path . | join "/"}}
+    {{$lstat := try $.FS "Stat" $lpath}}
+    <li><a href="/fs/{{$path}}/{{.}}">{{.}}</a> {{if $lstat.OK}}{{$lstat.Value.Mode}} {{printf "%+v" $lstat.Value.Sys}}{{else}}{{$lstat.Error}}{{end}}</li>
+    {{end}}
+</ul>
+{{else}}
+File size: {{$stat.Size}}
+{{end}}
