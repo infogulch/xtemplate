@@ -212,13 +212,16 @@ func (b *builder) addTemplateHandler(path_ string) error {
 			// strip the extension from the handled path
 			routePath := strings.TrimSuffix(path_, b.config.TemplateExtension)
 			// files named 'index' handle requests to the directory
-			if path.Base(routePath) == "index" {
-				routePath = path.Dir(routePath)
+			base := path.Base(routePath)
+			if base == "index" {
+				routePath = path.Dir(routePath) + "/"
 			}
-			if strings.HasSuffix(routePath, "/") {
-				routePath += "{$}"
+			if base == "index{$}" {
+				routePath = path.Dir(routePath) + "/{$}"
 			}
+			routePath = path.Clean(routePath)
 			pattern = "GET " + routePath
+			fmt.Printf("pattern: %s\n", pattern)
 			handler = bufferingTemplateHandler(b.Instance, tmpl)
 		} else if matches := routeMatcher.FindStringSubmatch(name); len(matches) == 3 {
 			method, path_ := matches[1], matches[2]
