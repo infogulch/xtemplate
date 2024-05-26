@@ -1,0 +1,5 @@
+<!DOCTYPE html>
+
+<p>{{.DB.Migrate .Migrations `^schema\.(\d+)\.sql$` (.DB.QueryVal `PRAGMA user_version;`)}} migrations applied.</p>
+
+<p>Current user_version: {{.DB.QueryVal `PRAGMA user_version`}}</p>

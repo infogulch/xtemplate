@@ -6,6 +6,11 @@
             "path": "./dataw"
         },
         {
+            "type": "fs",
+            "name": "Migrations",
+            "path": "./migrations"
+        },
+        {
             "type": "kv",
             "name": "KV",
             "values": {

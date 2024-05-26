@@ -1,0 +1,5 @@
+<!-- this runs at startup -->
+{{define "INIT db"}}
+{{template "create-migration-tables" .}}
+{{template "migrate-dir" (dict "DB" .DB "DIR" .Migrations "RE" `^schema\.(\d+)\.sql$`)}}
+{{end}}

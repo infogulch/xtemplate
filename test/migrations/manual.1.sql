@@ -1,0 +1,1 @@
+CREATE TABLE manual(id);
