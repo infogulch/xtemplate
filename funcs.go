@@ -267,12 +267,7 @@ func FuncTry(fn any, args ...any) (*result, error) {
 		}
 		reflectArgs = append(reflectArgs, arg)
 	}
-	var out []reflect.Value
-	if fnv.Type().IsVariadic() {
-		out = fnv.CallSlice(reflectArgs)
-	} else {
-		out = fnv.Call(reflectArgs)
-	}
+	out := fnv.Call(reflectArgs)
 	var err error
 	var value any
 	ierr := out[n-1].Interface()
