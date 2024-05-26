@@ -118,28 +118,32 @@ func (config Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Inst
 
 	build.bufferDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, config.Dot, []DotConfig{dcResp}))
 	build.flusherDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, config.Dot, []DotConfig{dcFlush}))
-	initDot := makeDot(append([]DotConfig{dcInstance}, config.Dot...))
 
-	// Invoke all initilization templates, aka any template whose name starts
-	// with "INIT ".
-	makeInitDot := func() (*reflect.Value, error) {
-		w, r := httptest.NewRecorder(), httptest.NewRequest("", "/", nil)
-		return initDot.value(config.Ctx, w, r)
-	}
-	if _, err := makeInitDot(); err != nil { // run at least once
-		return nil, nil, nil, fmt.Errorf("failed to initialize dot value: %w", err)
-	}
-	for _, tmpl := range build.templates.Templates() {
-		if strings.HasPrefix(tmpl.Name(), "INIT ") {
-			val, err := makeInitDot()
-			if err != nil {
-				return nil, nil, nil, fmt.Errorf("failed to initialize dot value: %w", err)
+	{
+		// Invoke all initilization templates, aka any template whose name starts
+		// with "INIT ".
+		makeDot := func() (*reflect.Value, error) {
+			w, r := httptest.NewRecorder(), httptest.NewRequest("", "/", nil)
+			return build.bufferDot.value(config.Ctx, w, r)
+		}
+		cleanup := build.bufferDot.cleanup
+		if val, err := makeDot(); err != nil { // run at least once
+			return nil, nil, nil, fmt.Errorf("failed to initialize dot value: %w", err)
+		} else if err = cleanup(val, err); err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to cleanup test dot value: %w", err)
+		}
+		for _, tmpl := range build.templates.Templates() {
+			if strings.HasPrefix(tmpl.Name(), "INIT ") {
+				val, err := makeDot()
+				if err != nil {
+					return nil, nil, nil, fmt.Errorf("failed to initialize dot value: %w", err)
+				}
+				err = tmpl.Execute(io.Discard, *val)
+				if err = cleanup(val, err); err != nil {
+					return nil, nil, nil, fmt.Errorf("template initializer '%s' failed: %w", tmpl.Name(), err)
+				}
+				build.TemplateInitializers += 1
 			}
-			err = tmpl.Execute(io.Discard, val)
-			if err = initDot.cleanup(val, err); err != nil {
-				return nil, nil, nil, fmt.Errorf("template initializer '%s' failed: %w", tmpl.Name(), err)
-			}
-			build.TemplateInitializers += 1
 		}
 	}
 
