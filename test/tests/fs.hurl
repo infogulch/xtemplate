@@ -1,10 +1,18 @@
 # reading files from fs
-GET http://localhost:8080/fs/
+GET http://localhost:8080/fs/browse/
 
 HTTP 200
 [Asserts]
 body contains "<!doctype html>"
 body contains "listing"
+
+# reading files from fs
+GET http://localhost:8080/fs/browse/subdir/
+
+HTTP 200
+[Asserts]
+body contains "<!doctype html>"
+body contains "world.txt"
 
 # serve content
 GET http://localhost:8080/fs/serve
