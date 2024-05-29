@@ -221,7 +221,6 @@ func (b *builder) addTemplateHandler(path_ string) error {
 			}
 			routePath = path.Clean(routePath)
 			pattern = "GET " + routePath
-			fmt.Printf("pattern: %s\n", pattern)
 			handler = bufferingTemplateHandler(b.Instance, tmpl)
 		} else if matches := routeMatcher.FindStringSubmatch(name); len(matches) == 3 {
 			method, path_ := matches[1], matches[2]
