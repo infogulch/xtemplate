@@ -24,6 +24,7 @@ var xtemplateFuncs template.FuncMap = template.FuncMap{
 	"markdown":         FuncMarkdown,
 	"splitFrontMatter": FuncSplitFrontMatter,
 	"return":           FuncReturn,
+	"failf":            FuncFailf,
 	"humanize":         FuncHumanize,
 	"trustHtml":        FuncTrustHtml,
 	"trustAttr":        FuncTrustAttr,
@@ -139,6 +140,10 @@ func FuncSplitFrontMatter(input string) (parsedMarkdownDoc, error) {
 // return causes the template to exit early with a success status.
 func FuncReturn() (string, error) {
 	return "", ReturnError{}
+}
+
+func FuncFailf(format string, args ...any) (string, error) {
+	return "", fmt.Errorf(format, args...)
 }
 
 // trustHtml marks the string s as safe and does not escape its contents in
