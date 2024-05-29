@@ -1,10 +1,10 @@
 package xtemplate
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"html/template"
-	"io"
 	"io/fs"
 	"log/slog"
 	"maps"
@@ -132,16 +132,20 @@ func (config Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Inst
 		} else if err = cleanup(val, err); err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to cleanup test dot value: %w", err)
 		}
+		buf := new(bytes.Buffer)
 		for _, tmpl := range build.templates.Templates() {
+			buf.Reset()
 			if strings.HasPrefix(tmpl.Name(), "INIT ") {
 				val, err := makeDot()
 				if err != nil {
 					return nil, nil, nil, fmt.Errorf("failed to initialize dot value: %w", err)
 				}
-				err = tmpl.Execute(io.Discard, *val)
+				err = tmpl.Execute(buf, *val)
 				if err = cleanup(val, err); err != nil {
 					return nil, nil, nil, fmt.Errorf("template initializer '%s' failed: %w", tmpl.Name(), err)
 				}
+				// TODO: output buffer somewhere?
+				build.config.Logger.Debug("executed initializer", slog.String("template_name", tmpl.Name()), slog.Int("rendered_len", buf.Len()))
 				build.TemplateInitializers += 1
 			}
 		}
