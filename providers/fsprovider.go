@@ -81,14 +81,14 @@ func (p *DotFSProvider) Value(r xtemplate.Request) (any, error) {
 		if _, err := newfs.(interface {
 			Stat(string) (fs.FileInfo, error)
 		}).Stat("."); err != nil {
-			return &DotFS{}, fmt.Errorf("failed to stat fs current directory '%s': %w", p.Path, err)
+			return Dir{}, fmt.Errorf("failed to stat fs current directory '%s': %w", p.Path, err)
 		}
 		p.FS = newfs
 	}
-	return &DotFS{p.FS, xtemplate.GetLogger(r.R.Context()), r.W, r.R, make(map[fs.File]struct{})}, nil
+	return Dir{dot: &dotFS{p.FS, xtemplate.GetLogger(r.R.Context()), make(map[fs.File]struct{})}, path: "."}, nil
 }
 func (p *DotFSProvider) Cleanup(a any, err error) error {
-	v := a.(*DotFS)
+	v := a.(Dir).dot
 	errs := []error{}
 	for file := range v.opened {
 		if err := file.Close(); err != nil {

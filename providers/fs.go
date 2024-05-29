@@ -6,21 +6,20 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
-	"net/http"
 	"path"
 	"sync"
 )
 
-// DotFS is used to create an xtemplate dot field value that can access files in
-// a local directory, or any [fs.FS].
-//
-// All public methods on DotFS are
-type DotFS struct {
+type dotFS struct {
 	fs     fs.FS
 	log    *slog.Logger
-	w      http.ResponseWriter
-	r      *http.Request
 	opened map[fs.File]struct{}
+}
+
+// Dir
+type Dir struct {
+	dot  *dotFS
+	path string
 }
 
 var bufPool = sync.Pool{
@@ -29,56 +28,57 @@ var bufPool = sync.Pool{
 	},
 }
 
-// List reads and returns a slice of names from the given directory
-// relative to the FS root.
-func (c *DotFS) List(name string) ([]string, error) {
-	entries, err := fs.ReadDir(c.fs, path.Clean(name))
-	if err != nil {
-		return nil, err
+// Dir returns a
+func (d Dir) Dir(name string) (Dir, error) {
+	name = path.Clean(name)
+	if st, err := d.Stat(name); err != nil {
+		return Dir{}, err
+	} else if !st.IsDir() {
+		return Dir{}, fmt.Errorf("not a directory: %s", name)
 	}
+	return Dir{dot: d.dot, path: path.Join(d.path, name)}, nil
+}
 
-	names := make([]string, 0, len(entries))
-	for _, dirEntry := range entries {
-		names = append(names, dirEntry.Name())
-	}
-
-	return names, nil
+// List reads and returns a slice of names from the given directory relative to
+// the FS root.
+func (d Dir) List(name string) ([]fs.DirEntry, error) {
+	return fs.ReadDir(d.dot.fs, path.Join(d.path, path.Clean(name)))
 }
 
 // Exists returns true if filename can be opened successfully.
-func (c *DotFS) Exists(filename string) (bool, error) {
-	file, err := c.fs.Open(filename)
+func (d Dir) Exists(name string) bool {
+	name = path.Join(d.path, path.Clean(name))
+	file, err := d.Open(name)
 	if err == nil {
 		file.Close()
-		return true, nil
+		return true
 	}
-	return false, nil
+	return false
 }
 
 // Stat returns Stat of a filename.
 //
 // Note: if you intend to read the file, afterwards, calling .Open instead may
 // be more efficient.
-func (c *DotFS) Stat(filename string) (fs.FileInfo, error) {
-	filename = path.Clean(filename)
-	file, err := c.fs.Open(filename)
+func (d Dir) Stat(name string) (fs.FileInfo, error) {
+	name = path.Join(d.path, path.Clean(name))
+	file, err := d.dot.fs.Open(name)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
-
 	return file.Stat()
 }
 
-// Read returns the contents of a filename relative to the FS root as a
-// string.
-func (c *DotFS) Read(filename string) (string, error) {
+// Read returns the contents of a filename relative to the FS root as a string.
+func (d Dir) Read(name string) (string, error) {
+	name = path.Join(d.path, path.Clean(name))
+
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer bufPool.Put(buf)
 
-	filename = path.Clean(filename)
-	file, err := c.fs.Open(filename)
+	file, err := d.dot.fs.Open(name)
 	if err != nil {
 		return "", err
 	}
@@ -93,16 +93,16 @@ func (c *DotFS) Read(filename string) (string, error) {
 }
 
 // Open opens the file
-func (c *DotFS) Open(path_ string) (fs.File, error) {
-	path_ = path.Clean(path_)
+func (d Dir) Open(name string) (fs.File, error) {
+	name = path.Join(d.path, path.Clean(name))
 
-	file, err := c.fs.Open(path_)
+	file, err := d.dot.fs.Open(name)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open file at path '%s': %w", path_, err)
+		return nil, fmt.Errorf("failed to open file at path '%s': %w", name, err)
 	}
 
-	c.log.Debug("opened file", slog.String("path", path_))
-	c.opened[file] = struct{}{}
+	d.dot.log.Debug("opened file", slog.String("path", name))
+	d.dot.opened[file] = struct{}{}
 
-	return file, nil
+	return d.dot.fs.Open(name)
 }
