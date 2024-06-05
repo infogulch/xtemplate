@@ -50,6 +50,7 @@ FROM dist AS test
 
 COPY ./test/templates /app/templates/
 COPY ./test/data /app/data/
+COPY ./test/migrations /app/migrations/
 COPY ./test/config.json /app/
 
 USER root:root
