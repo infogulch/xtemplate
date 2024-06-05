@@ -14,19 +14,7 @@ jobs:
       with:
         go-version: '1.22'
     - uses: gacts/install-hurl@v1
-
-    - name: Build
-      run: go build -v ./...
-
-    - name: Run Go Tests
-      run: go test -v ./...
-
-    - name: Run Integration Tests
-      run: go run .
-      working-directory: ./test
-
-    - name: Build binaries for all platforms
-      run: .github/workflows/release.sh
+    - uses: cue-lang/setup-cue@v1.0.0
 
     - name: Login to Docker Hub
       uses: docker/login-action@v3
@@ -34,33 +22,26 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Test docker
-      run: |
-        set -ex
-        docker build -t test --target test --build-arg LDFLAGS="${{ env.LDFLAGS }}" ..
-        docker run --rm --name test -p 8080:80 test &
-        go run . hurl
-        docker stop test
-      working-directory: ./test
-
-    - name: Build docker and push
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        build-args: |
-          LDFLAGS=${{ env.LDFLAGS }}
-        tags: |
-          infogulch/xtemplate:${{ env.VERSION }}
-          ${{ startsWith(github.ref, 'refs/tags/v') && 'infogulch/xtemplate:latest' || null }}
+    # CUE_DEBUG_TOOLS_FLOW=true cue cmd ci
+    - run: cue cmd ci
 
     - uses: actions/upload-artifact@v4
       with:
-        name: xtemplate-dist
-        path: 'dist/*'
+        name: xtemplate-amd64-linux
+        path: 'dist/xtemplate-amd64-linux/*'
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: xtemplate-amd64-darwin
+        path: 'dist/xtemplate-amd64-darwin/*'
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: xtemplate-amd64-windows
+        path: 'dist/xtemplate-amd64-windows/*'
 
     - name: Release
       if: startsWith(github.ref, 'refs/tags/v')
       uses: softprops/action-gh-release@v1
       with:
-        files: 'dist/*'
+        files: 'dist/*.zip'
