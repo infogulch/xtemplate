@@ -69,7 +69,7 @@ task: build: {
 task: run: {
 	vars: #vars
 
-	gobuild: task.build & {"vars": vars, OutFile: "\(vars.testdir)/xtemplate"}
+	gobuild: task.build & {"vars": vars, outfile: "\(vars.testdir)/xtemplate"}
 	rmdataw: file.RemoveAll & {path: "\(vars.testdir)/dataw"}
 	mkdataw: file.Mkdir & {path: "\(vars.testdir)/dataw", $dep: rmdataw.$done}
 	mklog: file.Create & {filename: "\(vars.testdir)/xtemplate.log", contents: ""}
@@ -132,8 +132,6 @@ task: dist: {
 			zip: exec.Run & {cmd: ["zip", "-jqr6", "\(dir)_\(vars.version).zip", dir], $dep: cp.$done && build.$done}
 		}
 	}
-
-	$done: and([for name, step in task.dist if name =~ "_" {step.$done}])
 }
 
 task: test_docker: {
@@ -180,7 +178,7 @@ command: run_test: {
 
 	run: task.run & {"vars": cfg.vars, start: mustSucceed: false}
 	test: task.test & {"vars": cfg.vars, hurl: $dep: run.ready.$done}
-	kill: exec.Run & {$dep: test.hurl.$done, cmd: "pkill xtemplate"} // better way?
+	kill: exec.Run & {cmd: "pkill xtemplate", $dep: test.hurl.$done} // better way?
 }
 
 command: ci: {
