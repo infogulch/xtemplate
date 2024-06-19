@@ -1,12 +1,15 @@
 package xtemplate
 
 import (
-	"tool/exec"
 	"strings"
-	"tool/file"
 	"list"
-	// "tool/cli"
+
+	"tool/exec"
+	"tool/file"
+	"tool/os"
+
 	// "encoding/json"
+	// "tool/cli"
 )
 
 #vars: {
@@ -29,21 +32,21 @@ meta: {
 	}
 	_commands: {
 		reporoot: exec.Run & {
-			cmd: ["bash", "-c", "git rev-parse --show-toplevel; >&2 echo reporoot"]
+			cmd: ["bash", "-c", "git rev-parse --show-toplevel"]
 			stdout: string
 		}
 		gitver: exec.Run & {
-			cmd: ["bash", "-c", "git describe --exact-match --tags --match='v*' 2> /dev/null || git rev-parse --short HEAD; >&2 echo gitver"]
+			cmd: ["bash", "-c", "git describe --exact-match --tags --match='v*' 2> /dev/null || git rev-parse --short HEAD"]
 			dir:    vars.rootdir
 			stdout: string
 		}
 		version: exec.Run & {
-			cmd: ["bash", "-c", "go list -f {{.Version}} -m github.com/infogulch/xtemplate@\(vars.gitver); >&2 echo version"]
+			cmd: ["bash", "-c", "go list -f {{.Version}} -m github.com/infogulch/xtemplate@\(vars.gitver)"]
 			dir:    vars.rootdir
 			stdout: string
 		}
 		latest: exec.Run & {
-			cmd: ["bash", "-c", "git tag -l --sort -version:refname | head -n 1; >&2 echo latest"]
+			cmd: ["bash", "-c", "git tag -l --sort -version:refname | head -n 1"]
 			dir:    vars.rootdir
 			stdout: string
 		}
@@ -53,11 +56,11 @@ meta: {
 task: build: {
 	vars: #vars
 
-	OutFile: *"xtemplate" | string
+	outfile: *"xtemplate" | string
 
 	gobuild: exec.Run & {
 		env: {[string]: string}
-		cmd: ["go", "build", "-ldflags", vars.ldflags, "-buildmode", "exe", "-o", OutFile, "./cmd"]
+		cmd: ["go", "build", "-ldflags", vars.ldflags, "-buildmode", "exe", "-o", outfile, "./cmd"]
 		dir:     vars.rootdir
 		success: true
 	}
@@ -113,6 +116,7 @@ task: dist: {
 	oses: ["linux", "darwin", "windows"]
 	arches: ["amd64", "arm64"]
 	matrix: [for os in oses for arch in arches {GOOS: os, GOARCH: arch}]
+	osenv: os.Environ
 
 	for env in matrix {
 		(env.GOOS + "_" + env.GOARCH): {
@@ -123,15 +127,13 @@ task: dist: {
 			}
 
 			mkdir: file.MkdirAll & {path: dir, $dep: rmdist.$done}
-			build: task.build.gobuild & {"vars": vars, "env": env, OutFile: "\(dir)/\(exe)", $dep: mkdir.$done}
+			build: task.build & {"vars": vars, outfile: "\(dir)/\(exe)", gobuild: {$dep: mkdir.$done, "env": env & osenv}}
 			cp: exec.Run & {cmd: ["cp", "README.md", "LICENSE", "\(dir)"], $dep: mkdir.$done}
-			// tar: exec.Run & {cmd: ["tar", "czf", "\(dir)_\(vars.version).tar.gz", "-C", dir, "."], $dep: cp.$done && build.$done}
 			zip: exec.Run & {cmd: ["zip", "-jqr6", "\(dir)_\(vars.version).zip", dir], $dep: cp.$done && build.$done}
-			// rm: file.RemoveAll & {path: dir, $dep: zip.$done}
 		}
 	}
 
-	wait: {$dep: and([for name, step in command.dist if name =~ "_" {step.$done}])}
+	$done: and([for name, step in task.dist if name =~ "_" {step.$done}])
 }
 
 task: test_docker: {
@@ -149,18 +151,17 @@ task: test_docker: {
 		cmd: ["bash", "-c", "grep -q 'starting server' <(docker logs -f xtemplate-test)"]
 		$dep: run.$done
 	}
-	test: task.test & {port: 8081, hurl: $dep: ready.$done}
+	test: task.test & {"vars": vars, port: 8081, hurl: $dep: ready.$done}
 	stop: exec.Run & {cmd: "docker stop xtemplate-test", $dep: test.hurl.$done} // be nice if we can always run this even if previous steps fail
 }
 
 task: build_docker: {
 	vars: #vars
 
-	_latest: [...string] | *[]
-	if vars.version == vars.latest {
-		_latest: ["infogulch/xtemplate:latest"]
-	}
-	tags: ["infogulch/xtemplate:\(vars.version)"] + _latest
+	tags: [
+		"infogulch/xtemplate:\(vars.version)",
+		if vars.version == vars.latest {"infogulch/xtemplate:latest"},
+	]
 
 	build: exec.Run & {
 		cmd: ["docker", "build"] + list.FlattenN([for t in tags {["-t", t]}], 1) + ["--build-arg", "LDFLAGS=\(vars.ldflags)", "."]
@@ -196,7 +197,7 @@ command: ci: {
 	test_docker: task.test_docker & {"vars": cfg.vars}
 	build_docker: task.build_docker & {"vars": cfg.vars, build: $dep: test_docker.stop.$done}
 	push: exec.Run & {
-		cmd: ["echo", "docker", "push"] + build_docker.tags
+		cmd: ["docker", "push"] + build_docker.tags
 		$dep: build_docker.build.$done
 	}
 }
