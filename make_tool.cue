@@ -81,8 +81,8 @@ task: run: {
 	}
 	display: exec.Run & {
 		$dep: mklog.$done
-		cmd:  "tail -f xtemplate.log"
-		dir:  vars.testdir
+		cmd: ["bash", "-c", "tail -f xtemplate.log | sed -e 's/^/[DISPLAY] /'"]
+		dir: vars.testdir
 	}
 
 	start: exec.Run & {
