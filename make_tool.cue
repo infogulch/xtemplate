@@ -9,7 +9,7 @@ import (
 	"tool/os"
 
 	// "encoding/json"
-	// "tool/cli"
+	"tool/cli"
 )
 
 #vars: {
@@ -72,7 +72,9 @@ task: run: {
 	gobuild: task.build & {"vars": vars, outfile: "\(vars.testdir)/xtemplate"}
 	rmdataw: file.RemoveAll & {path: "\(vars.testdir)/dataw"}
 	mkdataw: file.Mkdir & {path: "\(vars.testdir)/dataw", $dep: rmdataw.$done}
-	mklog: file.Create & {filename: "\(vars.testdir)/xtemplate.log", permissions: 0o666, contents: ""}
+	mklog: file.Create & {filename: "\(vars.testdir)/xtemplate.log", permissions: 0o666, contents: "hello world!\n"}
+	read: file.Read & {filename: mklog.filename, contents: string, $after: mklog}
+	prt: cli.Print & {text: "CONTENTS: " + read.contents}
 
 	ready: exec.Run & {
 		$dep: mklog.$done
