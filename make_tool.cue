@@ -72,7 +72,7 @@ task: run: {
 	gobuild: task.build & {"vars": vars, outfile: "\(vars.testdir)/xtemplate"}
 	rmdataw: file.RemoveAll & {path: "\(vars.testdir)/dataw"}
 	mkdataw: file.Mkdir & {path: "\(vars.testdir)/dataw", $dep: rmdataw.$done}
-	mklog: file.Create & {filename: "\(vars.testdir)/xtemplate.log", contents: ""}
+	mklog: file.Create & {filename: "\(vars.testdir)/xtemplate.log", permissions: 0o666, contents: ""}
 
 	ready: exec.Run & {
 		$dep: mklog.$done
