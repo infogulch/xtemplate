@@ -79,6 +79,11 @@ task: run: {
 		cmd: ["bash", "-c", "grep -q 'starting server' <(tail -f xtemplate.log)"]
 		dir: vars.testdir
 	}
+	display: exec.Run & {
+		$dep: mklog.$done
+		cmd:  "tail -f xtemplate.log"
+		dir:  vars.testdir
+	}
 
 	start: exec.Run & {
 		$dep: mkdataw.$done && mklog.$done && gobuild.$done
@@ -147,10 +152,6 @@ task: test_docker: {
 	}
 	ready: exec.Run & {
 		cmd: ["bash", "-c", "grep -q 'starting server' <(docker logs -f xtemplate-test)"]
-		$dep: run.$done
-	}
-	display: exec.Run & {
-		cmd:  "docker logs -f xtemplate-test"
 		$dep: run.$done
 	}
 	test: task.test & {"vars": vars, port: 8081, hurl: $dep: ready.$done}
