@@ -149,6 +149,10 @@ task: test_docker: {
 		cmd: ["bash", "-c", "grep -q 'starting server' <(docker logs -f xtemplate-test)"]
 		$dep: run.$done
 	}
+	display: exec.Run & {
+		cmd:  "docker logs -f xtemplate-test"
+		$dep: run.$done
+	}
 	test: task.test & {"vars": vars, port: 8081, hurl: $dep: ready.$done}
 	stop: exec.Run & {cmd: "docker stop xtemplate-test", $dep: test.hurl.$done} // be nice if we can always run this even if previous steps fail
 }
