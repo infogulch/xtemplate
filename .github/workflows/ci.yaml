@@ -22,7 +22,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - run: CUE_DEBUG_TOOLS_FLOW=true cue cmd ci
+    - run: CUE_DEBUG_TOOLS_FLOW=true cue cmd run_test
 
     - uses: actions/upload-artifact@v4
       with:
