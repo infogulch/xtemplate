@@ -76,18 +76,18 @@ task: run: {
 
 	ready: exec.Run & {
 		$dep: mklog.$done
-		cmd: ["bash", "-c", "grep -q 'starting server' <(tail -f xtemplate.log)"]
+		cmd: ["bash", "-c", "grep -q 'starting server' <(tail -f \(mklog.filename))"]
 		dir: vars.testdir
 	}
 	display: exec.Run & {
 		$dep: mklog.$done
-		cmd: ["bash", "-c", "tail -f xtemplate.log | sed -e 's/^/[DISPLAY] /'"]
+		cmd: ["bash", "-c", "echo DISPLAY; ls -la '\(mklog.filename)'; sleep 1; ls -la '\(mklog.filename)'"]
 		dir: vars.testdir
 	}
 
 	start: exec.Run & {
 		$dep: mkdataw.$done && mklog.$done && gobuild.$done
-		cmd: ["bash", "-c", "./xtemplate --loglevel -4 -d DB:sql:sqlite3:file:./dataw/test.sqlite -d FS:fs:./data --config-file config.json >xtemplate.log 2>&1"]
+		cmd: ["bash", "-c", "./xtemplate --loglevel -4 -d DB:sql:sqlite3:file:./dataw/test.sqlite -d FS:fs:./data --config-file config.json >\(mklog.filename) 2>&1"]
 		dir: vars.testdir
 	}
 }
