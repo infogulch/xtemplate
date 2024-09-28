@@ -20,7 +20,7 @@ type Config struct {
 	// The path to the templates directory. Default `templates`.
 	TemplatesDir string `json:"templates_dir,omitempty" arg:"-t,--template-dir" default:"templates"`
 
-	// The FS to load templates from. Overrides Path if not nil.
+	// The FS to load templates from. Overrides TemplatesDir if not nil.
 	TemplatesFS fs.FS `json:"-" arg:"-"`
 
 	// File extension to search for to find template files. Default `.html`.

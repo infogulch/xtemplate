@@ -29,7 +29,7 @@ func bufferingTemplateHandler(server *Instance, tmpl *template.Template) http.Ha
 
 		dot, err := server.bufferDot.value(server.config.Ctx, w, r)
 		if err != nil {
-			log.Error("failed to initialize dot value: %w", err)
+			log.Error("failed to initialize dot value", slog.Any("error", err))
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -65,7 +65,7 @@ func flushingTemplateHandler(server *Instance, tmpl *template.Template) http.Han
 
 		dot, err := server.flusherDot.value(server.config.Ctx, w, r)
 		if err != nil {
-			log.Error("failed to initialize dot value: %w", err)
+			log.Error("failed to initialize dot value", slog.Any("error", err))
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}

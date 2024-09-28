@@ -31,12 +31,11 @@
 
 ### Documentation
 
-- [ ] Documentation
-  - [ ] Using different databases
-    - Should be documented with DotDBProvider go docs (?)
-  - [ ] Using the new go-arg cli flags
-  - [ ] Using json config
-  - [ ] Creating a provider
+- [ ] Using different databases
+  - Should be documented with DotDBProvider go docs (?)
+- [ ] Using the new go-arg cli flags
+- [ ] Using json config
+- [ ] Creating a provider
 
 ### Application
 

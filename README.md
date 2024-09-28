@@ -176,7 +176,7 @@ designs, otherwise they'll be in the way of the fundamentals:
 >
 > ```html
 > <ul>
->   {{range .Tx.Query `SELECT id,name FROM contacts`}}
+>   {{range .DB.Query `SELECT id,name FROM contacts`}}
 >   <li><a href="/contact/{{.id}}">{{.name}}</a></li>
 >   {{end}}
 > </ul>
@@ -273,6 +273,8 @@ routes {
   xtemplate
 }
 ```
+
+Alternatively, build with the `xcaddy` CLI tool.
 
 ### 2. 📦 As the default CLI application
 

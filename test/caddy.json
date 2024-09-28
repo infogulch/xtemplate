@@ -1,0 +1,59 @@
+{
+	"apps": {
+		"http": {
+			"servers": {
+				"": {
+					"listen": [
+						":8082"
+					],
+					"routes": [
+						{
+							"handle": [
+								{
+									"handler": "xtemplate",
+									"minify": true,
+									"dot": [
+										{
+											"type": "sql",
+											"name": "DB",
+											"driver": "sqlite3",
+											"connstr": "file:./dataw/test.sqlite"
+										},
+										{
+											"type": "fs",
+											"name": "FS",
+											"path": "./data"
+										},
+										{
+											"type": "fs",
+											"name": "FSW",
+											"path": "./dataw"
+										},
+										{
+											"type": "fs",
+											"name": "Migrations",
+											"path": "./migrations"
+										},
+										{
+											"type": "kv",
+											"name": "KV",
+											"values": {
+												"a": "1",
+												"b": "2",
+												"hello": "world"
+											}
+										},
+										{
+											"type": "nats",
+											"name": "Nats"
+										}
+									]
+								}
+							]
+						}
+					]
+				}
+			}
+		}
+	}
+}

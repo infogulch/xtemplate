@@ -17,16 +17,18 @@ maintained with xtemplate.
 
 ## Providers
 
-### `KVDot`
+### `DotKV`
 
 Add simple key-value string pairs to your templates. Could be used for runtime
 config options for your templates.
 
-### `SqlDot`
+### `DotDB`
 
 Connect to a database with any available go driver by its name to run queries
 and execute procedures against your database from within templates.
 
-### `FSDot`
+To use a driver, import its Go package while building your application.
+
+### `DotFS`
 
 Open a directory to list and read files with templates.

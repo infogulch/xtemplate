@@ -7,9 +7,6 @@ import (
 	"tool/exec"
 	"tool/file"
 	"tool/os"
-
-	// "encoding/json"
-	// "tool/cli"
 )
 
 #vars: {
@@ -19,6 +16,7 @@ import (
 	version: string
 	ldflags: string
 	latest:  string
+	env: {[string]: string}
 }
 
 meta: {
@@ -29,6 +27,7 @@ meta: {
 		version: strings.TrimSpace(_commands.version.stdout)
 		ldflags: "-X 'github.com/infogulch/xtemplate/app.version=\(version)'"
 		latest:  strings.TrimSpace(_commands.latest.stdout)
+		env: {for k, v in _commands.env if k != "$id" {(k): v}}
 	}
 	_commands: {
 		reporoot: exec.Run & {
@@ -50,6 +49,7 @@ meta: {
 			dir:    vars.rootdir
 			stdout: string
 		}
+		env: os.Environ
 	}
 }
 
@@ -69,20 +69,13 @@ task: build: {
 task: run: {
 	vars: #vars
 
-	gobuild: task.build & {"vars": vars, outfile: "\(vars.testdir)/xtemplate"}
 	rmdataw: file.RemoveAll & {path: "\(vars.testdir)/dataw"}
 	mkdataw: file.Mkdir & {path: "\(vars.testdir)/dataw", $after: rmdataw.$done}
-	mklog: file.Create & {filename: "\(vars.testdir)/xtemplate.log", contents: ""}
 
 	start: exec.Run & {
-		$after: mkdataw.$done && mklog.$done && gobuild.gobuild.$done
-		cmd: ["bash", "-c", "./xtemplate --loglevel -4 -d DB:sql:sqlite3:file:./dataw/test.sqlite -d FS:fs:./data --config-file config.json >\(mklog.filename) 2>&1"]
-		dir: vars.testdir
-	}
-
-	ready: exec.Run & {
-		$after: mklog.$done
-		cmd: ["bash", "-c", "grep -q 'starting server' <(tail -f \(mklog.filename))"]
+		cmd: ["bash", "-c", "./xtemplate --loglevel -4 -d DB:sql:sqlite3:file:./dataw/test.sqlite -d FS:fs:./data --config-file config.json &>xtemplate.log &"]
+		dir:    vars.testdir
+		$after: mkdataw.$done
 	}
 }
 
@@ -92,9 +85,11 @@ task: test: {
 	port: int | *8080
 
 	list: file.Glob & {glob: "\(vars.testdir)/tests/*.hurl"}
+	ready: exec.Run & {cmd: "curl -X GET --retry-all-errors --retry 5 --retry-connrefused --retry-delay 1 http://localhost:\(port)/ready --silent", stdout: "OK"}
 	hurl: exec.Run & {
-		cmd: ["hurl", "--continue-on-error", "--test", "--report-html", "report", "--connect-to", "localhost:8080:localhost:\(port)"] + list.files
-		dir: vars.testdir
+		cmd: ["hurl", "--continue-on-error", "--no-output", "--test", "--report-html", "report", "--connect-to", "localhost:8080:localhost:\(port)"] + list.files
+		dir:   vars.testdir
+		after: ready.$done
 	}
 }
 
@@ -102,9 +97,18 @@ task: gotest: {
 	vars: #vars
 
 	gotest: exec.Run & {
-		cmd: "go test -v ./..."
+		cmd: ["bash", "-c", "go test -v ./... >\(vars.testdir)/gotest.log"]
 		dir: vars.rootdir
 	}
+}
+
+task: build_test: {
+	vars: #vars
+
+	build: task.build & {"vars": vars, outfile: "\(vars.testdir)/xtemplate"}
+	run: task.run & {"vars": vars, start: $after: build.gobuild.$done}
+	test: task.test & {"vars": vars, ready: $after: run.start.$done}
+	kill: exec.Run & {cmd: "pkill xtemplate", $after: test.hurl.$done}
 }
 
 task: dist: {
@@ -115,7 +119,6 @@ task: dist: {
 	oses: ["linux", "darwin", "windows"]
 	arches: ["amd64", "arm64"]
 	matrix: [for os in oses for arch in arches {GOOS: os, GOARCH: arch}]
-	osenv: os.Environ
 
 	for env in matrix {
 		(env.GOOS + "_" + env.GOARCH): {
@@ -126,30 +129,11 @@ task: dist: {
 			}
 
 			mkdir: file.MkdirAll & {path: dir, $after: rmdist.$done}
-			build: task.build & {"vars": vars, outfile: "\(dir)/\(exe)", gobuild: {$after: mkdir.$done, "env": env & osenv}}
+			build: task.build & {"vars": vars, outfile: "\(dir)/\(exe)", gobuild: {$after: mkdir.$done, "env": env & vars.env}}
 			cp: exec.Run & {cmd: ["cp", "README.md", "LICENSE", "\(dir)"], $after: mkdir.$done}
 			zip: exec.Run & {cmd: ["zip", "-jqr6", "\(dir)_\(vars.version).zip", dir], $after: cp.$done && build.$done}
 		}
 	}
-}
-
-task: test_docker: {
-	vars: #vars
-
-	build: exec.Run & {
-		cmd: ["docker", "build", "-t", "xtemplate-test", "--target", "test", "--build-arg", "LDFLAGS=\(vars.ldflags)", "."]
-		dir: vars.rootdir
-	}
-	run: exec.Run & {
-		cmd:    "docker run -d --rm --name xtemplate-test -p 8081:80 xtemplate-test"
-		$after: build.$done
-	}
-	ready: exec.Run & {
-		cmd: ["bash", "-c", "grep -q 'starting server' <(docker logs -f xtemplate-test)"]
-		$after: run.$done
-	}
-	test: task.test & {"vars": vars, port: 8081, hurl: $after: ready.$done}
-	stop: exec.Run & {cmd: "docker stop xtemplate-test", $after: test.hurl.$done} // be nice if we can always run this even if previous steps fail
 }
 
 task: build_docker: {
@@ -161,9 +145,65 @@ task: build_docker: {
 	]
 
 	build: exec.Run & {
-		cmd: ["docker", "build"] + list.FlattenN([for t in tags {["-t", t]}], 1) + ["--build-arg", "LDFLAGS=\(vars.ldflags)", "."]
+		cmd: ["docker", "build"] + list.FlattenN([for t in tags {["-t", t]}], 1) + ["--build-arg", "LDFLAGS=\(vars.ldflags)", "--progress=plain", "."]
 		dir: vars.rootdir
 	}
+}
+
+task: test_docker: {
+	vars: #vars
+
+	build: exec.Run & {
+		cmd: ["docker", "build", "-t", "xtemplate-test", "--target", "test", "--build-arg", "LDFLAGS=\(vars.ldflags)", "."]
+		dir: vars.rootdir
+	}
+	run: exec.Run & {
+		cmd: ["docker", "run", "-d", "--rm", "--name", "xtemplate-test", "-p", "8081:80", "xtemplate-test"]
+		$after: build.$done
+	}
+	test: task.test & {"vars": vars, port: 8081, ready: $after: run.$done}
+	stop: exec.Run & {cmd: "docker stop xtemplate-test", $after: test.hurl.$done} // be nice if we can always run this even if previous steps fail
+}
+
+task: build_caddy: {
+	vars: #vars
+
+	xbuild: exec.Run & {
+		cmd: ["bash", "-c",
+			"xcaddy build " +
+			"--with github.com/infogulch/xtemplate-caddy " +
+			"--with github.com/infogulch/xtemplate=. " +
+			"--with github.com/infogulch/xtemplate/providers=./providers " +
+			"--with github.com/infogulch/xtemplate/providers/nats=./providers/nats " +
+			"--with github.com/mattn/go-sqlite3 " +
+			"--output \(vars.testdir)/caddy " +
+			"&>\(vars.testdir)/xcaddy.log",
+		]
+		dir: vars.rootdir
+		env: vars.env & {CGO_ENABLED: "1"}
+	}
+}
+
+task: run_caddy: {
+	vars: #vars
+
+	rmdataw: file.RemoveAll & {path: "\(vars.testdir)/dataw"}
+	mkdataw: file.Mkdir & {path: "\(vars.testdir)/dataw", $after: rmdataw.$done}
+
+	start: exec.Run & {
+		cmd: ["bash", "-c", "./caddy start --config caddy.json &>xtemplate.caddy.log"]
+		dir:    vars.testdir
+		$after: mkdataw.$done
+	}
+}
+
+task: build_test_caddy: {
+	vars: #vars
+
+	build: task.build_caddy & {"vars": vars}
+	run: task.run_caddy & {"vars": vars, start: $after: build.xbuild.$done}
+	test: task.test & {"vars": vars, port: 8082, ready: $after: run.start.$done}
+	kill: exec.Run & {cmd: "pkill caddy", $after: test.hurl.$done} // is there a better way?
 }
 
 command: {
@@ -172,29 +212,21 @@ command: {
 	}
 }
 
-command: run_test: {
-	cfg: meta
-
-	run: task.run & {"vars": cfg.vars, start: mustSucceed: false}
-	test: task.test & {"vars": cfg.vars, hurl: $after: run.ready.$done}
-	kill: exec.Run & {cmd: "pkill xtemplate", $after: test.hurl.$done}
-}
-
 command: ci: {
 	cfg: meta
 
 	gotest: task.gotest & {"vars": cfg.vars}
 
-	run: task.run & {"vars": cfg.vars, start: mustSucceed: false} // it's killed so it will never succeed
-	test: task.test & {"vars": cfg.vars, hurl: $after: run.ready.$done}
-	kill: exec.Run & {cmd: "pkill xtemplate", $after: test.hurl.$done} // is there a better way?
+	build_test: task.build_test & {"vars": cfg.vars}
+	build_test_caddy: task.build_test_caddy & {"vars": cfg.vars, run: rmdataw: $after: build_test.kill.$done}
 
-	dist: task.dist & {"vars": cfg.vars, rmdist: $after: kill.$done}
+	dist: task.dist & {"vars": cfg.vars, rmdist: $after: build_test.kill.$done}
 
 	test_docker: task.test_docker & {"vars": cfg.vars}
 	build_docker: task.build_docker & {"vars": cfg.vars, build: $after: test_docker.stop.$done}
+
 	push: exec.Run & {
 		cmd: ["docker", "push"] + build_docker.tags
-		$after: build_docker.build.$done
+		$after: build_docker.build.$done && build_test.kill.$done && build_test_caddy.kill.$done
 	}
 }
