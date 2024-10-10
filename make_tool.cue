@@ -226,7 +226,7 @@ command: ci: {
 	build_docker: task.build_docker & {"vars": cfg.vars, build: $after: test_docker.stop.$done}
 
 	push: exec.Run & {
-		cmd: ["docker", "push"] + build_docker.tags
+		cmd: ["docker", "push", build_docker.tags[0]]
 		$after: build_docker.build.$done && build_test.kill.$done && build_test_caddy.kill.$done
 	}
 }
