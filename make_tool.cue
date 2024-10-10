@@ -165,6 +165,16 @@ task: test_docker: {
 	stop: exec.Run & {cmd: "docker stop xtemplate-test", $after: test.hurl.$done} // be nice if we can always run this even if previous steps fail
 }
 
+task: push_docker: {
+	tags: [...string]
+
+	for tag in tags {
+		("push-" + tag): exec.Run & {
+			cmd: ["docker", "push", tag]
+		}
+	}
+}
+
 task: build_caddy: {
 	vars: #vars
 
@@ -224,9 +234,5 @@ command: ci: {
 
 	test_docker: task.test_docker & {"vars": cfg.vars}
 	build_docker: task.build_docker & {"vars": cfg.vars, build: $after: test_docker.stop.$done}
-
-	push: exec.Run & {
-		cmd: ["docker", "push", build_docker.tags[0]]
-		$after: build_docker.build.$done && build_test.kill.$done && build_test_caddy.kill.$done
-	}
+	push_docker: task.push_docker & {tags: build_docker.tags} & {[=~"^push"]: $after: build_docker.build.$done}
 }
