@@ -453,6 +453,7 @@ You can custom FuncMaps by configuring the `Config.FuncMaps` field.
 
 ## 🏆 Users
 
+* [PixyBlue/lazy-lob-web](https://github.com/PixyBlue/lazy-lob-web), a fullstack web lob framework.
 * [infogulch/xrss](https://github.com/infogulch/xrss), an rss feed reader built with htmx and inline css.
 * [infogulch/todos](https://github.com/infogulch/todos), a demo todomvc application.
 
