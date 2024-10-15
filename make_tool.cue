@@ -73,7 +73,7 @@ task: run: {
 	mkdataw: file.Mkdir & {path: "\(vars.testdir)/dataw", $after: rmdataw.$done}
 
 	start: exec.Run & {
-		cmd: ["bash", "-c", "./xtemplate --loglevel -4 -d DB:sql:sqlite3:file:./dataw/test.sqlite -d FS:fs:./data --config-file config.json &>xtemplate.log &"]
+		cmd: ["bash", "-c", "./xtemplate --loglevel -4 --config-file config.json &>xtemplate.log &"]
 		dir:    vars.testdir
 		$after: mkdataw.$done
 	}
@@ -183,8 +183,6 @@ task: build_caddy: {
 			"xcaddy build " +
 			"--with github.com/infogulch/xtemplate-caddy " +
 			"--with github.com/infogulch/xtemplate=. " +
-			"--with github.com/infogulch/xtemplate/providers=./providers " +
-			"--with github.com/infogulch/xtemplate/providers/nats=./providers/nats " +
 			"--with github.com/mattn/go-sqlite3 " +
 			"--output \(vars.testdir)/caddy " +
 			"&>\(vars.testdir)/xcaddy.log",

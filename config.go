@@ -26,18 +26,20 @@ type Config struct {
 	// File extension to search for to find template files. Default `.html`.
 	TemplateExtension string `json:"template_extension,omitempty" arg:"--template-ext" default:".html"`
 
+	// Whether html templates are minified at load time. Default `true`.
+	Minify bool `json:"minify,omitempty" arg:"-m,--minify" default:"true"`
+
+	Databases       []DotDBConfig    `json:"databases" arg:"-"`
+	Flags           []DotFlagsConfig `json:"flags" arg:"-"`
+	Directories     []DotDirConfig   `json:"directories" arg:"-"`
+	Nats            []DotNatsConfig  `json:"nats" arg:"-"`
+	CustomProviders []DotConfig      `json:"-" arg:"-"`
+
 	// Left template action delimiter. Default `{{`.
 	LDelim string `json:"left,omitempty" arg:"--ldelim" default:"{{"`
 
 	// Right template action delimiter. Default `}}`.
 	RDelim string `json:"right,omitempty" arg:"--rdelim" default:"}}"`
-
-	// Whether html templates are minified at load time. Default `true`.
-	Minify bool `json:"minify,omitempty" arg:"-m,--minify" default:"true"`
-
-	// A list of additional custom fields to add to the template dot value
-	// `{{.}}`.
-	Dot []DotConfig `json:"dot" arg:"-d,--dot,separate"`
 
 	// Additional functions to add to the template execution context.
 	FuncMaps []template.FuncMap `json:"-" arg:"-"`
@@ -117,17 +119,9 @@ func WithFuncMaps(fm ...template.FuncMap) Option {
 	}
 }
 
-func WithProvider(name string, p DotProvider) Option {
+func WithProvider(p DotConfig) Option {
 	return func(c *Config) error {
-		for _, d := range c.Dot {
-			if d.Name == name {
-				if d.DotProvider != p {
-					return fmt.Errorf("tried to assign different providers the same name. name: %s; old: %v; new: %v", d.Name, d.DotProvider, p)
-				}
-				return nil
-			}
-		}
-		c.Dot = append(c.Dot, DotConfig{Name: name, DotProvider: p})
+		c.CustomProviders = append(c.CustomProviders, p)
 		return nil
 	}
 }

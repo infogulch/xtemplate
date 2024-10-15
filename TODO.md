@@ -66,8 +66,6 @@
 - [ ] See if its possible to implement sql queryrows with https://go.dev/wiki/RangefuncExperiment
   - Not until caddy releases 2.8.0 and upgrades to 1.22.
 - [ ] Add command that pre-compresses static files
-- [ ] Schema migration? https://david.rothlis.net/declarative-schema-migration-for-sqlite/
-- [ ] Schema generator: https://gitlab.com/Screwtapello/sqlite-schema-diagram/-/blob/main/sqlite-schema-diagram.sql?ref_type=heads
 - [ ] Add a way to register additional routes dynamically during init
 - [ ] Organize docs according to https://diataxis.fr/
 - [ ] Research alternative template loading strategies:

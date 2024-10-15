@@ -14,7 +14,6 @@ ARG LDFLAGS
 
 COPY app ./app/
 COPY cmd ./cmd/
-COPY providers ./providers/
 COPY *.go ./
 RUN CGO_ENABLED=1 \
     GOFLAGS='-tags="sqlite_json"' \

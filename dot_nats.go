@@ -1,4 +1,4 @@
-package nats
+package xtemplate
 
 import (
 	"context"
@@ -6,16 +6,19 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 type DotNats struct {
-	ctx  context.Context
-	conn *nats.Conn
+	ctx context.Context
+
+	*nats.Conn
+	jetstream.JetStream
 }
 
 func (d *DotNats) Subscribe(subject string) (<-chan *nats.Msg, error) {
 	ch := make(chan *nats.Msg)
-	sub, err := d.conn.ChanSubscribe(subject, ch)
+	sub, err := d.Conn.ChanSubscribe(subject, ch)
 	if err != nil {
 		return nil, err
 	}
@@ -29,19 +32,19 @@ func (d *DotNats) Subscribe(subject string) (<-chan *nats.Msg, error) {
 }
 
 func (d *DotNats) Publish(subject, message string) error {
-	return d.conn.Publish(subject, []byte(message))
+	return d.Conn.Publish(subject, []byte(message))
 }
 
 func (d *DotNats) Request(subject, data string, timeout_ ...time.Duration) (*nats.Msg, error) {
 	var timeout time.Duration
 	switch len(timeout_) {
 	case 0:
-		timeout = 1 * time.Second
+		timeout = 5 * time.Second
 	case 1:
 		timeout = timeout_[0]
 	default:
 		return nil, fmt.Errorf("too many timeout args")
 	}
 
-	return d.conn.Request(subject, []byte(data), timeout)
+	return d.Conn.Request(subject, []byte(data), timeout)
 }

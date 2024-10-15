@@ -1,0 +1,20 @@
+GET http://localhost:8080/nats
+HTTP 200
+[Asserts]
+body contains "multi-user realtime chat"
+
+
+GET http://localhost:8080/nats/messages
+Accept: text/event-stream
+HTTP 200
+[Asserts]
+duration < 1000
+body contains "data: \"<li>hello 1</li>\"\n\n"
+
+
+POST http://localhost:8080/nats/messages
+[FormParams]
+msg: "hello 1"
+HTTP 200
+[Asserts]
+body == "<input autofocus type=\"text\" name=\"msg\" required=\"required\">"

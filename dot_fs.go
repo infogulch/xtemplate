@@ -1,4 +1,4 @@
-package providers
+package xtemplate
 
 import (
 	"bytes"
@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"log/slog"
 	"path"
-	"sync"
 )
 
 type dotFS struct {
@@ -20,12 +19,6 @@ type dotFS struct {
 type Dir struct {
 	dot  *dotFS
 	path string
-}
-
-var bufPool = sync.Pool{
-	New: func() any {
-		return new(bytes.Buffer)
-	},
 }
 
 // Dir returns a

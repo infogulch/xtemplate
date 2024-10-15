@@ -1,27 +1,43 @@
 {
-    "dot": [
+    "directories": [
         {
-            "type": "fs",
+            "name": "FS",
+            "path": "./data"
+        },
+        {
             "name": "FSW",
             "path": "./dataw"
         },
         {
-            "type": "fs",
             "name": "Migrations",
             "path": "./migrations"
-        },
+        }
+    ],
+    "databases": [
         {
-            "type": "kv",
-            "name": "KV",
+            "name": "DB",
+            "driver": "sqlite3",
+            "connstr": "file:./dataw/test.sqlite"
+        }
+    ],
+    "flags": [
+        {
+            "name": "Flags",
             "values": {
                 "a": "1",
                 "b": "2",
                 "hello": "world"
             }
-        },
+        }
+    ],
+    "nats": [
         {
-            "type": "nats",
-            "name": "Nats"
+            "name": "Nats",
+            "nats_config": {
+                "in_process_server_options": {
+                    "dont_listen": true
+                }
+            }
         }
     ]
 }

@@ -2,6 +2,7 @@ package xtemplate
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"html/template"
@@ -12,9 +13,9 @@ type dotXProvider struct {
 	instance *Instance
 }
 
-func (p dotXProvider) Value(Request) (any, error) {
-	return DotX(p), nil
-}
+func (dotXProvider) FieldName() string            { return "X" }
+func (dotXProvider) Init(_ context.Context) error { return nil }
+func (p dotXProvider) Value(Request) (any, error) { return DotX(p), nil }
 
 func (dotXProvider) Cleanup(_ any, err error) error {
 	if errors.As(err, &ReturnError{}) {

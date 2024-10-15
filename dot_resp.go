@@ -1,6 +1,7 @@
 package xtemplate
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -13,6 +14,8 @@ import (
 
 type dotRespProvider struct{}
 
+func (dotRespProvider) FieldName() string            { return "Resp" }
+func (dotRespProvider) Init(_ context.Context) error { return nil }
 func (dotRespProvider) Value(r Request) (any, error) {
 	return DotResp{
 		Header: make(http.Header),

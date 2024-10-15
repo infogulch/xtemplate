@@ -21,6 +21,8 @@ import (
 	"github.com/Masterminds/sprig/v3"
 	"github.com/felixge/httpsnoop"
 	"github.com/google/uuid"
+	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/css"
 	"github.com/tdewolff/minify/v2/html"
@@ -46,24 +48,27 @@ type Instance struct {
 	templates *template.Template
 	funcs     template.FuncMap
 
+	natsServer *server.Server
+	natsClient *jetstream.JetStream
+
 	bufferDot  dot
 	flusherDot dot
 }
 
 // Instance creates a new *Instance from the given config
-func (config Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []InstanceRoute, error) {
+func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []InstanceRoute, error) {
 	start := time.Now()
-
-	if _, err := config.Defaults().Options(cfgs...); err != nil {
-		return nil, nil, nil, err
-	}
 
 	build := &builder{
 		Instance: &Instance{
-			config: config,
+			config: *config.Defaults(),
 			id:     nextInstanceIdentity.Add(1),
 		},
 		InstanceStats: &InstanceStats{},
+	}
+
+	if _, err := build.config.Options(cfgs...); err != nil {
+		return nil, nil, nil, err
 	}
 
 	build.config.Logger = build.config.Logger.With(slog.Int64("instance", build.id))
@@ -111,27 +116,59 @@ func (config Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Inst
 		return nil, nil, nil, fmt.Errorf("error scanning files: %w", err)
 	}
 
-	dcInstance := DotConfig{"X", "instance", dotXProvider{build.Instance}}
-	dcReq := DotConfig{"Req", "req", dotReqProvider{}}
-	dcResp := DotConfig{"Resp", "resp", dotRespProvider{}}
-	dcFlush := DotConfig{"Flush", "flush", dotFlushProvider{}}
+	dcInstance := dotXProvider{build.Instance}
+	dcReq := dotReqProvider{}
+	dcResp := dotRespProvider{}
+	dcFlush := dotFlushProvider{}
 
-	build.bufferDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, config.Dot, []DotConfig{dcResp}))
-	build.flusherDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, config.Dot, []DotConfig{dcFlush}))
+	var dot []DotConfig
+
+	{
+		names := map[string]int{}
+		for _, d := range build.config.Databases {
+			dot = append(dot, &d)
+			names[d.FieldName()] += 1
+		}
+		for _, d := range build.config.Flags {
+			dot = append(dot, &d)
+			names[d.FieldName()] += 1
+		}
+		for _, d := range build.config.Directories {
+			dot = append(dot, &d)
+			names[d.FieldName()] += 1
+		}
+		for _, d := range build.config.Nats {
+			dot = append(dot, &d)
+			names[d.FieldName()] += 1
+		}
+		for _, d := range build.config.CustomProviders {
+			dot = append(dot, d)
+			names[d.FieldName()] += 1
+		}
+		for name, count := range names {
+			if count > 1 {
+				return nil, nil, nil, fmt.Errorf("dot field name '%s' is used %d times", name, count)
+			}
+		}
+		for _, d := range dot {
+			err := d.Init(build.config.Ctx)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("failed to initialize dot field '%s': %w", d.FieldName(), err)
+			}
+		}
+	}
+
+	build.bufferDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, dot, []DotConfig{dcResp}))
+	build.flusherDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, dot, []DotConfig{dcFlush}))
 
 	{
 		// Invoke all initilization templates, aka any template whose name starts
 		// with "INIT ".
 		makeDot := func() (*reflect.Value, error) {
 			w, r := httptest.NewRecorder(), httptest.NewRequest("", "/", nil)
-			return build.bufferDot.value(config.Ctx, w, r)
+			return build.bufferDot.value(build.config.Ctx, w, r)
 		}
 		cleanup := build.bufferDot.cleanup
-		if val, err := makeDot(); err != nil { // run at least once
-			return nil, nil, nil, fmt.Errorf("failed to initialize dot value: %w", err)
-		} else if err = cleanup(val, err); err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to cleanup test dot value: %w", err)
-		}
 		buf := new(bytes.Buffer)
 		for _, tmpl := range build.templates.Templates() {
 			buf.Reset()
