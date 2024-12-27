@@ -12,30 +12,31 @@
 								{
 									"handler": "xtemplate",
 									"minify": true,
+									"templates_dir": "../templates",
 									"databases": [
 										{
 											"name": "DB",
 											"driver": "sqlite3",
-											"connstr": "file:./dataw/test.sqlite"
+											"connstr": "file:./test.sqlite"
 										}
 									],
 									"directories": [
 										{
 											"name": "FS",
-											"path": "./data"
+											"path": "../data"
 										},
 										{
 											"name": "FSW",
-											"path": "./dataw"
+											"path": "."
 										},
 										{
 											"name": "Migrations",
-											"path": "./migrations"
+											"path": "../migrations"
 										}
 									],
 									"flags": [
 										{
-											"name": "KV",
+											"name": "Flags",
 											"values": {
 												"a": "1",
 												"b": "2",

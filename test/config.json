@@ -1,23 +1,24 @@
 {
+    "templates_dir": "../templates",
     "directories": [
         {
             "name": "FS",
-            "path": "./data"
+            "path": "../data"
         },
         {
             "name": "FSW",
-            "path": "./dataw"
+            "path": "."
         },
         {
             "name": "Migrations",
-            "path": "./migrations"
+            "path": "../migrations"
         }
     ],
     "databases": [
         {
             "name": "DB",
             "driver": "sqlite3",
-            "connstr": "file:./dataw/test.sqlite"
+            "connstr": "file:./test.sqlite"
         }
     ],
     "flags": [

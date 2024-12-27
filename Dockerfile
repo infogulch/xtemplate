@@ -53,14 +53,15 @@ COPY ./test/migrations /app/migrations/
 COPY ./test/config.json /app/
 
 USER root:root
-RUN mkdir /app/dataw; chown $USER:$USER /app/dataw
-USER $USER:$USER
+RUN mkdir /app/dataw
 
 VOLUME /app/dataw
 
 RUN ["/app/xtemplate", "--version"]
 
-CMD ["--loglevel", "-4", "-d", "DB:sql:sqlite3:file:./dataw/test.sqlite", "-d", "FS:fs:./data", "--config-file", "config.json"]
+WORKDIR /app/dataw
+
+CMD ["--loglevel", "-4", "--config-file", "../config.json"]
 
 ###
 

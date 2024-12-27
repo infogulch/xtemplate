@@ -69,25 +69,25 @@ task: build: {
 task: run: {
 	vars: #vars
 
-	rmdataw: file.RemoveAll & {path: "\(vars.testdir)/dataw"}
-	mkdataw: file.Mkdir & {path: "\(vars.testdir)/dataw", $after: rmdataw.$done}
+	mktemp: file.MkdirTemp & {dir: vars.testdir, pattern: "temp-"}
 
 	start: exec.Run & {
-		cmd: ["bash", "-c", "./xtemplate --loglevel -4 --config-file config.json &>xtemplate.log &"]
-		dir:    vars.testdir
-		$after: mkdataw.$done
+		cmd: ["bash", "-c", "../xtemplate --loglevel -4 --config-file ../config.json &>xtemplate.log &"]
+		dir:    mktemp.path
+		$after: mktemp.$done
 	}
 }
 
 task: test: {
 	vars: #vars
 
-	port: int | *8080
+	port:       int | *8080
+	reportpath: string | *"report"
 
-	list: file.Glob & {glob: "\(vars.testdir)/tests/*.hurl"}
+	testfiles: file.Glob & {glob: "\(vars.testdir)/tests/*.hurl"}
 	ready: exec.Run & {cmd: "curl -X GET --retry-all-errors --retry 5 --retry-connrefused --retry-delay 1 http://localhost:\(port)/ready --silent", stdout: "OK"}
 	hurl: exec.Run & {
-		cmd: ["hurl", "--continue-on-error", "--no-output", "--test", "--report-html", "report", "--connect-to", "localhost:8080:localhost:\(port)"] + list.files
+		cmd: list.Concat([["hurl", "--continue-on-error", "--no-output", "--test", "--report-html", reportpath, "--connect-to", "localhost:8080:localhost:\(port)"], testfiles.files])
 		dir:   vars.testdir
 		after: ready.$done
 	}
@@ -107,7 +107,7 @@ task: build_test: {
 
 	build: task.build & {"vars": vars, outfile: "\(vars.testdir)/xtemplate"}
 	run: task.run & {"vars": vars, start: $after: build.gobuild.$done}
-	test: task.test & {"vars": vars, ready: $after: run.start.$done}
+	test: task.test & {"vars": vars, reportpath: "\(run.mktemp.path)/report", ready: $after: run.start.$done}
 	kill: exec.Run & {cmd: "pkill xtemplate", $after: test.hurl.$done}
 }
 
@@ -145,7 +145,7 @@ task: build_docker: {
 	]
 
 	build: exec.Run & {
-		cmd: ["docker", "build"] + list.FlattenN([for t in tags {["-t", t]}], 1) + ["--build-arg", "LDFLAGS=\(vars.ldflags)", "--progress=plain", "."]
+		cmd: list.Concat([["docker", "build"], list.FlattenN([for t in tags {["-t", t]}], 1), ["--build-arg", "LDFLAGS=\(vars.ldflags)", "--progress=plain", "."]])
 		dir: vars.rootdir
 	}
 }
@@ -153,15 +153,22 @@ task: build_docker: {
 task: test_docker: {
 	vars: #vars
 
+	mktemp: file.MkdirTemp & {dir: vars.testdir, pattern: "temp-"}
+
 	build: exec.Run & {
 		cmd: ["docker", "build", "-t", "xtemplate-test", "--target", "test", "--build-arg", "LDFLAGS=\(vars.ldflags)", "."]
 		dir: vars.rootdir
 	}
 	run: exec.Run & {
-		cmd: ["docker", "run", "-d", "--rm", "--name", "xtemplate-test", "-p", "8081:80", "xtemplate-test"]
+		cmd: ["bash", "-c", "docker run -d --rm --name xtemplate-test -p 8081:80 -v \(mktemp.path):/app/dataw xtemplate-test"]
 		$after: build.$done
 	}
-	test: task.test & {"vars": vars, port: 8081, ready: $after: run.$done}
+	logs: exec.Run & {
+		cmd: ["bash", "-c", "docker logs xtemplate-test &>docker.log"]
+		dir:    mktemp.path
+		$after: run.$done
+	}
+	test: task.test & {"vars": vars, port: 8081, reportpath: "\(mktemp.path)/report", ready: $after: run.$done}
 	stop: exec.Run & {cmd: "docker stop xtemplate-test", $after: test.hurl.$done} // be nice if we can always run this even if previous steps fail
 }
 
@@ -195,13 +202,12 @@ task: build_caddy: {
 task: run_caddy: {
 	vars: #vars
 
-	rmdataw: file.RemoveAll & {path: "\(vars.testdir)/dataw"}
-	mkdataw: file.Mkdir & {path: "\(vars.testdir)/dataw", $after: rmdataw.$done}
+	mktemp: file.MkdirTemp & {dir: vars.testdir, pattern: "temp-"}
 
 	start: exec.Run & {
-		cmd: ["bash", "-c", "./caddy start --config caddy.json &>xtemplate.caddy.log"]
-		dir:    vars.testdir
-		$after: mkdataw.$done
+		cmd: ["bash", "-c", "../caddy start --config ../caddy.json &>caddy.log"]
+		dir:    mktemp.path
+		$after: mktemp.$done
 	}
 }
 
@@ -210,7 +216,7 @@ task: build_test_caddy: {
 
 	build: task.build_caddy & {"vars": vars}
 	run: task.run_caddy & {"vars": vars, start: $after: build.xbuild.$done}
-	test: task.test & {"vars": vars, port: 8082, ready: $after: run.start.$done}
+	test: task.test & {"vars": vars, port: 8082, reportpath: "\(run.mktemp.path)/report", ready: $after: run.start.$done}
 	kill: exec.Run & {cmd: "pkill caddy", $after: test.hurl.$done} // is there a better way?
 }
 
@@ -223,14 +229,20 @@ command: {
 command: ci: {
 	cfg: meta
 
+	tempdirs: file.Glob & {glob: "\(cfg.vars.testdir)/temp-*"}
+	for tempdir in tempdirs.files {
+		("delete-" + tempdir): file.RemoveAll & {path: tempdir}
+	}
+
 	gotest: task.gotest & {"vars": cfg.vars}
 
-	build_test: task.build_test & {"vars": cfg.vars}
-	build_test_caddy: task.build_test_caddy & {"vars": cfg.vars, run: rmdataw: $after: build_test.kill.$done}
+	build_test: task.build_test & {"vars": cfg.vars, run: mktemp: $after: tempdirs.$done}
+	build_test_caddy: task.build_test_caddy & {"vars": cfg.vars, run: mktemp: $after: tempdirs.$done}
+	test_docker: task.test_docker & {"vars": cfg.vars, mktemp: $after: tempdirs.$done}
 
-	dist: task.dist & {"vars": cfg.vars, rmdist: $after: build_test.kill.$done}
+	pass: build_test.kill.$done && build_test_caddy.kill.$done && test_docker.stop.$done
 
-	test_docker: task.test_docker & {"vars": cfg.vars}
-	build_docker: task.build_docker & {"vars": cfg.vars, build: $after: test_docker.stop.$done}
+	dist: task.dist & {"vars": cfg.vars, rmdist: $after: pass}
+	build_docker: task.build_docker & {"vars": cfg.vars, build: $after: pass}
 	push_docker: task.push_docker & {tags: build_docker.tags} & {[=~"^push"]: $after: build_docker.build.$done}
 }
