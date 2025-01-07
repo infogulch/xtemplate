@@ -26,12 +26,14 @@ jobs:
     # CUE_DEBUG_TOOLS_FLOW=true cue cmd ci
     - run: cue cmd ci
 
-    - uses: actions/upload-artifact@v4
+    - name: Archive test results
+      uses: actions/upload-artifact@v4
+      if: always()
       with:
         name: logs
         path: |
-          test/*.log
-          test/report/
+          test/**/*.log
+          test/**/report/
 
     - uses: actions/upload-artifact@v4
       with:
