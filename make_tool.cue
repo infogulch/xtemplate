@@ -131,7 +131,7 @@ task: dist: {
 			mkdir: file.MkdirAll & {path: dir, $after: rmdist.$done}
 			build: task.build & {"vars": vars, outfile: "\(dir)/\(exe)", gobuild: {$after: mkdir.$done, "env": env & vars.env}}
 			cp: exec.Run & {cmd: ["cp", "README.md", "LICENSE", "\(dir)"], $after: mkdir.$done}
-			zip: exec.Run & {cmd: ["zip", "-jqr6", "\(dir)_\(vars.version).zip", dir], $after: cp.$done && build.$done}
+			zip: exec.Run & {cmd: ["zip", "-jqr6", "\(dir)_\(vars.version).zip", dir], $after: cp.$done & build.gobuild.$done}
 		}
 	}
 }
@@ -185,6 +185,8 @@ task: push_docker: {
 task: build_caddy: {
 	vars: #vars
 
+	flag: *"" | string @tag(debug,short=debug)
+
 	xbuild: exec.Run & {
 		cmd: ["bash", "-c",
 			"xcaddy build " +
@@ -195,7 +197,10 @@ task: build_caddy: {
 			"&>\(vars.testdir)/xcaddy.log",
 		]
 		dir: vars.rootdir
-		env: vars.env & {CGO_ENABLED: "1"}
+		env: vars.env & {
+			CGO_ENABLED: "1"
+			if flag == "debug" {XCADDY_DEBUG: "1"}
+		}
 	}
 }
 
