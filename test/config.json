@@ -1,9 +1,9 @@
 {
-    "templates_dir": "../templates",
+    "templates_dir": "templates",
     "directories": [
         {
             "name": "FS",
-            "path": "../data"
+            "path": "data"
         },
         {
             "name": "FSW",
@@ -11,7 +11,7 @@
         },
         {
             "name": "Migrations",
-            "path": "../migrations"
+            "path": "migrations"
         }
     ],
     "databases": [

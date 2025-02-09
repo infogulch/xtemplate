@@ -40,7 +40,7 @@ meta: {
 			stdout: string
 		}
 		version: exec.Run & {
-			cmd: ["bash", "-c", "go list -f {{.Version}} -m github.com/infogulch/xtemplate@\(vars.gitver)"]
+			cmd: ["bash", "-c", "go list -f {{.Version}} -m github.com/infogulch/xtemplate@\(vars.gitver) || echo 'github.com/infogulch/xtemplate@'$(git describe --tags --match='v*')"]
 			dir:    vars.rootdir
 			stdout: string
 		}
@@ -66,15 +66,26 @@ task: build: {
 	}
 }
 
-task: run: {
+task: mktemp: {
 	vars: #vars
 
 	mktemp: file.MkdirTemp & {dir: vars.testdir, pattern: "temp-"}
+	copy: exec.Run & {
+		cmd: "cp -r templates/ data/ migrations/ " + mktemp.path
+		dir: vars.testdir
+		$done: bool
+	}
+}
+
+task: run: {
+	vars: #vars
+
+	mktemp: task.mktemp & {"vars": vars}
 
 	start: exec.Run & {
 		cmd: ["bash", "-c", "../xtemplate --loglevel -4 --config-file ../config.json &>xtemplate.log &"]
-		dir:    mktemp.path
-		$after: mktemp.$done
+		dir:    mktemp.mktemp.path
+		$after: mktemp.copy.$done
 	}
 }
 
@@ -107,7 +118,7 @@ task: build_test: {
 
 	build: task.build & {"vars": vars, outfile: "\(vars.testdir)/xtemplate"}
 	run: task.run & {"vars": vars, start: $after: build.gobuild.$done}
-	test: task.test & {"vars": vars, reportpath: "\(run.mktemp.path)/report", ready: $after: run.start.$done}
+	test: task.test & {"vars": vars, reportpath: "\(run.mktemp.mktemp.path)/report", ready: $after: run.start.$done}
 	kill: exec.Run & {cmd: "pkill xtemplate", $after: test.hurl.$done}
 }
 
@@ -153,22 +164,22 @@ task: build_docker: {
 task: test_docker: {
 	vars: #vars
 
-	mktemp: file.MkdirTemp & {dir: vars.testdir, pattern: "temp-"}
+	mktemp: task.mktemp & {"vars": vars}
 
 	build: exec.Run & {
 		cmd: ["docker", "build", "-t", "xtemplate-test", "--target", "test", "--build-arg", "LDFLAGS=\(vars.ldflags)", "."]
 		dir: vars.rootdir
 	}
 	run: exec.Run & {
-		cmd: ["bash", "-c", "docker run -d --rm --name xtemplate-test -p 8081:80 -v \(mktemp.path):/app/dataw xtemplate-test"]
-		$after: build.$done
+		cmd: ["bash", "-c", "docker run -d --rm --name xtemplate-test -p 8081:80 -v \(mktemp.mktemp.path):/app/dataw xtemplate-test"]
+		$after: build.$done && mktemp.copy.$done
 	}
 	logs: exec.Run & {
 		cmd: ["bash", "-c", "docker logs xtemplate-test &>docker.log"]
-		dir:    mktemp.path
+		dir:    mktemp.mktemp.path
 		$after: run.$done
 	}
-	test: task.test & {"vars": vars, port: 8081, reportpath: "\(mktemp.path)/report", ready: $after: run.$done}
+	test: task.test & {"vars": vars, port: 8081, reportpath: "\(mktemp.mktemp.path)/report", ready: $after: run.$done}
 	stop: exec.Run & {cmd: "docker stop xtemplate-test", $after: test.hurl.$done} // be nice if we can always run this even if previous steps fail
 }
 
@@ -208,12 +219,12 @@ task: build_caddy: {
 task: run_caddy: {
 	vars: #vars
 
-	mktemp: file.MkdirTemp & {dir: vars.testdir, pattern: "temp-"}
+	mktemp: task.mktemp & {"vars": vars}
 
 	start: exec.Run & {
 		cmd: ["bash", "-c", "../caddy start --config ../caddy.json &>caddy.log"]
-		dir:    mktemp.path
-		$after: mktemp.$done
+		dir:    mktemp.mktemp.path
+		$after: mktemp.copy.$done
 	}
 }
 
@@ -222,7 +233,7 @@ task: build_test_caddy: {
 
 	build: task.build_caddy & {"vars": vars}
 	run: task.run_caddy & {"vars": vars, start: $after: build.xbuild.$done}
-	test: task.test & {"vars": vars, port: 8082, reportpath: "\(run.mktemp.path)/report", ready: $after: run.start.$done}
+	test: task.test & {"vars": vars, port: 8082, reportpath: "\(run.mktemp.mktemp.path)/report", ready: $after: run.start.$done}
 	kill: exec.Run & {cmd: "pkill caddy", $after: test.hurl.$done} // is there a better way?
 }
 
@@ -242,9 +253,9 @@ command: ci: {
 
 	gotest: task.gotest & {"vars": cfg.vars}
 
-	build_test: task.build_test & {"vars": cfg.vars, run: mktemp: $after: tempdirs.$done}
-	build_test_caddy: task.build_test_caddy & {"vars": cfg.vars, run: mktemp: $after: tempdirs.$done}
-	test_docker: task.test_docker & {"vars": cfg.vars, mktemp: $after: tempdirs.$done}
+	build_test: task.build_test & {"vars": cfg.vars, run: mktemp: mktemp: $after: tempdirs.$done}
+	build_test_caddy: task.build_test_caddy & {"vars": cfg.vars, run: mktemp: mktemp: $after: tempdirs.$done}
+	test_docker: task.test_docker & {"vars": cfg.vars, mktemp: mktemp: $after: tempdirs.$done}
 
 	pass: build_test.kill.$done && build_test_caddy.kill.$done && test_docker.stop.$done
 
