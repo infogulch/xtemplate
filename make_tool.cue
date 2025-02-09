@@ -40,7 +40,7 @@ meta: {
 			stdout: string
 		}
 		version: exec.Run & {
-			cmd: ["bash", "-c", "go list -f {{.Version}} -m github.com/infogulch/xtemplate@\(vars.gitver) || echo 'github.com/infogulch/xtemplate@'$(git describe --tags --match='v*')"]
+			cmd: ["bash", "-c", "go list -f {{.Version}} -m github.com/infogulch/xtemplate@\(vars.gitver) 2> /dev/null || git describe --tags --match='v*'"]
 			dir:    vars.rootdir
 			stdout: string
 		}
