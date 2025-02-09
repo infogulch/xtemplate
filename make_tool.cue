@@ -178,6 +178,7 @@ task: push_docker: {
 	for tag in tags {
 		("push-" + tag): exec.Run & {
 			cmd: ["docker", "push", tag]
+			mustSucceed: false
 		}
 	}
 }
