@@ -232,7 +232,7 @@ designs, otherwise they'll be in the way of the fundamentals:
 > stale cache issues**.
 >
 > ```html
-> {{- with $hash := .StaticFileHash `/reset.css`}}
+> {{- with $hash := .X.StaticFileHash `/assets/reset.css`}}
 > <link rel="stylesheet" href="/reset.css?hash={{$hash}}" integrity="{{$hash}}">
 > {{- end}}
 > ```
