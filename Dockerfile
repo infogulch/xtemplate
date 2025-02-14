@@ -54,14 +54,11 @@ COPY ./test/config.json /app/
 
 USER root:root
 RUN mkdir /app/dataw
-
 VOLUME /app/dataw
 
 RUN ["/app/xtemplate", "--version"]
 
-WORKDIR /app/dataw
-
-CMD ["--loglevel", "-4", "--config-file", "../config.json"]
+CMD ["--loglevel", "-4", "--config-file", "./config.json"]
 
 ###
 

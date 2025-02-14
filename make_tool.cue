@@ -53,6 +53,41 @@ meta: {
 	}
 }
 
+RunBash: exec.Run & {
+	bcmd: [...string] | string
+	_cmd: string
+	_cmd: bcmd | strings.Join([for arg in bcmd {
+		if !strings.ContainsAny(arg, "\"'$ \t\n") {
+			arg
+		}
+		if strings.ContainsAny(arg, "\"'$ \t\n") {
+			"'"+strings.Replace(arg, "'", "''", -1)+"'"
+		}
+	}], " ")
+	cmd: ["bash", "-c", _cmd]
+}
+
+MkTemp: {
+	vars: #vars
+
+	name: string
+
+	remove: file.RemoveAll & {path: vars.testdir+"/temp-"+name}
+	mktemp: file.Mkdir & {path: remove.path, $after: remove.$done}
+	copy: RunBash & {
+		bcmd: ["cp", "-r", "templates/", "data/", "migrations/", "config.json", "caddy.json", remove.path]
+		dir: vars.testdir
+		$after: mktemp.$done
+	}
+}
+
+task: testbash: {
+	vars: #vars
+
+	mktemp: MkTemp & {"vars": vars, "name": "testbash"}
+	create: file.Create & {filename: mktemp.path + "/hello.txt"}
+}
+
 task: build: {
 	vars: #vars
 
@@ -66,24 +101,13 @@ task: build: {
 	}
 }
 
-task: mktemp: {
-	vars: #vars
-
-	mktemp: file.MkdirTemp & {dir: vars.testdir, pattern: "temp-"}
-	copy: exec.Run & {
-		cmd: "cp -r templates/ data/ migrations/ " + mktemp.path
-		dir: vars.testdir
-		$done: bool
-	}
-}
-
 task: run: {
 	vars: #vars
 
-	mktemp: task.mktemp & {"vars": vars}
+	mktemp: MkTemp & {"vars": vars, name: "native"}
 
-	start: exec.Run & {
-		cmd: ["bash", "-c", "../xtemplate --loglevel -4 --config-file ../config.json &>xtemplate.log &"]
+	start: RunBash & {
+		bcmd: "../xtemplate --loglevel -4 --config-file config.json &>xtemplate.log &"
 		dir:    mktemp.mktemp.path
 		$after: mktemp.copy.$done
 	}
@@ -96,7 +120,7 @@ task: test: {
 	reportpath: string | *"report"
 
 	testfiles: file.Glob & {glob: "\(vars.testdir)/tests/*.hurl"}
-	ready: exec.Run & {cmd: "curl -X GET --retry-all-errors --retry 5 --retry-connrefused --retry-delay 1 http://localhost:\(port)/ready --silent", stdout: "OK"}
+	ready: RunBash & {bcmd: "curl -X GET --retry-all-errors --retry 5 --retry-connrefused --retry-delay 1 http://localhost:\(port)/ready --silent", stdout: "OK"}
 	hurl: exec.Run & {
 		cmd: list.Concat([["hurl", "--continue-on-error", "--no-output", "--test", "--report-html", reportpath, "--connect-to", "localhost:8080:localhost:\(port)"], testfiles.files])
 		dir:   vars.testdir
@@ -107,9 +131,10 @@ task: test: {
 task: gotest: {
 	vars: #vars
 
-	gotest: exec.Run & {
-		cmd: ["bash", "-c", "go test -v ./... >\(vars.testdir)/gotest.log"]
+	gotest: RunBash & {
+		bcmd: "go test -v ./... >'\(vars.testdir)/gotest.log'"
 		dir: vars.rootdir
+		env: vars.env
 	}
 }
 
@@ -141,8 +166,8 @@ task: dist: {
 
 			mkdir: file.MkdirAll & {path: dir, $after: rmdist.$done}
 			build: task.build & {"vars": vars, outfile: "\(dir)/\(exe)", gobuild: {$after: mkdir.$done, "env": env & vars.env}}
-			cp: exec.Run & {cmd: ["cp", "README.md", "LICENSE", "\(dir)"], $after: mkdir.$done}
-			zip: exec.Run & {cmd: ["zip", "-jqr6", "\(dir)_\(vars.version).zip", dir], $after: cp.$done & build.gobuild.$done}
+			cp: RunBash & {bcmd: ["cp", "README.md", "LICENSE", dir], $after: mkdir.$done}
+			zip: RunBash & {bcmd: ["zip", "-jqr6", "\(dir)_\(vars.version).zip", dir], $after: cp.$done & build.gobuild.$done}
 		}
 	}
 }
@@ -155,8 +180,8 @@ task: build_docker: {
 		if vars.version == vars.latest {"infogulch/xtemplate:latest"},
 	]
 
-	build: exec.Run & {
-		cmd: list.Concat([["docker", "build"], list.FlattenN([for t in tags {["-t", t]}], 1), ["--build-arg", "LDFLAGS=\(vars.ldflags)", "--progress=plain", "."]])
+	build: RunBash & {
+		bcmd: list.Concat([["docker", "build"], list.FlattenN([for t in tags {["-t", t]}], 1), ["--build-arg", "LDFLAGS=\(vars.ldflags)", "--progress=plain", "."]])
 		dir: vars.rootdir
 	}
 }
@@ -164,18 +189,19 @@ task: build_docker: {
 task: test_docker: {
 	vars: #vars
 
-	mktemp: task.mktemp & {"vars": vars}
+	mktemp: MkTemp & {"vars": vars, name: "docker"}
 
-	build: exec.Run & {
-		cmd: ["docker", "build", "-t", "xtemplate-test", "--target", "test", "--build-arg", "LDFLAGS=\(vars.ldflags)", "."]
+	build: RunBash & {
+		bcmd: ["docker", "build", "-t", "xtemplate-test", "--target", "test", "--build-arg", "LDFLAGS=\(vars.ldflags)", "."]
 		dir: vars.rootdir
+		env: vars.env
 	}
-	run: exec.Run & {
-		cmd: ["bash", "-c", "docker run -d --rm --name xtemplate-test -p 8081:80 -v \(mktemp.mktemp.path):/app/dataw xtemplate-test"]
+	run: RunBash & {
+		bcmd: ["docker", "run", "-d", "--rm", "--name", "xtemplate-test", "-p", "8081:80", "-v", mktemp.mktemp.path+":/app/dataw", "xtemplate-test"]
 		$after: build.$done && mktemp.copy.$done
 	}
-	logs: exec.Run & {
-		cmd: ["bash", "-c", "docker logs xtemplate-test &>docker.log"]
+	logs: RunBash & {
+		bcmd: "docker logs xtemplate-test &>docker.log"
 		dir:    mktemp.mktemp.path
 		$after: run.$done
 	}
@@ -199,15 +225,13 @@ task: build_caddy: {
 
 	flag: *"" | string @tag(debug,short=debug)
 
-	xbuild: exec.Run & {
-		cmd: ["bash", "-c",
-			"xcaddy build " +
-			"--with github.com/infogulch/xtemplate-caddy " +
-			"--with github.com/infogulch/xtemplate=. " +
-			"--with github.com/mattn/go-sqlite3 " +
-			"--output \(vars.testdir)/caddy " +
-			"&>\(vars.testdir)/xcaddy.log",
-		]
+	xbuild: RunBash & {
+		bcmd: "xcaddy build "+
+			"--with github.com/infogulch/xtemplate-caddy "+
+			"--with github.com/infogulch/xtemplate=. "+
+			"--with github.com/mattn/go-sqlite3 "+
+			"--output '\(vars.testdir)/caddy' "+
+			"&>'\(vars.testdir)/xcaddy.log'"
 		dir: vars.rootdir
 		env: vars.env & {
 			CGO_ENABLED: "1"
@@ -219,12 +243,12 @@ task: build_caddy: {
 task: run_caddy: {
 	vars: #vars
 
-	mktemp: task.mktemp & {"vars": vars}
+	mktemp: MkTemp & {"vars": vars, name: "caddy"}
 
-	start: exec.Run & {
-		cmd: ["bash", "-c", "../caddy start --config ../caddy.json &>caddy.log"]
+	start: RunBash & {
+		bcmd: "../caddy start --config ./caddy.json &>caddy.log"
 		dir:    mktemp.mktemp.path
-		$after: mktemp.copy.$done
+		$after: mktemp.copy.$don
 	}
 }
 
@@ -245,21 +269,17 @@ command: {
 
 command: ci: {
 	cfg: meta
+	vars: #vars & cfg.vars
 
-	tempdirs: file.Glob & {glob: "\(cfg.vars.testdir)/temp-*"}
-	for tempdir in tempdirs.files {
-		("delete-" + tempdir): file.RemoveAll & {path: tempdir}
-	}
+	gotest: task.gotest & {"vars": vars}
 
-	gotest: task.gotest & {"vars": cfg.vars}
-
-	build_test: task.build_test & {"vars": cfg.vars, run: mktemp: mktemp: $after: tempdirs.$done}
-	build_test_caddy: task.build_test_caddy & {"vars": cfg.vars, run: mktemp: mktemp: $after: tempdirs.$done}
-	test_docker: task.test_docker & {"vars": cfg.vars, mktemp: mktemp: $after: tempdirs.$done}
+	build_test: task.build_test & {"vars": vars}
+	build_test_caddy: task.build_test_caddy & {"vars": vars}
+	test_docker: task.test_docker & {"vars": vars}
 
 	pass: build_test.kill.$done && build_test_caddy.kill.$done && test_docker.stop.$done
 
-	dist: task.dist & {"vars": cfg.vars, rmdist: $after: pass}
-	build_docker: task.build_docker & {"vars": cfg.vars, build: $after: pass}
+	dist: task.dist & {"vars": vars, rmdist: $after: pass}
+	build_docker: task.build_docker & {"vars": vars, build: $after: pass}
 	push_docker: task.push_docker & {tags: build_docker.tags} & {[=~"^push"]: $after: build_docker.build.$done}
 }
