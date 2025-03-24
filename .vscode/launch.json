@@ -12,9 +12,14 @@
             "args": [
                 "--loglevel",
                 "-4",
+                "--listen",
+                ":8080",
                 "--config-file",
                 "config.json"
-            ]
+            ],
+            "env": {
+                "CGO_ENABLED": "1"
+            }
         },
         {
             "name": "Debug xtemplate-caddy",
