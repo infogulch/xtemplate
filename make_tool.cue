@@ -202,7 +202,7 @@ task: build_caddy: {
 	xbuild: exec.Run & {
 		cmd: ["bash", "-c",
 			"xcaddy build " +
-			"--with github.com/infogulch/xtemplate-caddy " +
+			"--with github.com/infogulch/xtemplate/caddy=./caddy " +
 			"--with github.com/infogulch/xtemplate=. " +
 			"--with github.com/mattn/go-sqlite3 " +
 			"--output \(vars.testdir)/caddy " +
