@@ -55,7 +55,7 @@ func Main(overrides ...xtemplate.Option) {
 			func() {
 				file, err := os.OpenFile(name, os.O_RDONLY, 0)
 				if err != nil {
-					log.Error("failed to open config file '%s': %w", name, err)
+					log.Error("failed to open config file", slog.String("filename", name), slog.Any("error", err))
 					os.Exit(1)
 				}
 				defer file.Close()
