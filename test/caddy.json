@@ -12,7 +12,7 @@
 								{
 									"handler": "xtemplate",
 									"minify": true,
-									"templates_dir": "../templates",
+									"templates_dir": "templates",
 									"databases": [
 										{
 											"name": "DB",
@@ -23,7 +23,7 @@
 									"directories": [
 										{
 											"name": "FS",
-											"path": "../data"
+											"path": "data"
 										},
 										{
 											"name": "FSW",
@@ -31,7 +31,7 @@
 										},
 										{
 											"name": "Migrations",
-											"path": "../migrations"
+											"path": "migrations"
 										}
 									],
 									"flags": [

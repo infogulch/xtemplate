@@ -59,10 +59,10 @@ VOLUME /app/dataw
 
 RUN ["/app/xtemplate", "--version"]
 
-WORKDIR /app/dataw
+WORKDIR /app
 
-CMD ["--loglevel", "-4", "--config-file", "../config.json"]
+CMD ["--loglevel", "-4", "--config-file", "config.json"]
 
 ###
 
-FROM dist as final
+FROM dist AS final
