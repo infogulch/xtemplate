@@ -12,7 +12,7 @@ server by:
 [xtemplate]: https://github.com/infogulch/xtemplate
 [caddy]: https://caddyserver.com/
 [extending-caddy]: https://caddyserver.com/docs/extending-caddy
-[http.handlers.xtemplate]: https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate-caddy
+[http.handlers.xtemplate]: https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate%2Fcaddy
 
 ## Quickstart
 
@@ -49,6 +49,12 @@ caddy run --config Caddyfile
 
 Here are the xtemplate configs available to a Caddyfile:
 
+> [!NOTE]
+>
+> `xtemplate/caddy` currently does not support configuring the dot context in
+> the Caddyfile format. To access all configuration options you must use Caddy's
+> json configuration. See example xtemplate/caddy configuration at: [caddy.json](test\caddy.json)
+
 ```Caddy
 xtemplate {
     templates_path <string>                  # The path to the templates directory. Default: "templates".
@@ -57,12 +63,6 @@ xtemplate {
     delimiters <Left:string> <Right:string>  # The template action delimiters, default "{{" and "}}".
 }
 ```
-
-> [!NOTE]
->
-> `xtemplate-caddy` currently does not support configuring the dot context in
-> the Caddyfile format. To configure the dot context you must use Caddy's json
-> configuration.
 
 ## Build
 
@@ -73,10 +73,10 @@ the directory root. Examples:
 
 ```shell
 # build with CGO in order to use the sqlite3 db driver
-CGO_ENABLED=1 xcaddy build --with github.com/infogulch/xtemplate-caddy
+CGO_ENABLED=1 xcaddy build --with github.com/infogulch/xtemplate/caddy
 
 # build enable the sqlite_json build tag to get json funcs
-GOFLAGS='-tags="sqlite_json"' CGO_ENABLED=1 xcaddy build --with github.com/infogulch/xtemplate-caddy
+GOFLAGS='-tags="sqlite_json"' CGO_ENABLED=1 xcaddy build --with github.com/infogulch/xtemplate/caddy
 ```
 
 [xcaddy]: https://github.com/caddyserver/xcaddy
@@ -99,11 +99,7 @@ package main
 import (
     caddycmd "github.com/caddyserver/caddy/v2/cmd"
 
-    _ "github.com/infogulch/xtemplate-caddy"
-
-    // Add xtemplate dot providers:
-    _ "github.com/infogulch/xtemplate/providers"
-    _ "github.com/infogulch/xtemplate/providers/nats"
+    _ "github.com/infogulch/xtemplate/caddy"
 
     // Add other caddy modules:
     // _ "github.com/greenpau/caddy-security"
@@ -122,4 +118,5 @@ This package has moved several times. Here are some previous names it has been k
 
 * `github.com/infogulch/caddy-xtemplate` - Initial implementation to prove out the idea.
 * `github.com/infogulch/xtemplate/caddy` - Refactored xtemplate to be usable from the cli and as a Go library, split Caddy integration into a separate module in the same repo.
-* `github.com/infogulch/xtemplate-caddy` **Current package** - Caddy integration moved to its own repo, and refactored config organization. This should be the final rename 🤞.
+* `github.com/infogulch/xtemplate-caddy` - Caddy integration moved to its own repo, and refactored config organization.
+* `github.com/infogulch/xtemplate/caddy` - Moved back to the main xtemplate repo as part of the xtemplate module, because I learned that splitting modules doesn't actually help reduce dependencies.
