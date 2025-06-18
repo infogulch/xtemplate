@@ -267,15 +267,15 @@ designs, otherwise they'll be in the way of the fundamentals:
 
 ### 1. 📦 As a Caddy plugin
 
-The `xtemplate-caddy` plugin offers all `xtemplate` features integrated into
+The `xtemplate/caddy` plugin offers all `xtemplate` features integrated into
 [Caddy](https://caddyserver.com), a fast and extensible multi-platform
 HTTP/1-2-3 web server with automatic HTTPS.
 
-Download Caddy with `xtemplate-caddy` middleware plugin built-in:
+Download Caddy with `xtemplate/caddy` middleware plugin built-in:
 
-https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate-caddy
+https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate&package=github.com%2Fncruces%2Fgo-sqlite3
 
-This is the simplest Caddyfile that uses the `xtemplate-caddy` plugin:
+This is the simplest Caddyfile that uses the `xtemplate/caddy` plugin:
 
 ```Caddyfile
 routes {
@@ -298,7 +298,7 @@ consider starting your customization there.
 
 ```shell
 $ ./xtemplate -h
-v0.8.2
+v0.8.3
 Usage: xtemplate [--template-dir TEMPLATE-DIR] [--template-ext TEMPLATE-EXT] [--minify] [--ldelim LDELIM] [--rdelim RDELIM] [--watch WATCH] [--watchtemplates] [--listen LISTEN] [--loglevel LOGLEVEL] [--config CONFIG] [--config-file CONFIG-FILE]
 
 Options:
@@ -462,16 +462,22 @@ You can custom FuncMaps by configuring the `Config.FuncMaps` field.
 
 xtemplate is split into the following packages:
 
-* `github.com/infogulch/xtemplate`, a library that loads template files and
-  implements an `http.Handler` that routes requests to templates and serves
-  static files.
-* `github.com/infogulch/xtemplate/providers`, contains optional dot provider
-  implementations for common functionality.
-* `github.com/infogulch/xtemplate/cmd`, a simple binary that configures
-  `xtemplate` with CLI args and serves http requests with it.
-* [`github.com/infogulch/xtemplate-caddy`](https://github.com/infogulch/xtemplate-caddy),
-  uses xtemplate's Go library API to integrate xtemplate into Caddy server as a
-  Caddy module.
+* `github.com/infogulch/xtemplate` is a library that exports the `Instance`
+  struct which can load template files and implements `http.Handler` that
+  routes requests to templates and serves static files, the `Server` struct
+  which can atomically reload an `Instance` on demand, and a number of built-in
+  providers.
+* `./app` is a library that contains an exported `Main` function which
+  configures and starts xtemplate with CLI args and accepts config override
+  parameters. This `Main` fucntion can be used as a reference for using the
+  `xtemplate` API in advanced use-cases.
+* `./cmd` is a binary that simply imports a database driver and runs
+  `xtemplate/app.Main()`. The recommended way to begin customizing
+  xtemplate is to copy the `./cmd` package to your own repo, then add your
+  own database driver, provide custom config overrides, etc.
+* `./caddy` is a [Caddy module](https://caddyserver.com/docs/extending-caddy)
+  package that uses xtemplate's Go library API to integrate xtemplate into Caddy
+  server.
 
 > [!TIP]
 >
@@ -512,10 +518,10 @@ features including reading files directly and built-in funcs for markdown
 conversion, and to get a jump start on supporting the broad array of web server
 features without having to implement them from scratch.
 
-xtemplate has since been refactored to be usable independently from Caddy.
-Instead, [xtemplate-caddy](https://github.com/infogulch/xtemplate-caddy) is
-published as a separate module that depends on the xtemplate Go API and
-integrates xtemplate into Caddy as a Caddy http middleware.
+xtemplate has since been refactored to be usable independently from Caddy, and
+is published as a subpackage in this module at [./caddy](./caddy) which uses
+the public xtemplate Go API and to integrate xtemplate into Caddy as an
+http middleware.
 
 `xtemplate` is licensed under the Apache 2.0 license. See [LICENSE](./LICENSE)
 
