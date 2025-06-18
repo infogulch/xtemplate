@@ -23,6 +23,18 @@ type Args struct {
 	ConfigFiles    []string `json:"-" arg:"-f,--config-file,separate"`
 }
 
+func (Args) Epilogue() string {
+	return `Examples:
+    Listen on port 80:
+    $ ./xtemplate --listen :80
+
+    Specify a context directory and reload when it changes:
+    $ ./xtemplate --template-dir public --watch-templates
+
+    Parse template files matching a custom extension and minify them:
+    $ ./xtemplate --template-ext ".go.html" --minify`
+}
+
 var version = "development"
 
 func (Args) Version() string {
