@@ -246,12 +246,21 @@ designs, otherwise they'll be in the way of the fundamentals:
 > sent over Go channels or can block on server shutdown.
 </details>
 
-<details><summary><strong>🐜 Small footprint and easy deployment</strong></summary>
+<details><summary><strong>🐜 Small footprint</strong></summary>
 
 > Compiles to a ~30MB binary. Easily add your own custom functions and choice of
-> database driver on top. Deploy next to your templates and static files or
-> [embed](https://pkg.go.dev/embed) them into the binary for single binary
-> deployments.
+> database driver on top.
+</details>
+
+<details open><summary><strong>🏃‍♂️‍➡️ Single binary deployments</strong></summary>
+
+> Deploy next to your templates and static files or [embed](https://pkg.go.dev/embed)
+> them for single binary deployments.
+> 
+> ```go
+> //go:embed all:templates
+> var Files embed.FS
+> ```
 </details>
 
 ## 📦 How to run
