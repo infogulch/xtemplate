@@ -1,0 +1,9 @@
+{{- define "link"}}
+{{- $dot := .dot}}{{$_ := unset . "dot"}}
+{{- $href := .href}}{{$_ := unset . "href" }}
+{{- $hash := $dot.X.StaticFileHash $href }}
+<link href="{{ $href }}?hash={{ $hash }}" integrity="{{ $hash }}"{{range $k,$v := .}} {{$k | trustAttr}}="{{$v}}"{{end}}/>
+{{- end}}
+
+{{- template "link" (dict "dot" . "href" "/assets/reset.css" "rel" "stylesheet")}}
+{{- template "link" (dict "dot" . "href" "/assets/print.css" "rel" "stylesheet" "media" "print")}}

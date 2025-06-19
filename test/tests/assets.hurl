@@ -125,3 +125,11 @@ xpath "string(//link[@rel='stylesheet']/@href)" contains "?hash=sha384-5rcfZ"
 GET http://localhost:8080/favicon.ico
 
 HTTP 200
+
+
+GET http://localhost:8080/assets/link
+
+HTTP 200
+[Asserts]
+body contains `<link href="/assets/reset.css?hash=sha384-5rcfZgbOPW7qvI7_bo9eNa8hclwmmmzNeyvDzZlqI6vAzNwzbmi7PTS4uA15-fJj" integrity="sha384-5rcfZgbOPW7qvI7_bo9eNa8hclwmmmzNeyvDzZlqI6vAzNwzbmi7PTS4uA15-fJj" rel="stylesheet">`
+body contains `<link href="/assets/print.css?hash=sha384-V7JKf4GPUDlJLIdQCo2OHU4Xdmb_-y1c57naR8QFsBRLcnJAB8G3wad9X8TlQLcQ" integrity="sha384-V7JKf4GPUDlJLIdQCo2OHU4Xdmb_-y1c57naR8QFsBRLcnJAB8G3wad9X8TlQLcQ" media="print" rel="stylesheet">`
