@@ -1,14 +1,6 @@
 # TODO
 
-- [ ] Add fs methods to write files, save file upload
-  - https://github.com/golang/go/issues/45757#issuecomment-1675157698
-  - https://github.com/hack-pad/hackpadfs
-  - https://github.com/jarxorg/wfs
-  - Add separate "wfs" for writable fs?
-- [ ] Update `xtemplate-caddy`. Note only caddy 2.8.0 uses Go 1.22
-  - [ ] Figure out how to run caddy with xtemplate
-  - [ ] Must test on caddy head?
-  - [ ] Accept dot provider configuration from Caddyfile
+- [ ] Accept dot provider configuration from Caddyfile
 - [ ] Add .TemplateLazy that renders a template to a io.ReadSeeker after the
   first call to a method. Can be used for mail, servecontent, etc
   - https://github.com/spatialcurrent/go-lazy ?
@@ -16,7 +8,6 @@
   - [ ] Send mail, send mail by rendering template
   - https://github.com/Shopify/gomail
 - [ ] Use https://github.com/abhinav/goldmark-frontmatter
-- [ ] Publish docker image, document docker usage
 - [ ] Pass Config.Ctx down to http.Server/net.Listener to allow caller to cancel
   .Serve() and associated instances.
 
@@ -36,26 +27,22 @@
 - [ ] Using the new go-arg cli flags
 - [ ] Using json config
 - [ ] Creating a provider
+- [ ] Document docker usage
 
 ### Application
 
 - [ ] Measure performance
 - [ ] Make and link to more example applications
   - [ ] Demo/test how to use sql
-  - [ ] Demo/test reading and writing to the context fs
-- [ ] Demonstrate how to do auth with xtemplate
+  - [ ] Demo/test reading and writing to the fs dot provider
+- [ ] Demonstrate authentication with xtemplate
   - [ ] [forward_auth](https://caddyserver.com/docs/caddyfile/directives/forward_auth#forward-auth) / [Trusted Header SSO](https://www.authelia.com/integration/trusted-header-sso/introduction/)
-- [ ] Demo integration with [caddy-git](https://github.com/greenpau/caddy-git) for zero-CI app deployments
 
 # BACKLOG
 
-- [ ] NATS provider:
-  - [ ] Request-Reply
 - [ ] Look into https://github.com/42atomys/sprout
 - [ ] Review https://github.com/hairyhenderson/gomplate for data source ideas
 - [ ] Fix `superfluous response.WriteHeader call from github.com/felixge/httpsnoop.(*Metrics).CaptureMetrics` https://go.dev/play/p/spBB4w7nBCZ
-- [ ] Accept Env configuration
-- [ ] Built-in CSRF handling?
 - [ ] Fine tune timeouts? https://ieftimov.com/posts/make-resilient-golang-net-http-servers-using-timeouts-deadlines-context-cancellation/
 - [ ] Idea: Add special FILE pseudo-func that is replaced with a string constant of the current filename.
   - Potentially useful for invoking a template file with a relative path. (Add
@@ -65,7 +52,6 @@
   - Should be fine?
 - [ ] See if its possible to implement sql queryrows with https://go.dev/wiki/RangefuncExperiment
   - Not until caddy releases 2.8.0 and upgrades to 1.22.
-- [ ] Add command that pre-compresses static files
 - [ ] Add a way to register additional routes dynamically during init
 - [ ] Organize docs according to https://diataxis.fr/
 - [ ] Research alternative template loading strategies:
@@ -75,6 +61,50 @@
 # DONE
 
 ## next
+
+- [ ] Enable writable file system for template fs and fs dot provider; fixes #36
+- [ ] Add option to pre-compresses static files
+- [ ] Built-in CSRF handling with nosurf; fixes #49
+- [ ] Integrate datastar functions
+- [ ] Load templates from a remote git repo, updating automatically when new commits are pushed; fixes #46
+
+## v0.8.4
+
+- [x] Use zed agent to summarize and generate release notes
+- [x] Mention template embedding in features list, fixes #50
+- [x] Update readme repository layout section for caddy module changes
+- [x] Add go-arg help epilogue examples to match the readme
+- [x] Add link tag template test
+- [x] Relax match rule
+- [x] Add hello world example
+- [x] Remove migration scripts
+- [x] VSCode: listen on 8080 in launch.json; use CGO; add "run hurl" task, fixes #44
+- [x] Add debug launch profiles for xtemplate and caddy
+
+## v0.8.1-v0.8.3
+
+- [x] Update dependencies
+- [x] Add logging to caddy tester; always upload logs in GH CI
+- [x] Build before zipping, fixes #29; add flag to build caddy with debug symbols
+- [x] Update README CLI flags listing; fixes #30
+- [x] Fix static file hash example, fixes #31
+- [x] CI improvements: fix version command, simplify testing, allow docker push to fail
+- [x] VSCode setup to debug test folder
+
+## v0.6.1-v0.8.0
+
+- [x] Split cmd from app into separate modules for better organization
+- [x] Add NATS request-reply functionality to NATS provider
+- [x] Add Config.Options() and Server.Stop() methods for better API control
+- [x] Add JSON config option to set maxopenconns for database connections
+- [x] Enhanced 'try' function to be able to call methods
+- [x] Fix Instance.ServeHTTP so PathValue is set on request context
+- [x] Add Dir method to DotFS for directory operations
+- [x] Add sample file browser template and move fs browse template to own directory
+- [x] Fix invoking INIT templates with proper dot values
+- [x] Major refactor to simplify dot provider configuration system
+- [x] Remove separate modules to consolidate lazy module loading
+- [x] Improve build system with LDFLAGS for app defaults and Docker CI integration
 
 ## v0.6.0 - Apr 2024
 
