@@ -1,72 +1,66 @@
 {
-	"apps": {
-		"http": {
-			"servers": {
-				"": {
-					"listen": [
-						":8082"
-					],
-					"routes": [
-						{
-							"handle": [
-								{
-									"handler": "xtemplate",
-									"minify": true,
-									"templates_dir": "templates",
-									"databases": [
-										{
-											"name": "DB",
-											"driver": "sqlite3",
-											"connstr": "file:./test.sqlite"
-										}
-									],
-									"directories": [
-										{
-											"name": "FS",
-											"path": "data"
-										},
-										{
-											"name": "FSW",
-											"path": "."
-										},
-										{
-											"name": "Migrations",
-											"path": "migrations"
-										}
-									],
-									"flags": [
-										{
-											"name": "Flags",
-											"values": {
-												"a": "1",
-												"b": "2",
-												"hello": "world"
-											}
-										}
-									],
-									"nats": [
-										{
-											"name": "Nats",
-											"nats_config": {
-												"in_process_server_options": {
-													"dont_listen": true
-												}
-											}
-										}
-									]
-								}
-							]
-						}
-					]
-				}
-			}
-		}
-	},
-	"logging": {
-		"logs": {
-			"": {
-				"level": "DEBUG"
-			}
-		}
-	}
+  "apps": {
+    "http": {
+      "servers": {
+        "": {
+          "listen": [":8082"],
+          "routes": [
+            {
+              "handle": [
+                {
+                  "handler": "xtemplate",
+                  "minify": true,
+                  "templates_dir": "templates",
+                  "databases": [
+                    {
+                      "name": "DB",
+                      "driver": "sqlite3",
+                      "connstr": "file:./test.sqlite"
+                    }
+                  ],
+                  "directories": [
+                    {
+                      "name": "FS",
+                      "path": "data"
+                    },
+                    {
+                      "name": "FSW",
+                      "path": "."
+                    }
+                  ],
+                  "flags": [
+                    {
+                      "name": "Flags",
+                      "values": {
+                        "a": "1",
+                        "b": "2",
+                        "hello": "world"
+                      }
+                    }
+                  ],
+                  "nats": [
+                    {
+                      "name": "Nats",
+                      "nats_config": {
+                        "in_process_server_options": {
+                          "dont_listen": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "logging": {
+    "logs": {
+      "": {
+        "level": "DEBUG"
+      }
+    }
+  }
 }

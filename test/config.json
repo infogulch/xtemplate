@@ -1,44 +1,40 @@
 {
-    "templates_dir": "templates",
-    "directories": [
-        {
-            "name": "FS",
-            "path": "data"
-        },
-        {
-            "name": "FSW",
-            "path": "."
-        },
-        {
-            "name": "Migrations",
-            "path": "migrations"
+  "templates_dir": "templates",
+  "directories": [
+    {
+      "name": "FS",
+      "path": "data"
+    },
+    {
+      "name": "FSW",
+      "path": "."
+    }
+  ],
+  "databases": [
+    {
+      "name": "DB",
+      "driver": "sqlite3",
+      "connstr": "file:./test.sqlite"
+    }
+  ],
+  "flags": [
+    {
+      "name": "Flags",
+      "values": {
+        "a": "1",
+        "b": "2",
+        "hello": "world"
+      }
+    }
+  ],
+  "nats": [
+    {
+      "name": "Nats",
+      "nats_config": {
+        "in_process_server_options": {
+          "dont_listen": true
         }
-    ],
-    "databases": [
-        {
-            "name": "DB",
-            "driver": "sqlite3",
-            "connstr": "file:./test.sqlite"
-        }
-    ],
-    "flags": [
-        {
-            "name": "Flags",
-            "values": {
-                "a": "1",
-                "b": "2",
-                "hello": "world"
-            }
-        }
-    ],
-    "nats": [
-        {
-            "name": "Nats",
-            "nats_config": {
-                "in_process_server_options": {
-                    "dont_listen": true
-                }
-            }
-        }
-    ]
+      }
+    }
+  ]
 }
