@@ -6,8 +6,9 @@ import (
 	"context"
 	"fmt"
 	"html/template"
-	"io/fs"
 	"log/slog"
+
+	"github.com/spf13/afero"
 )
 
 func New() (c *Config) {
@@ -17,11 +18,11 @@ func New() (c *Config) {
 }
 
 type Config struct {
-	// The path to the templates directory. Default `templates`.
+	// The path to the templates directory within the filesystem. Default `templates`.
 	TemplatesDir string `json:"templates_dir,omitempty" arg:"-t,--template-dir" default:"templates"`
 
-	// The FS to load templates from. Overrides TemplatesDir if not nil.
-	TemplatesFS fs.FS `json:"-" arg:"-"`
+	// The FS to load templates from. Default: a FS made from the current working directory.
+	TemplatesFS afero.Fs `json:"-" arg:"-"`
 
 	// File extension to search for to find template files. Default `.html`.
 	TemplateExtension string `json:"template_extension,omitempty" arg:"--template-ext" default:".html"`
@@ -92,7 +93,7 @@ func (c *Config) Options(options ...Option) (*Config, error) {
 
 type Option func(*Config) error
 
-func WithTemplateFS(fs fs.FS) Option {
+func WithTemplateFS(fs afero.Fs) Option {
 	return func(c *Config) error {
 		if fs == nil {
 			return fmt.Errorf("nil fs")

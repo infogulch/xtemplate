@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
-	"os"
+
+	"github.com/spf13/afero"
 )
 
 // WithDir creates an [xtemplate.Option] that can be used with
 // [xtemplate.Config.Server], [xtemplate.Config.Instance], or [xtemplate.Main]
 // to add an fs dot provider to the config.
-func WithDir(name string, fs fs.FS) Option {
+func WithDir(name string, fs afero.Fs) Option {
 	return func(c *Config) error {
 		if fs == nil {
 			return fmt.Errorf("cannot create DotFSProvider with null FS with name %s", name)
@@ -27,9 +28,10 @@ func WithDir(name string, fs fs.FS) Option {
 //
 // By setting a cli flag: “
 type DotDirConfig struct {
-	Name  string `json:"name"`
-	fs.FS `json:"-"`
-	Path  string `json:"path"`
+	Name string   `json:"name"`
+	Path string   `json:"path"`
+	Type string   `json:"type"`
+	FS   afero.Fs `json:"-"`
 }
 
 var _ CleanupDotProvider = &DotDirConfig{}
@@ -39,7 +41,7 @@ func (p *DotDirConfig) Init(ctx context.Context) error {
 	if p.FS != nil {
 		return nil
 	}
-	newfs := os.DirFS(p.Path)
+	newfs := afero.NewBasePathFs(afero.NewOsFs(), p.Path)
 	if _, err := newfs.(interface {
 		Stat(string) (fs.FileInfo, error)
 	}).Stat("."); err != nil {
@@ -49,10 +51,10 @@ func (p *DotDirConfig) Init(ctx context.Context) error {
 	return nil
 }
 func (p *DotDirConfig) Value(r Request) (any, error) {
-	return Dir{dot: &dotFS{p.FS, GetLogger(r.R.Context()), make(map[fs.File]struct{})}, path: "."}, nil
+	return Dir{p.FS, GetLogger(r.R.Context()), make(map[afero.File]struct{})}, nil
 }
 func (p *DotDirConfig) Cleanup(a any, err error) error {
-	v := a.(Dir).dot
+	v := a.(Dir)
 	errs := []error{}
 	for file := range v.opened {
 		if err := file.Close(); err != nil {

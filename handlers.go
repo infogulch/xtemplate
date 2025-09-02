@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"html/template"
 	"io"
-	"io/fs"
 	"log/slog"
 	"math"
 	"net/http"
@@ -15,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/spf13/afero"
 )
 
 var bufPool = sync.Pool{
@@ -80,7 +81,7 @@ func flushingTemplateHandler(server *Instance, tmpl *template.Template) http.Han
 	}
 }
 
-func staticFileHandler(fs fs.FS, fileinfo *fileInfo) http.HandlerFunc {
+func staticFileHandler(fs afero.Fs, fileinfo *fileInfo) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := GetLogger(r.Context())
 

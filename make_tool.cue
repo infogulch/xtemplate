@@ -101,11 +101,12 @@ task: gotest: {
 task: build_cli: {
 	vars: #vars
 
+	logfile: string | *"gobuild.log"
 	outfile: *"\(vars.distdir)/xtemplate\(vars.exeExt)" | string
 
 	gobuild: exec.Run & {
-		env: {[string]: string}
-		cmd: ["bash", "-xc", "go build -x -ldflags '\(vars.ldflags)' -buildmode exe -o '\(outfile)' ./cmd &>'\(vars.distdir)/gobuild.log'"]
+		env: vars.env & {CGO_ENABLED: "1"}
+		cmd: ["bash", "-xc", "go build -x -ldflags \"\(vars.ldflags)\" -buildmode exe -o '\(outfile)' ./cmd &>'\(vars.distdir)/\(logfile)'"]
 		dir:         vars.rootdir
 		mustSucceed: true
 	}
@@ -150,7 +151,7 @@ task: dist: {
 
 			rmdir: file.RemoveAll & {path: dir}
 			mkdir: file.MkdirAll & {path: dir, $after: rmdir.$done}
-			build: task.build_cli & {"vars": vars, outfile: "\(dir)/\(exe)", gobuild: {$after: mkdir.$done, "env": env & vars.env}}
+			build: task.build_cli & {"vars": vars, outfile: "\(dir)/\(exe)", logfile: "gobuild-\(env.GOARCH)-\(env.GOOS).log", gobuild: {$after: mkdir.$done, "env": env & vars.env}}
 			cp: exec.Run & {cmd: ["cp", "README.md", "LICENSE", "\(dir)"], $after: mkdir.$done}
 			zip: exec.Run & {cmd: ["zip", "-jqr6", "\(dir)_\(vars.version).zip", dir], $after: cp.$done & build.gobuild.$done}
 		}
@@ -166,7 +167,7 @@ task: build_docker: {
 	]
 
 	build: exec.Run & {
-		cmd: ["bash", "-xc", "\(vars.dockercmd) build \(strings.Join(list.FlattenN([for t in tags {["-t", t]}], 1), " ")) --build-arg 'LDFLAGS=\(vars.ldflags)' --progress=plain . &>'\(vars.distdir)/docker-build.log'"]
+		cmd: ["bash", "-xc", "\(vars.dockercmd) build \(strings.Join(list.FlattenN([for t in tags {["-t", t]}], 1), " ")) --build-arg 'LDFLAGS=\(vars.ldflags)' --progress=plain \".\" &>'\(vars.distdir)/docker-build.log'"]
 		dir: vars.rootdir
 	}
 }
@@ -224,8 +225,8 @@ task: build_caddy: {
 			"--with github.com/infogulch/xtemplate/caddy=./caddy " +
 			"--with github.com/infogulch/xtemplate=. " +
 			"--with github.com/mattn/go-sqlite3 " +
-			"--output \(vars.distdir)/caddy\(vars.exeExt) " +
-			"&>\(vars.distdir)/xcaddy.log",
+			"--output '\(vars.distdir)/caddy\(vars.exeExt)' " +
+			"&>'\(vars.distdir)/xcaddy.log'",
 		]
 		dir: vars.rootdir
 		env: vars.env & {

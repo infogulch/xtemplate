@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/fs"
 	"log/slog"
 	"net/http"
 	"path"
@@ -21,6 +20,7 @@ import (
 
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
+	"github.com/spf13/afero"
 	"github.com/tdewolff/minify/v2"
 )
 
@@ -171,7 +171,7 @@ func catch(description string, fn func()) (err error) {
 var routeMatcher *regexp.Regexp = regexp.MustCompile("^(GET|POST|PUT|PATCH|DELETE|SSE) (.*)$")
 
 func (b *builder) addTemplateHandler(path_ string) error {
-	content, err := fs.ReadFile(b.config.TemplatesFS, path_)
+	content, err := afero.ReadFile(b.config.TemplatesFS, path_)
 	if err != nil {
 		return fmt.Errorf("could not read template file '%s': %v", path_, err)
 	}

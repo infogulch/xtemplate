@@ -20,6 +20,7 @@ require (
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/nats-io/nats-server/v2 v2.10.24
 	github.com/nats-io/nats.go v1.38.0
+	github.com/spf13/afero v1.14.0
 	github.com/tdewolff/minify/v2 v2.21.2
 	github.com/yuin/goldmark v1.7.8
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
@@ -115,7 +116,6 @@ require (
 	github.com/spf13/cobra v1.9.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
-	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/tailscale/tscert v0.0.0-20240608151842-d3f834017e53 // indirect
 	github.com/tdewolff/parse/v2 v2.7.19 // indirect
 	github.com/urfave/cli v1.22.14 // indirect
@@ -134,7 +134,7 @@ require (
 	golang.org/x/mod v0.24.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sync v0.12.0 // indirect
-	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/term v0.30.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
@@ -143,6 +143,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241007155032-5fefd90f89a9 // indirect
 	google.golang.org/grpc v1.67.1 // indirect
 	google.golang.org/protobuf v1.35.1 // indirect
-	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	howett.net/plist v1.0.0 // indirect
 )

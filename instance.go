@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"log"
 	"log/slog"
 	"maps"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"reflect"
 	"regexp"
 	"slices"
@@ -20,6 +20,8 @@ import (
 
 	"github.com/Masterminds/sprig/v3"
 	"github.com/felixge/httpsnoop"
+	"github.com/spf13/afero"
+
 	"github.com/google/uuid"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go/jetstream"
@@ -75,7 +77,7 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 	build.config.Logger.Info("initializing")
 
 	if build.config.TemplatesFS == nil {
-		build.config.TemplatesFS = os.DirFS(build.config.TemplatesDir)
+		build.config.TemplatesFS = afero.NewBasePathFs(afero.NewOsFs(), build.config.TemplatesDir)
 	}
 
 	{
@@ -102,14 +104,15 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 		build.m = m
 	}
 
-	if err := fs.WalkDir(build.config.TemplatesFS, ".", func(path string, d fs.DirEntry, err error) error {
+	if err := afero.Walk(build.config.TemplatesFS, ".", func(path_ string, d fs.FileInfo, err error) error {
+		path_ = strings.ReplaceAll(path_, "\\", "/")
 		if err != nil || d.IsDir() {
 			return err
 		}
-		if strings.HasSuffix(path, build.config.TemplateExtension) {
-			err = build.addTemplateHandler(path)
+		if strings.HasSuffix(path_, build.config.TemplateExtension) {
+			err = build.addTemplateHandler(path_)
 		} else {
-			err = build.addStaticFileHandler(path)
+			err = build.addStaticFileHandler(path_)
 		}
 		return err
 	}); err != nil {
@@ -200,6 +203,13 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 		))
 
 	return build.Instance, build.InstanceStats, build.routes, nil
+}
+
+func must[V any](v V, err error) V {
+	if err != nil {
+		log.Fatal(err)
+	}
+	return v
 }
 
 // Counter to assign a unique id to each instance of xtemplate created when
