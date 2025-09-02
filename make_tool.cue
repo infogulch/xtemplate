@@ -18,7 +18,7 @@ import (
 	ldflags: string
 	latest:  string
 	env: {[string]: string}
-	exeExt: string | *""
+	exeExt:    string | *""
 	dockercmd: string
 }
 
@@ -55,7 +55,7 @@ meta: {
 			dir:    vars.rootdir
 			stdout: string
 		}
-		env: os.Environ
+		env:  os.Environ
 		"os": string @tag(os,var=os)
 	}
 }
@@ -64,11 +64,11 @@ task: mktemp: {
 	vars: #vars
 
 	now0: string @tag(now,var=now)
-	now1: strings.Replace(strings.SliceRunes(now0,0,19),":","-",-1)
+	now1: strings.Replace(strings.SliceRunes(now0, 0, 19), ":", "-", -1)
 	mktemp: file.MkdirTemp & {dir: vars.distdir, pattern: "test_\(now1)_"}
 	copy: exec.Run & {
-		cmd: "cp -r templates/ data/ migrations/ caddy.json config.json " + mktemp.path
-		dir: vars.testdir
+		cmd: ["cp", "-r", "templates/", "data/", "migrations/", "caddy.json", "config.json", mktemp.path]
+		dir:   vars.testdir
 		$done: bool
 	}
 }
@@ -117,7 +117,7 @@ task: run_cli: {
 	mktemp: task.mktemp & {"vars": vars}
 
 	start: exec.Run & {
-		cmd: ["bash", "-xc", "\(vars.distdir)/xtemplate\(vars.exeExt) --loglevel -4 --config-file config.json &>xtemplate.log & echo $!"]
+		cmd: ["bash", "-xc", "'\(vars.distdir)/xtemplate\(vars.exeExt)' --loglevel -4 --config-file config.json &>xtemplate.log & echo $!"]
 		dir:    mktemp.mktemp.path
 		stdout: string
 		$after: mktemp.copy.$done
@@ -141,7 +141,7 @@ task: dist: {
 	matrix: [for os in oses for arch in arches {GOOS: os, GOARCH: arch}]
 
 	for env in matrix {
-		(env.GOOS + "_" + env.GOARCH): {
+		("dist_" + env.GOOS + "_" + env.GOARCH): {
 			dir: "\(vars.distdir)/xtemplate-\(env.GOARCH)-\(env.GOOS)"
 			exe: string | *"xtemplate"
 			if env.GOOS == "windows" {
@@ -166,7 +166,7 @@ task: build_docker: {
 	]
 
 	build: exec.Run & {
-		cmd: ["bash", "-xc", "\(vars.dockercmd) build \(strings.Join(list.FlattenN([for t in tags {["-t", t]}], 1)," ")) --build-arg 'LDFLAGS=\(vars.ldflags)' --progress=plain . &>'\(vars.distdir)/docker-build.log'"]
+		cmd: ["bash", "-xc", "\(vars.dockercmd) build \(strings.Join(list.FlattenN([for t in tags {["-t", t]}], 1), " ")) --build-arg 'LDFLAGS=\(vars.ldflags)' --progress=plain . &>'\(vars.distdir)/docker-build.log'"]
 		dir: vars.rootdir
 	}
 }
@@ -178,14 +178,14 @@ task: build_test_docker: {
 
 	build: exec.Run & {
 		cmd: ["bash", "-xc", "\(vars.dockercmd) build -t xtemplate-test --target test --build-arg 'LDFLAGS=\(vars.ldflags)' --progress=plain . &>'\(vars.distdir)/docker-build-test.log'"]
-		dir: vars.rootdir
+		dir:    vars.rootdir
 		$after: mktemp.mktemp.$done
 	}
 	del: exec.Run & {
 		cmd: ["bash", "-c", "\(vars.dockercmd) rm xtemplate-test"]
 		mustSucceed: false
-		stdout: string
-		stderr: string
+		stdout:      string
+		stderr:      string
 	}
 	run: exec.Run & {
 		cmd: ["bash", "-xc", "\(vars.dockercmd) run -d --name xtemplate-test -p 8081:80 -v \(mktemp.mktemp.path):/app/dataw xtemplate-test"]
@@ -278,7 +278,7 @@ command: ci: {
 
 	pass: build_test_cli.kill.$done && build_test_caddy.kill.$done && build_test_docker.stop.$done
 
-	dist: task.dist & {"vars": cfg.vars}
+	dist: task.dist & {"vars": cfg.vars, [=~"^dist"]: rmdir: $after: pass}
 	build_docker: task.build_docker & {"vars": cfg.vars, build: $after: pass}
 	push_docker: task.push_docker & {"vars": cfg.vars, tags: build_docker.tags} & {[=~"^push"]: $after: build_docker.build.$done}
 }

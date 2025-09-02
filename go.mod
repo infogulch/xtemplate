@@ -2,7 +2,7 @@ module github.com/infogulch/xtemplate
 
 go 1.24
 
-toolchain go1.24.2
+toolchain go1.24.6
 
 require (
 	github.com/BurntSushi/toml v1.4.0
