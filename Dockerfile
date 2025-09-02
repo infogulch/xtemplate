@@ -15,9 +15,7 @@ ARG LDFLAGS
 COPY app ./app/
 COPY cmd ./cmd/
 COPY *.go ./
-RUN CGO_ENABLED=1 \
-    GOFLAGS='-tags="sqlite_json"' \
-    GOOS=linux \
+RUN GOOS=linux \
     GOARCH=amd64 \
     go build -x -ldflags="${LDFLAGS} -X 'github.com/infogulch/xtemplate/app.defaultWatchTemplates=false' -X 'github.com/infogulch/xtemplate/app.defaultListenAddress=0.0.0.0:80'" -o /build/xtemplate ./cmd
 

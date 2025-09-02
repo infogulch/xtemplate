@@ -105,7 +105,7 @@ task: build_cli: {
 	outfile: *"\(vars.distdir)/xtemplate\(vars.exeExt)" | string
 
 	gobuild: exec.Run & {
-		env: vars.env & {CGO_ENABLED: "1"}
+		env: {[string]: string}
 		cmd: ["bash", "-xc", "go build -x -ldflags \"\(vars.ldflags)\" -buildmode exe -o '\(outfile)' ./cmd &>'\(vars.distdir)/\(logfile)'"]
 		dir:         vars.rootdir
 		mustSucceed: true
@@ -220,17 +220,17 @@ task: build_caddy: {
 	flag: *"" | string @tag(debug,short=debug)
 
 	xbuild: exec.Run & {
-		cmd: ["bash", "-c",
+		cmd: ["bash", "-xc",
 			"xcaddy build " +
 			"--with github.com/infogulch/xtemplate/caddy=./caddy " +
 			"--with github.com/infogulch/xtemplate=. " +
-			"--with github.com/mattn/go-sqlite3 " +
+			"--with github.com/ncruces/go-sqlite3/driver " +
+			"--with github.com/ncruces/go-sqlite3/embed " +
 			"--output '\(vars.distdir)/caddy\(vars.exeExt)' " +
 			"&>'\(vars.distdir)/xcaddy.log'",
 		]
 		dir: vars.rootdir
 		env: vars.env & {
-			CGO_ENABLED: "1"
 			if flag == "debug" {XCADDY_DEBUG: "1"}
 		}
 	}
