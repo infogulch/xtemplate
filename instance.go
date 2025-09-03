@@ -154,7 +154,9 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 			}
 		}
 		for _, d := range dot {
+			start := time.Now()
 			err := d.Init(build.config.Ctx)
+			build.config.Logger.Debug("initialized provider", "name", d.FieldName(), "type", reflect.TypeOf(d).String(), "duration", time.Since(start))
 			if err != nil {
 				return nil, nil, nil, fmt.Errorf("failed to initialize dot field '%s': %w", d.FieldName(), err)
 			}
