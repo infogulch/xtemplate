@@ -265,8 +265,7 @@ func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			slog.Duration("duration", metrics.Duration),
 			slog.Int("statusCode", metrics.Code),
 			slog.Int64("bytes", metrics.Written),
-			// Uncomment after release with this commit: https://github.com/golang/go/commit/a523152ea1df8d39d923ed90d19662896eff0607
-			// slog.String("pattern", r.Pattern),
+			slog.String("pattern", r.Pattern),
 		))
 }
 
