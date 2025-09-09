@@ -81,7 +81,7 @@ task: test: {
 
 	testfiles: file.Glob & {glob: "\(vars.testdir)/tests/*.hurl"}
 	mkdir: file.Mkdir & {path: reportpath}
-	ready: exec.Run & {cmd: "curl -X GET --retry-all-errors --retry 5 --retry-connrefused --retry-delay 1 http://localhost:\(port)/ready --silent", stdout: "OK"}
+	ready: exec.Run & {cmd: "curl -X GET --retry-all-errors --retry 10 --retry-connrefused --retry-delay 1 http://localhost:\(port)/ready --silent", stdout: "OK"}
 	hurl: exec.Run & {
 		cmd: ["bash", "-xc", "hurl --continue-on-error --no-output --test --report-html '\(reportpath)' --connect-to localhost:8080:localhost:\(port) '\(strings.Join(testfiles.files, "' '"))' &>'\(reportpath)/hurl.log'"]
 		dir:   vars.testdir
