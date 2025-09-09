@@ -23,8 +23,6 @@ import (
 	"github.com/spf13/afero"
 
 	"github.com/google/uuid"
-	"github.com/nats-io/nats-server/v2/server"
-	"github.com/nats-io/nats.go/jetstream"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/css"
 	"github.com/tdewolff/minify/v2/html"
@@ -49,9 +47,6 @@ type Instance struct {
 	files     map[string]*fileInfo
 	templates *template.Template
 	funcs     template.FuncMap
-
-	natsServer *server.Server
-	natsClient *jetstream.JetStream
 
 	bufferDot  dot
 	flusherDot dot
