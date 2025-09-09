@@ -232,7 +232,13 @@ func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	rid := GetRequestId(ctx)
 	if rid == "" {
-		rid = uuid.NewString()
+		id, err := uuid.NewV7()
+		if err != nil {
+			instance.config.Logger.Error("failed to generate request id", slog.String("method", r.Method), slog.String("path", r.URL.Path), slog.Any("error", err))
+			http.Error(w, "failed to generate request id", http.StatusInternalServerError)
+			return
+		}
+		rid = id.String()
 		ctx = context.WithValue(ctx, requestIdKey, rid)
 	}
 
