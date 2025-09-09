@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/justinas/nosurf"
 )
 
 type dotFlushProvider struct{}
@@ -18,7 +20,7 @@ func (dotFlushProvider) Value(r Request) (any, error) {
 	if !ok {
 		return &DotFlush{}, fmt.Errorf("response writer could not cast to http.Flusher")
 	}
-	return &DotFlush{flusher: f, serverCtx: r.ServerCtx, requestCtx: r.R.Context()}, nil
+	return &DotFlush{flusher: f, serverCtx: r.ServerCtx, request: r.R}, nil
 }
 
 func (dotFlushProvider) Cleanup(v any, err error) error {
@@ -37,8 +39,9 @@ type flusher interface {
 
 // DotFlush is used as the .Flush field for flushing template handlers (SSE).
 type DotFlush struct {
-	flusher               flusher
-	serverCtx, requestCtx context.Context
+	flusher   flusher
+	serverCtx context.Context
+	request   *http.Request
 }
 
 // SendSSE sends an sse message by formatting the provided args as an sse event:
@@ -105,7 +108,7 @@ func (f *DotFlush) Repeat(max_ ...int) <-chan int {
 	loop:
 		for {
 			select {
-			case <-f.requestCtx.Done():
+			case <-f.request.Context().Done():
 				break loop
 			case <-f.serverCtx.Done():
 				break loop
@@ -125,7 +128,7 @@ func (f *DotFlush) Repeat(max_ ...int) <-chan int {
 func (f *DotFlush) Sleep(ms int) (string, error) {
 	select {
 	case <-time.After(time.Duration(ms) * time.Millisecond):
-	case <-f.requestCtx.Done():
+	case <-f.request.Context().Done():
 		return "", ReturnError{}
 	case <-f.serverCtx.Done():
 		return "", ReturnError{}
@@ -137,9 +140,13 @@ func (f *DotFlush) Sleep(ms int) (string, error) {
 // client or until the server closes.
 func (f *DotFlush) WaitForServerStop() (string, error) {
 	select {
-	case <-f.requestCtx.Done():
+	case <-f.request.Context().Done():
 		return "", ReturnError{}
 	case <-f.serverCtx.Done():
 		return "", nil
 	}
+}
+
+func (f *DotFlush) Token() string {
+	return nosurf.Token(f.request)
 }

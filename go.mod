@@ -15,6 +15,7 @@ require (
 	github.com/felixge/httpsnoop v1.0.4
 	github.com/google/uuid v1.6.0
 	github.com/infogulch/watch v0.2.0
+	github.com/justinas/nosurf v1.2.0
 	github.com/klauspost/compress v1.18.0
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/nats-io/nats-server/v2 v2.10.24

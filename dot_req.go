@@ -3,6 +3,8 @@ package xtemplate
 import (
 	"context"
 	"net/http"
+
+	"github.com/justinas/nosurf"
 )
 
 type dotReqProvider struct{}
@@ -28,4 +30,8 @@ var _ DotConfig = dotReqProvider{}
 // [http.Request.Form], [http.Request.PostForm], and [http.Request.PostValue].
 type DotReq struct {
 	*http.Request
+}
+
+func (d DotReq) Token() string {
+	return nosurf.Token(d.Request)
 }

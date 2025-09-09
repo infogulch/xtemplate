@@ -20,6 +20,7 @@ import (
 
 	"github.com/Masterminds/sprig/v3"
 	"github.com/felixge/httpsnoop"
+	"github.com/justinas/nosurf"
 	"github.com/spf13/afero"
 
 	"github.com/google/uuid"
@@ -251,17 +252,17 @@ func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log := instance.config.Logger.With(slog.Group("serve",
 		slog.String("requestid", rid),
 	))
-	log.LogAttrs(r.Context(), slog.LevelDebug, "serving request",
+	log.LogAttrs(ctx, slog.LevelDebug, "serving request",
 		slog.String("user-agent", r.Header.Get("User-Agent")),
 		slog.String("method", r.Method),
 		slog.String("requestPath", r.URL.Path),
 	)
-	ctx = context.WithValue(ctx, loggerKey, log)
 
-	r = r.WithContext(ctx)
-	metrics := httpsnoop.CaptureMetrics(instance.router, w, r)
+	metrics := httpsnoop.CaptureMetricsFn(w, func(ww http.ResponseWriter) {
+		nosurf.New(instance.router).ServeHTTP(ww, r.WithContext(context.WithValue(ctx, loggerKey, log)))
+	})
 
-	log.LogAttrs(r.Context(), levelDebug2, "request served",
+	log.LogAttrs(ctx, levelDebug2, "request served",
 		slog.Group("response",
 			slog.Duration("duration", metrics.Duration),
 			slog.Int("statusCode", metrics.Code),
