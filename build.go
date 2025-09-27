@@ -29,6 +29,7 @@ type builder struct {
 	*InstanceStats
 	m      *minify.M
 	routes []InstanceRoute
+	router *http.ServeMux
 }
 
 type InstanceStats struct {
