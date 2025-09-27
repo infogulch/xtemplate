@@ -36,6 +36,8 @@ type Config struct {
 	// documented default of true would only hold when constructing via New().
 	Minify *bool `json:"minify,omitempty" arg:"-m,--minify" default:"true"`
 
+	CrossOrigin CrossOriginConfig `json:"crossorigin" arg:"-"`
+
 	Databases       []DotDBConfig    `json:"databases" arg:"-"`
 	Flags           []DotFlagsConfig `json:"flags" arg:"-"`
 	Directories     []DotDirConfig   `json:"directories" arg:"-"`
@@ -57,6 +59,12 @@ type Config struct {
 
 	// The default logger. Defaults to `slog.Default()`.
 	Logger *slog.Logger `json:"-" arg:"-"`
+}
+
+type CrossOriginConfig struct {
+	Disabled               bool     `json:"disabled" arg:"--disable-cors" default:"false"`
+	TrustedOrigins         []string `json:"trusted_origins" arg:"--trusted-origin,separate"`
+	InsecureBypassPatterns []string `json:"insecure_bypass_patterns" arg:"--insecure-bypass-pattern,separate"`
 }
 
 // FillDefaults sets default values for unset fields
