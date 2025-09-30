@@ -7,8 +7,8 @@ import (
 
 type dotReqProvider struct{}
 
-func (dotReqProvider) FieldName() string            { return "Req" }
-func (dotReqProvider) Init(_ context.Context) error { return nil }
+func (dotReqProvider) FieldName() string                   { return "Req" }
+func (dotReqProvider) Init(_ context.Context, _ *Config) error { return nil }
 func (dotReqProvider) Value(r Request) (any, error) {
 	return DotReq{r.R}, nil
 }

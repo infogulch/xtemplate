@@ -32,29 +32,29 @@ func (d *DotDB) makeTx() (err error) {
 // Exec executes a statement with parameters and returns the raw [sql.Result].
 // Note: this can be a bit difficult to use inside a template, consider using
 // other methods that provide easier to use return values.
-func (c *DotDB) Exec(query string, params ...any) (result sql.Result, err error) {
-	if err = c.makeTx(); err != nil {
+func (d *DotDB) Exec(query string, params ...any) (result sql.Result, err error) {
+	if err = d.makeTx(); err != nil {
 		return
 	}
 
 	defer func(start time.Time) {
-		c.log.Debug("Exec", slog.String("query", query), slog.Any("params", params), slog.Any("error", err), slog.Duration("queryduration", time.Since(start)))
+		d.log.Debug("Exec", slog.String("query", query), slog.Any("params", params), slog.Any("error", err), slog.Duration("queryduration", time.Since(start)))
 	}(time.Now())
 
-	return c.tx.Exec(query, params...)
+	return d.tx.Exec(query, params...)
 }
 
 // QueryRows executes a query and buffers all rows into a []map[string]any object.
-func (c *DotDB) QueryRows(query string, params ...any) (rows []map[string]any, err error) {
-	if err = c.makeTx(); err != nil {
+func (d *DotDB) QueryRows(query string, params ...any) (rows []map[string]any, err error) {
+	if err = d.makeTx(); err != nil {
 		return
 	}
 
 	defer func(start time.Time) {
-		c.log.Debug("QueryRows", slog.String("query", query), slog.Any("params", params), slog.Any("error", err), slog.Duration("queryduration", time.Since(start)))
+		d.log.Debug("QueryRows", slog.String("query", query), slog.Any("params", params), slog.Any("error", err), slog.Duration("queryduration", time.Since(start)))
 	}(time.Now())
 
-	result, err := c.tx.Query(query, params...)
+	result, err := d.tx.Query(query, params...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
@@ -89,8 +89,8 @@ func (c *DotDB) QueryRows(query string, params ...any) (rows []map[string]any, e
 
 // QueryRow executes a query, which must return one row, and returns it as a
 // map[string]any.
-func (c *DotDB) QueryRow(query string, params ...any) (map[string]any, error) {
-	rows, err := c.QueryRows(query, params...)
+func (d *DotDB) QueryRow(query string, params ...any) (map[string]any, error) {
+	rows, err := d.QueryRows(query, params...)
 	if err != nil {
 		return nil, err
 	}
@@ -102,8 +102,8 @@ func (c *DotDB) QueryRow(query string, params ...any) (map[string]any, error) {
 
 // QueryVal executes a query, which must return one row with one column, and
 // returns the value of the column.
-func (c *DotDB) QueryVal(query string, params ...any) (any, error) {
-	row, err := c.QueryRow(query, params...)
+func (d *DotDB) QueryVal(query string, params ...any) (any, error) {
+	row, err := d.QueryRow(query, params...)
 	if err != nil {
 		return nil, err
 	}
@@ -119,15 +119,15 @@ func (c *DotDB) QueryVal(query string, params ...any) (any, error) {
 // Commit manually commits any implicit transactions opened by this DotDB. This
 // is called automatically if there were no errors at the end of template
 // execution.
-func (c *DotDB) Commit() (string, error) {
-	return "", c.commit()
+func (d *DotDB) Commit() (string, error) {
+	return "", d.commit()
 }
 
-func (c *DotDB) commit() error {
-	if c.tx != nil {
-		err := c.tx.Commit()
-		c.log.Debug("commit", slog.Any("error", err))
-		c.tx = nil
+func (d *DotDB) commit() error {
+	if d.tx != nil {
+		err := d.tx.Commit()
+		d.log.Debug("commit", slog.Any("error", err))
+		d.tx = nil
 		return err
 	}
 	return nil
@@ -136,15 +136,15 @@ func (c *DotDB) commit() error {
 // Rollback manually rolls back any implicit tranactions opened by this DotDB.
 // This is called automatically if there were any errors that occurred during
 // template exeuction.
-func (c *DotDB) Rollback() (string, error) {
-	return "", c.rollback()
+func (d *DotDB) Rollback() (string, error) {
+	return "", d.rollback()
 }
 
-func (c *DotDB) rollback() error {
-	if c.tx != nil {
-		err := c.tx.Rollback()
-		c.log.Debug("rollback", slog.Any("error", err))
-		c.tx = nil
+func (d *DotDB) rollback() error {
+	if d.tx != nil {
+		err := d.tx.Rollback()
+		d.log.Debug("rollback", slog.Any("error", err))
+		d.tx = nil
 		return err
 	}
 	return nil

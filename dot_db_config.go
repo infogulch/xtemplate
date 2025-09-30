@@ -29,7 +29,7 @@ type DotDBConfig struct {
 var _ CleanupDotProvider = &DotDBConfig{}
 
 func (d *DotDBConfig) FieldName() string { return d.Name }
-func (d *DotDBConfig) Init(ctx context.Context) error {
+func (d *DotDBConfig) Init(ctx context.Context, config *Config) error {
 	if d.DB != nil {
 		return nil
 	}
@@ -47,11 +47,11 @@ func (d *DotDBConfig) Init(ctx context.Context) error {
 func (d *DotDBConfig) Value(r Request) (any, error) {
 	return &DotDB{d.DB, GetLogger(r.R.Context()), r.R.Context(), d.TxOptions, nil}, nil
 }
-func (dp *DotDBConfig) Cleanup(v any, err error) error {
-	d := v.(*DotDB)
+func (d *DotDBConfig) Cleanup(v any, err error) error {
+	dot := v.(*DotDB)
 	if err != nil {
-		return errors.Join(err, d.rollback())
+		return errors.Join(err, dot.rollback())
 	} else {
-		return errors.Join(err, d.commit())
+		return errors.Join(err, dot.commit())
 	}
 }

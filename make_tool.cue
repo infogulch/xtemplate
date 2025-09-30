@@ -134,6 +134,75 @@ task: build_test_cli: {
 	kill: exec.Run & {cmd: ["bash", "-c", "kill \(run.start.stdout)"], mustSucceed: false, $after: test.hurl.$done}
 }
 
+task: build_nats: {
+	vars: #vars
+
+	logfile: string | *"gobuild-nats.log"
+	outfile: *"\(vars.distdir)/app-nats\(vars.exeExt)" | string
+
+	gobuild: exec.Run & {
+		env: {[string]: string}
+		cmd: ["bash", "-xc", "cd app-nats && go build -o '\(outfile)' . &>'\(vars.distdir)/\(logfile)'"]
+		dir:         vars.testdir
+		mustSucceed: true
+	}
+}
+
+task: run_nats: {
+	vars: #vars
+
+	// Create temp directory and copy test data including config-nats-test.json
+	now0: string @tag(now,var=now)
+	now1: strings.Replace(strings.SliceRunes(now0, 0, 19), ":", "-", -1)
+	mktemp: file.MkdirTemp & {dir: vars.distdir, pattern: "test_\(now1)_"}
+	copy: exec.Run & {
+		cmd:    ["cp", "-r", "templates/", "data/", "migrations/", "caddy.json", "config-nats-test.json", mktemp.path]
+		dir:    vars.testdir
+		$done:  bool
+		$after: mktemp.$done
+	}
+
+	// Start app-nats from temp directory. It will not create templates to start with
+	// but will add templates after starting, and the Watcher will reload the instance
+	// NATS data will be stored in <tempdir>/nats-test-data
+	start: exec.Run & {
+		cmd: ["bash", "-xc", "'\(vars.distdir)/app-nats\(vars.exeExt)' --config-file config-nats-test.json &>app-nats.log & echo $!"]
+		dir:    mktemp.path
+		stdout: string
+		$after: copy.$done
+	}
+}
+
+task: build_test_nats: {
+	vars: #vars
+
+	build: task.build_nats & {"vars": vars}
+	run: task.run_nats & {"vars": vars, start: $after: build.gobuild.$done}
+
+	// Wait for hot reload to complete after templates are uploaded
+	// The watcher triggers a reload, so we need to wait for instance 2 to finish loading
+	reloaded: exec.Run & {
+		cmd: ["bash", "-c", "for i in {1..60}; do grep -q 'instance loaded.*instance=2' '\(run.mktemp.path)/app-nats.log' && exit 0; sleep 0.5; done; exit 1"]
+		mustSucceed: true
+		$after:      run.start.$done
+	}
+
+	// Run hurl tests (same pattern as build_test_cli)
+	test: exec.Run & {
+		cmd: ["bash", "-xc", "mkdir -p '\(run.mktemp.path)/report/store' && hurl --test --report-html '\(run.mktemp.path)/report' --report-json '\(run.mktemp.path)/report/store/report.json' --variable host=http://localhost:8080 tests/*.hurl &>'\(run.mktemp.path)/report/hurl.log'"]
+		dir:         vars.testdir
+		mustSucceed: true
+		$after:      reloaded.$done
+	}
+
+	// Kill app-nats server (same pattern as build_test_cli)
+	kill: exec.Run & {
+		cmd: ["bash", "-c", "kill \(run.start.stdout)"]
+		mustSucceed: false
+		$after:      test.$done
+	}
+}
+
 task: dist: {
 	vars: #vars
 
@@ -274,10 +343,11 @@ command: ci: {
 	gotest: task.gotest & {"vars": cfg.vars, gotest: $after: mkdist.$done}
 
 	build_test_cli: task.build_test_cli & {"vars": cfg.vars, run: mktemp: mktemp: $after: mkdist.$done}
+	build_test_nats: task.build_test_nats & {"vars": cfg.vars, build: gobuild: $after: mkdist.$done, run: mktemp: $after: mkdist.$done}
 	build_test_caddy: task.build_test_caddy & {"vars": cfg.vars, build: xbuild: $after: mkdist.$done}
 	build_test_docker: task.build_test_docker & {"vars": cfg.vars, mktemp: mktemp: $after: mkdist.$done}
 
-	pass: build_test_cli.kill.$done && build_test_caddy.kill.$done && build_test_docker.stop.$done
+	pass: build_test_cli.kill.$done && build_test_nats.kill.$done && build_test_caddy.kill.$done && build_test_docker.stop.$done
 
 	dist: task.dist & {"vars": cfg.vars, [=~"^dist"]: rmdir: $after: pass}
 	build_docker: task.build_docker & {"vars": cfg.vars, build: $after: pass}

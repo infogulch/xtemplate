@@ -1,0 +1,13 @@
+[tools]
+caddy = "latest"
+cue = "latest"
+go = "latest"
+hurl = "latest"
+nats = "latest"
+nats-server = "latest"
+xcaddy = "latest"
+
+[alias]
+nats = "github:nats-io/natscli"
+nats-server = "github:nats-io/nats-server"
+xcaddy = "github:caddyserver/xcaddy"

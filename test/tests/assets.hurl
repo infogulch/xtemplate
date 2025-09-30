@@ -131,5 +131,5 @@ GET http://localhost:8080/assets/link
 
 HTTP 200
 [Asserts]
-body matches `<link href="/assets/reset.css\\?hash=(.*)" integrity="(.*)" rel="stylesheet">`
-body matches `<link href="/assets/print.css\\?hash=(.*)" integrity="(.*)" media="print" rel="stylesheet">`
+body matches `<link href="/assets/reset.css\\?hash=(.*)" integrity="(.*)" rel="stylesheet"/?>`
+body matches `<link href="/assets/print.css\\?hash=(.*)" integrity="(.*)" media="print" rel="stylesheet"/?>`

@@ -1,4 +1,4 @@
-// xtemplate extends Go's html/template to be capable enough to define an entire
+// Package xtemplate extends Go's html/template to be capable enough to define an entire
 // server-side application with a directory of Go templates.
 package xtemplate
 
@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"log/slog"
 
+	"github.com/infogulch/xtemplate/backends"
 	"github.com/spf13/afero"
 )
 
@@ -24,17 +25,21 @@ type Config struct {
 	// The FS to load templates from. Default: a FS made from the current working directory.
 	TemplatesFS afero.Fs `json:"-" arg:"-"`
 
+	// Backend provides the template storage backend (filesystem, NATS Object Store, etc.)
+	// If nil, defaults to filesystem backend
+	Backend backends.Backend `json:"-" arg:"-"`
+
 	// File extension to search for to find template files. Default `.html`.
 	TemplateExtension string `json:"template_extension,omitempty" arg:"--template-ext" default:".html"`
 
 	// Whether html templates are minified at load time. Default `true`.
 	Minify bool `json:"minify,omitempty" arg:"-m,--minify" default:"true"`
 
-	Databases       []DotDBConfig    `json:"databases" arg:"-"`
-	Flags           []DotFlagsConfig `json:"flags" arg:"-"`
-	Directories     []DotDirConfig   `json:"directories" arg:"-"`
-	Nats            []DotNatsConfig  `json:"nats" arg:"-"`
-	CustomProviders []DotConfig      `json:"-" arg:"-"`
+	Databases       []DotDBConfig     `json:"databases" arg:"-"`
+	Flags           []DotFlagsConfig  `json:"flags" arg:"-"`
+	Directories     []DotDirConfig    `json:"directories" arg:"-"`
+	Nats            []*DotNatsConfig  `json:"nats" arg:"-"`
+	CustomProviders []DotConfig       `json:"-" arg:"-"`
 
 	// Left template action delimiter. Default `{{`.
 	LDelim string `json:"left,omitempty" arg:"--ldelim" default:"{{"`
@@ -53,33 +58,33 @@ type Config struct {
 	Logger *slog.Logger `json:"-" arg:"-"`
 }
 
-// FillDefaults sets default values for unset fields
-func (config *Config) Defaults() *Config {
-	if config.TemplatesDir == "" {
-		config.TemplatesDir = "templates"
+// Defaults sets default values for unset fields
+func (c *Config) Defaults() *Config {
+	if c.TemplatesDir == "" {
+		c.TemplatesDir = "templates"
 	}
 
-	if config.TemplateExtension == "" {
-		config.TemplateExtension = ".html"
+	if c.TemplateExtension == "" {
+		c.TemplateExtension = ".html"
 	}
 
-	if config.LDelim == "" {
-		config.LDelim = "{{"
+	if c.LDelim == "" {
+		c.LDelim = "{{"
 	}
 
-	if config.RDelim == "" {
-		config.RDelim = "}}"
+	if c.RDelim == "" {
+		c.RDelim = "}}"
 	}
 
-	if config.Logger == nil {
-		config.Logger = slog.Default()
+	if c.Logger == nil {
+		c.Logger = slog.Default()
 	}
 
-	if config.Ctx == nil {
-		config.Ctx = context.Background()
+	if c.Ctx == nil {
+		c.Ctx = context.Background()
 	}
 
-	return config
+	return c
 }
 
 func (c *Config) Options(options ...Option) (*Config, error) {

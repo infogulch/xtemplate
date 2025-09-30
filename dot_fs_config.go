@@ -36,8 +36,8 @@ type DotDirConfig struct {
 
 var _ CleanupDotProvider = &DotDirConfig{}
 
-func (c *DotDirConfig) FieldName() string { return c.Name }
-func (p *DotDirConfig) Init(ctx context.Context) error {
+func (p *DotDirConfig) FieldName() string { return p.Name }
+func (p *DotDirConfig) Init(ctx context.Context, config *Config) error {
 	if p.FS != nil {
 		return nil
 	}

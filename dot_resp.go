@@ -14,8 +14,8 @@ import (
 
 type dotRespProvider struct{}
 
-func (dotRespProvider) FieldName() string            { return "Resp" }
-func (dotRespProvider) Init(_ context.Context) error { return nil }
+func (dotRespProvider) FieldName() string                   { return "Resp" }
+func (dotRespProvider) Init(_ context.Context, _ *Config) error { return nil }
 func (dotRespProvider) Value(r Request) (any, error) {
 	return DotResp{
 		Header: make(http.Header),
@@ -70,35 +70,35 @@ func (d *DotResp) ServeContent(path_ string, modtime time.Time, content any) (st
 // AddHeader adds a header field value, appending val to
 // existing values for that field. It returns an
 // empty string.
-func (h *DotResp) AddHeader(field, val string) string {
-	h.Header.Add(field, val)
+func (d *DotResp) AddHeader(field, val string) string {
+	d.Header.Add(field, val)
 	return ""
 }
 
 // SetHeader sets a header field value, overwriting any
 // other values for that field. It returns an
 // empty string.
-func (h *DotResp) SetHeader(field, val string) string {
-	h.Header.Set(field, val)
+func (d *DotResp) SetHeader(field, val string) string {
+	d.Header.Set(field, val)
 	return ""
 }
 
 // DelHeader deletes a header field. It returns an empty string.
-func (h *DotResp) DelHeader(field string) string {
-	h.Header.Del(field)
+func (d *DotResp) DelHeader(field string) string {
+	d.Header.Del(field)
 	return ""
 }
 
 // SetStatus sets the HTTP response status. It returns an empty string.
-func (h *DotResp) SetStatus(status int) string {
-	h.status = status
+func (d *DotResp) SetStatus(status int) string {
+	d.status = status
 	return ""
 }
 
 // ReturnStatus sets the HTTP response status and exits template rendering
 // immediately.
-func (h *DotResp) ReturnStatus(status int) (string, error) {
-	h.status = status
+func (d *DotResp) ReturnStatus(status int) (string, error) {
+	d.status = status
 	return "", ReturnError{}
 }
 

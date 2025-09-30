@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
-	"log"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -20,6 +19,7 @@ import (
 
 	"github.com/Masterminds/sprig/v3"
 	"github.com/felixge/httpsnoop"
+	"github.com/infogulch/xtemplate/backends"
 	"github.com/spf13/afero"
 
 	"github.com/google/uuid"
@@ -52,13 +52,18 @@ type Instance struct {
 	flusherDot dot
 }
 
+// Backend returns the backend configured for this instance, if any.
+func (i *Instance) Backend() backends.Backend {
+	return i.config.Backend
+}
+
 // Instance creates a new *Instance from the given config
-func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []InstanceRoute, error) {
+func (c *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []InstanceRoute, error) {
 	start := time.Now()
 
 	build := &builder{
 		Instance: &Instance{
-			config: *config.Defaults(),
+			config: *c.Defaults(),
 			id:     nextInstanceIdentity.Add(1),
 		},
 		InstanceStats: &InstanceStats{},
@@ -71,54 +76,8 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 	build.config.Logger = build.config.Logger.With(slog.Int64("instance", build.id))
 	build.config.Logger.Info("initializing")
 
-	if build.config.TemplatesFS == nil {
-		build.config.TemplatesFS = afero.NewBasePathFs(afero.NewOsFs(), build.config.TemplatesDir)
-	}
-
-	{
-		build.funcs = template.FuncMap{}
-		maps.Copy(build.funcs, xtemplateFuncs)
-		maps.Copy(build.funcs, sprig.HtmlFuncMap())
-		for _, extra := range build.config.FuncMaps {
-			maps.Copy(build.funcs, extra)
-		}
-	}
-
-	build.files = make(map[string]*fileInfo)
-	build.router = http.NewServeMux()
-	build.templates = template.New(".").Delims(build.config.LDelim, build.config.RDelim).Funcs(build.funcs)
-
-	if config.Minify {
-		m := minify.New()
-		m.Add("text/css", &css.Minifier{})
-		m.Add("image/svg+xml", &svg.Minifier{})
-		m.Add("text/html", &html.Minifier{
-			TemplateDelims: [...]string{build.config.LDelim, build.config.RDelim},
-		})
-		m.AddRegexp(regexp.MustCompile("^(application|text)/(x-)?(java|ecma)script$"), &js.Minifier{})
-		build.m = m
-	}
-
-	if err := afero.Walk(build.config.TemplatesFS, ".", func(path_ string, d fs.FileInfo, err error) error {
-		path_ = strings.ReplaceAll(path_, "\\", "/")
-		if err != nil || d.IsDir() {
-			return err
-		}
-		if strings.HasSuffix(path_, build.config.TemplateExtension) {
-			err = build.addTemplateHandler(path_)
-		} else {
-			err = build.addStaticFileHandler(path_)
-		}
-		return err
-	}); err != nil {
-		return nil, nil, nil, fmt.Errorf("error scanning files: %w", err)
-	}
-
-	dcInstance := dotXProvider{build.Instance}
-	dcReq := dotReqProvider{}
-	dcResp := dotRespProvider{}
-	dcFlush := dotFlushProvider{}
-
+	// Initialize providers FIRST (before backend FS access)
+	// This allows backends to use provider infrastructure (like NATS connections)
 	var dot []DotConfig
 
 	{
@@ -136,7 +95,7 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 			names[d.FieldName()] += 1
 		}
 		for _, d := range build.config.Nats {
-			dot = append(dot, &d)
+			dot = append(dot, d)
 			names[d.FieldName()] += 1
 		}
 		for _, d := range build.config.CustomProviders {
@@ -150,13 +109,77 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 		}
 		for _, d := range dot {
 			start := time.Now()
-			err := d.Init(build.config.Ctx)
+			err := d.Init(build.config.Ctx, &build.config)
 			build.config.Logger.Debug("initialized provider", "name", d.FieldName(), "type", reflect.TypeOf(d).String(), "duration", time.Since(start))
 			if err != nil {
 				return nil, nil, nil, fmt.Errorf("failed to initialize dot field '%s': %w", d.FieldName(), err)
 			}
 		}
 	}
+
+	// Initialize TemplatesFS from backend or default to filesystem
+	if build.config.TemplatesFS == nil {
+		if build.config.Backend != nil {
+			// Use the provided backend
+			build.config.TemplatesFS = build.config.Backend.FS()
+			build.config.Logger.Info("using backend", "name", build.config.Backend.Name())
+		} else {
+			// Default to filesystem - no watch support
+			// For watch support, set Backend explicitly or use app.Main()
+			build.config.TemplatesFS = afero.NewBasePathFs(afero.NewOsFs(), build.config.TemplatesDir)
+			build.config.Logger.Info("using default filesystem", "path", build.config.TemplatesDir)
+		}
+	}
+
+	// Set up template functions and infrastructure
+	{
+		build.funcs = template.FuncMap{}
+		maps.Copy(build.funcs, xtemplateFuncs)
+		maps.Copy(build.funcs, sprig.HtmlFuncMap())
+		for _, extra := range build.config.FuncMaps {
+			maps.Copy(build.funcs, extra)
+		}
+	}
+
+	build.files = make(map[string]*fileInfo)
+	build.router = http.NewServeMux()
+	build.templates = template.New(".").Delims(build.config.LDelim, build.config.RDelim).Funcs(build.funcs)
+
+	if c.Minify {
+		m := minify.New()
+		m.Add("text/css", &css.Minifier{})
+		m.Add("image/svg+xml", &svg.Minifier{})
+		m.Add("text/html", &html.Minifier{
+			TemplateDelims: [...]string{build.config.LDelim, build.config.RDelim},
+		})
+		m.AddRegexp(regexp.MustCompile("^(application|text)/(x-)?(java|ecma)script$"), &js.Minifier{})
+		build.m = m
+	}
+
+	// Load templates from backend FS
+	if err := afero.Walk(build.config.TemplatesFS, ".", func(path_ string, d fs.FileInfo, err error) error {
+		path_ = strings.ReplaceAll(path_, "\\", "/")
+		if err != nil || d.IsDir() {
+			return err
+		}
+		if strings.HasSuffix(path_, build.config.TemplateExtension) {
+			err = build.addTemplateHandler(path_)
+		} else {
+			err = build.addStaticFileHandler(path_)
+		}
+		return err
+	}); err != nil {
+		// If the backend is empty (e.g., NATS object store with no objects),
+		// we still want to create the instance so the watcher can reload when files are added
+		build.config.Logger.Warn("failed to scan templates", "error", err)
+		// Don't return error - allow instance creation with no templates
+	}
+
+	// Create built-in dot providers
+	dcInstance := dotXProvider{build.Instance}
+	dcReq := dotReqProvider{}
+	dcResp := dotRespProvider{}
+	dcFlush := dotFlushProvider{}
 
 	build.bufferDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, dot, []DotConfig{dcResp}))
 	build.flusherDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, dot, []DotConfig{dcFlush}))
@@ -202,53 +225,46 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 	return build.Instance, build.InstanceStats, build.routes, nil
 }
 
-func must[V any](v V, err error) V {
-	if err != nil {
-		log.Fatal(err)
-	}
-	return v
-}
-
 // Counter to assign a unique id to each instance of xtemplate created when
 // calling Config.Instance(). This is intended to help distinguish logs from
 // multiple instances in a single process.
 var nextInstanceIdentity atomic.Int64
 
-// Id returns the id of this instance which is unique in the current
+// ID returns the id of this instance which is unique in the current
 // process. This differentiates multiple instances, as the instance id
 // is attached to all logs generated by the instance with the attribute name
 // `xtemplate.instance`.
-func (x *Instance) Id() int64 {
-	return x.id
+func (i *Instance) ID() int64 {
+	return i.id
 }
 
 var (
 	levelDebug2 slog.Level = slog.LevelDebug + 2
 )
 
-func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (i *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	select {
-	case <-instance.config.Ctx.Done():
-		instance.config.Logger.Error("received request after xtemplate instance cancelled", slog.String("method", r.Method), slog.String("path", r.URL.Path))
+	case <-i.config.Ctx.Done():
+		i.config.Logger.Error("received request after xtemplate instance cancelled", slog.String("method", r.Method), slog.String("path", r.URL.Path))
 		http.Error(w, "server stopped", http.StatusInternalServerError)
 		return
 	default:
 	}
 
 	ctx := r.Context()
-	rid := GetRequestId(ctx)
+	rid := GetRequestID(ctx)
 	if rid == "" {
 		id, err := uuid.NewV7()
 		if err != nil {
-			instance.config.Logger.Error("failed to generate request id", slog.String("method", r.Method), slog.String("path", r.URL.Path), slog.Any("error", err))
+			i.config.Logger.Error("failed to generate request id", slog.String("method", r.Method), slog.String("path", r.URL.Path), slog.Any("error", err))
 			http.Error(w, "failed to generate request id", http.StatusInternalServerError)
 			return
 		}
 		rid = id.String()
-		ctx = context.WithValue(ctx, requestIdKey, rid)
+		ctx = context.WithValue(ctx, requestIDKey, rid)
 	}
 
-	log := instance.config.Logger.With(slog.Group("serve",
+	log := i.config.Logger.With(slog.Group("serve",
 		slog.String("requestid", rid),
 	))
 	log.LogAttrs(r.Context(), slog.LevelDebug, "serving request",
@@ -259,7 +275,7 @@ func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx = context.WithValue(ctx, loggerKey, log)
 
 	r = r.WithContext(ctx)
-	metrics := httpsnoop.CaptureMetrics(instance.router, w, r)
+	metrics := httpsnoop.CaptureMetrics(i.router, w, r)
 
 	log.LogAttrs(r.Context(), levelDebug2, "request served",
 		slog.Group("response",
@@ -270,13 +286,13 @@ func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		))
 }
 
-type requestIdType struct{}
+type requestIDType struct{}
 
-var requestIdKey = requestIdType{}
+var requestIDKey = requestIDType{}
 
-func GetRequestId(ctx context.Context) string {
+func GetRequestID(ctx context.Context) string {
 	// xtemplate request id
-	if av := ctx.Value(requestIdKey); av != nil {
+	if av := ctx.Value(requestIDKey); av != nil {
 		if v, ok := av.(string); ok {
 			return v
 		}

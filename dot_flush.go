@@ -11,8 +11,8 @@ import (
 
 type dotFlushProvider struct{}
 
-func (dotFlushProvider) FieldName() string            { return "Flush" }
-func (dotFlushProvider) Init(_ context.Context) error { return nil }
+func (dotFlushProvider) FieldName() string                   { return "Flush" }
+func (dotFlushProvider) Init(_ context.Context, _ *Config) error { return nil }
 func (dotFlushProvider) Value(r Request) (any, error) {
 	f, ok := r.W.(flusher)
 	if !ok {

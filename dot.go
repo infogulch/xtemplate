@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"sync"
+	"unicode"
 )
 
 type Request struct {
@@ -18,7 +20,7 @@ type Request struct {
 
 type DotConfig interface {
 	FieldName() string
-	Init(context.Context) error
+	Init(context.Context, *Config) error
 	Value(Request) (any, error)
 }
 
@@ -30,16 +32,21 @@ type CleanupDotProvider interface {
 func makeDot(dps []DotConfig) dot {
 	fields := make([]reflect.StructField, 0, len(dps))
 	cleanups := []cleanup{}
-	mockHttpRequest := httptest.NewRequest("GET", "/", nil)
+	mockHTTPRequest := httptest.NewRequest("GET", "/", nil)
 	for i, dp := range dps {
-		mockRequest := Request{dp, context.Background(), mockResponseWriter{}, mockHttpRequest}
+		mockRequest := Request{dp, context.Background(), mockResponseWriter{}, mockHTTPRequest}
 		a, _ := dp.Value(mockRequest)
 		t := reflect.TypeOf(a)
 		if t.Kind() == reflect.Interface && t.NumMethod() == 0 {
 			t = t.Elem()
 		}
+		// Capitalize field name to ensure it's exported (required by reflect.StructOf)
+		fieldName := dp.FieldName()
+		if len(fieldName) > 0 && unicode.IsLower(rune(fieldName[0])) {
+			fieldName = strings.ToUpper(fieldName[:1]) + fieldName[1:]
+		}
 		f := reflect.StructField{
-			Name:      dp.FieldName(),
+			Name:      fieldName,
 			Type:      t,
 			Anonymous: false, // alas
 		}

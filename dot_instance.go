@@ -13,8 +13,8 @@ type dotXProvider struct {
 	instance *Instance
 }
 
-func (dotXProvider) FieldName() string            { return "X" }
-func (dotXProvider) Init(_ context.Context) error { return nil }
+func (dotXProvider) FieldName() string                   { return "X" }
+func (dotXProvider) Init(_ context.Context, _ *Config) error { return nil }
 func (p dotXProvider) Value(Request) (any, error) { return DotX(p), nil }
 
 func (dotXProvider) Cleanup(_ any, err error) error {
@@ -44,12 +44,12 @@ func (d DotX) StaticFileHash(urlpath string) (string, error) {
 
 // Template invokes the template name with the given dot value, returning the
 // result as a html string.
-func (c DotX) Template(name string, dot any) (template.HTML, error) {
+func (d DotX) Template(name string, dot any) (template.HTML, error) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer bufPool.Put(buf)
 
-	t := c.instance.templates.Lookup(name)
+	t := d.instance.templates.Lookup(name)
 	if t == nil {
 		return "", fmt.Errorf("failed to lookup template name: '%s'", name)
 	}
@@ -61,8 +61,8 @@ func (c DotX) Template(name string, dot any) (template.HTML, error) {
 
 // Func returns a function by name to call manually. Can be used in combination
 // with the call and try funcs.
-func (c DotX) Func(name string) any {
-	return c.instance.funcs[name]
+func (d DotX) Func(name string) any {
+	return d.instance.funcs[name]
 }
 
 // ReturnError is a sentinel value that indicates a successful/normal exit but
