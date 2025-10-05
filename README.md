@@ -1,49 +1,48 @@
 # xtemplate
 
 `xtemplate` is a html/template-based hypertext preprocessor and rapid
-application development web server written in Go. It streamlines construction of
-hypermedia-exchange-oriented web sites by efficiently handling basic server
-tasks, enabling authors to focus on defining routes and responding to them using
-templates and configurable data sources.
+application development web server written in Go. Its good defaults handle
+typical server activity, enabling authors to focus on building
+hypermedia-exchange-oriented websites by defining routes and responding to them
+with template-generated HTML combined with configurable backing data stores.
 
 ## 🎯 Goal
 
-After bulding some sites with [htmx](https://htmx.org) and Go, I wished that
-everything would just get out of the way of the fundamentals:
+Frustrated with the status-quo of frameworks that add more abstractions than
+they solve problems, I set out to create something that feels more like
+wrestling directly with first-class citizens of the web:
 
-- URLs and path patterns
-- Access to a backing data source
-- Executing a template to return HTML
+- HTTP paths and matching server path patterns
+- Responding to an HTTP request with a template-generated HTML
+- Access to various backing data sources
 
-🎇 **The idea of `xtemplate` is that *templates* can be the nexus of these
-fundamentals.**
+🎇 **The idea of `xtemplate` is that all of these can be managed with a
+directory of Go *template* files.**
 
 <details><summary>🚫 Anti-goals</summary>
 
-`xtemplate` needs to implement some of the things that are required to make a
-good web server in a way that avoids common issues with existing web server
-designs, otherwise they'll be in the way of the fundamentals:
+`xtemplate` implements things that are required to make a good web server in a
+way that avoids common pitfalls with existing engines:
 
-* **Rigid template behavior**: Most designs relegate templates to be dumb string
-  concatenators with just enough dynamic behavior to walk over some fixed data
-  structure.
-* **Inefficient template loading**: Some designs read template files from disk
-  and parse them on every request. This seems wasteful when the web server
-  definition is typically static.
-* **Constant rebuilds**: On the other end of the spectrum, some designs require
-  rebuilding the entire server from source when any little thing changes. This
-  seems wasteful and makes graceful restarts more difficult than necessary when
-  all you're doing is changing a button name.
-* **Repetitive route definitions**: Why should you have to name a http handler
-  and add it to a central registry (or maintain a pile of code that plumbs these
-  together for you) when new routes are often only relevant to the local html?
-* **Default unsafe**: Some designs require authors to vigilantly escape user
-  inputs, risking XSS attacks that could have been avoided with less effort.
-* **Inefficient asset serving**: Some designs compress static assets at request
-  time, instead of serving pre-compressed content with sendfile(2) and
-  negotiated content encoding. Most designs don't give templates access to the
-  hash of asset files, depriving clients of enough information to optimize
-  caching behavior and check resource integrity.
+- **Rigid template behavior**: Engines typically relegate templates to be dumb
+string concatenators with just enough dynamic behavior to walk over some known
+fixed data structure.
+- **Inefficient template loading**: Many engines often load template files from
+disk and parse them on *every request*, which is wasteful when web server
+definitions are largely static.
+- **Constant rebuilds**: Yet other engines rebuild the entire program from
+source when any little thing changes.
+- **Unnecessary handler names**: You've already had to name the http path and
+write the associated response template, why do you have to come up with a
+redundant name for the handler?
+- **Default unsafe**: Some engines require authors to vigilantly escape user
+inputs, risking XSS attacks that could have been avoided with less effort.
+- **Inefficient asset serving**: Many engines don't try to optimize serving
+assets at all and compress static assets at request time, instead of serving
+pre-compressed content with sendfile(2) and negotiated content encoding. Most
+designs don't give templates access to the hash of asset files, depriving
+authors of the right information to optimize cache behavior and check resource
+integrity.
 
 </details>
 
@@ -51,7 +50,7 @@ designs, otherwise they'll be in the way of the fundamentals:
 
 *Click a feature to expand and show details:*
 
-<details open><summary><strong>⚡ Efficient design</strong></summary>
+<details open><summary><strong>⚡ Efficient loading</strong></summary>
 
 > All template files are read and parsed *once*, at startup, and kept in memory
 > during the life of an xtemplate *instance*. Requests are routed to a handler
@@ -77,6 +76,7 @@ designs, otherwise they'll be in the way of the fundamentals:
 > <script>new EventSource("/reload").onmessage = () => location.reload()</script>
 > <!-- Maybe not a great idea for production, but you do you. -->
 > ```
+>
 </details>
 
 <details open><summary><strong>🗃️ Simple file-based routing</strong></summary>
@@ -84,7 +84,7 @@ designs, otherwise they'll be in the way of the fundamentals:
 > `GET` requests are handled by invoking a matching template file at that path.
 > (Hidden files that start with `.` are loaded but not routed by default.)
 >
-> ```
+> ```ascii
 > File path:              HTTP path:
 > .
 > ├── index.html          GET /
@@ -94,6 +94,7 @@ designs, otherwise they'll be in the way of the fundamentals:
 > └── shared
 >     └── .head.html      (not routed because it starts with '.')
 > ```
+>
 </details>
 
 <details><summary><strong>🔱 Add custom routes to handle any method and path pattern</strong></summary>
@@ -105,7 +106,7 @@ designs, otherwise they'll be in the way of the fundamentals:
 > ```html
 > <!-- match on path parameters -->
 > {{define "GET /contact/{id}"}}
-> {{$contact := .QueryRow `SELECT name,phone FROM contacts WHERE id=?` (.Req.PathValue "id")}}
+> {{$contact := .DB.QueryRow `SELECT name,phone FROM contacts WHERE id=?` (.Req.PathValue "id")}}
 > <div>
 >   <span>Name: {{$contact.name}}</span>
 >   <span>Phone: {{$contact.phone}}</span>
@@ -114,7 +115,7 @@ designs, otherwise they'll be in the way of the fundamentals:
 >
 > <!-- match on any http method -->
 > {{define "DELETE /contact/{id}"}}
-> {{$_ := .Exec `DELETE from contacts WHERE id=?` (.Req.PathValue "id")}}
+> {{$_ := .DB.Exec `DELETE from contacts WHERE id=?` (.Req.PathValue "id")}}
 > {{.RespStatus 204}}
 > {{end}}
 > ```
@@ -141,6 +142,7 @@ designs, otherwise they'll be in the way of the fundamentals:
 >   </body>
 > </html>
 > ```
+>
 </details>
 
 <details><summary><strong>🛡️ XSS safe by default</strong></summary>
@@ -181,6 +183,7 @@ designs, otherwise they'll be in the way of the fundamentals:
 >   {{end}}
 > </ul>
 > ```
+>
 </details>
 
 <details><summary><strong>🗄️ Filesystem context provider: List and read local files</strong></summary>
@@ -191,11 +194,12 @@ designs, otherwise they'll be in the way of the fundamentals:
 > ```html
 > <p>Here are the files:
 > <ol>
-> {{range .ListFiles "dir/"}}
+> {{range .FS.List "dir/"}}
 >   <li>{{.Name}}</li>
 > {{end}}
 > </ol>
 > ```
+>
 </details>
 
 <details><summary><strong>💬 NATS context provider: Send and receive messages</strong></summary>
@@ -206,36 +210,34 @@ designs, otherwise they'll be in the way of the fundamentals:
 > ```html
 > <example></example>
 > ```
+>
 </details>
 
 <details open><summary><strong>📤 Optimal asset serving</strong></summary>
 
 > Non-template files in the templates directory are served directly from disk
 > with appropriate caching responses, negotiating with the client to serve
-> compressed versions. Efficient access to the content hash is available to
-> templates for efficient SRI and perfect cache behavior.
+> compressed encodings if corresponding `.zst`, `.zip`, `.gz`, `.br` files are present.
 >
-> If a static file also has .gz, .br, .zip, or .zst copies, they are decoded and
-> hashed for consistency on startup, and use the `Accept-Encoding` header to
-> negotiate an appropriate `Content-Encoding` with the client and served
-> directly from disk.
->
-> Templates can efficiently access the static file's precalculated content hash
+> Templates can efficiently access static files' precalculated content hash
 > to build a `<script>` or `<link>` integrity attribute, instructing clients to
 > check the integrity of the content if they are served through a CDN. See:
-> [Subresource Integrity](https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity)
+> [Subresource Integrity (SRI)](https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity)
 >
 > Add the content hash as a query parameter and responses will automatically add
 > a 1 year long `Cache-Control` header so clients can safely cache as long as
 > possible. If the file changes, its hash and thus query parameter will change
-> so the client will immediately request a new version, **entirely eliminating
+> and the client will immediately request a new version, **completely eliminating
 > stale cache issues**.
+>
+> This example uses both SRI and precise 1-year `Cache-Control`:
 >
 > ```html
 > {{- with $hash := .X.StaticFileHash `/assets/reset.css`}}
 > <link rel="stylesheet" href="/reset.css?hash={{$hash}}" integrity="{{$hash}}">
 > {{- end}}
 > ```
+>
 </details>
 
 <details><summary><strong>📬 Live updates with Server Sent Events (SSE)</strong></summary>
@@ -256,14 +258,19 @@ designs, otherwise they'll be in the way of the fundamentals:
 
 > Deploy next to your templates and static files or [embed](https://pkg.go.dev/embed)
 > them for single binary deployments.
-> 
+>
 > ```go
 > //go:embed all:templates
 > var Files embed.FS
 > ```
+>
 </details>
 
 ## 📦 How to run
+
+### 0. 📦 As a Docker container
+
+...
 
 ### 1. 📦 As a Caddy plugin
 
@@ -273,7 +280,7 @@ HTTP/1-2-3 web server with automatic HTTPS.
 
 Download Caddy with `xtemplate/caddy` middleware plugin built-in:
 
-https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate&package=github.com%2Fncruces%2Fgo-sqlite3
+<https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate&package=github.com%2Fncruces%2Fgo-sqlite3>
 
 This is the simplest Caddyfile that uses the `xtemplate/caddy` plugin:
 
@@ -326,6 +333,7 @@ Examples:
     Parse template files matching a custom extension and minify them:
     $ ./xtemplate --template-ext ".go.html" --minify
 ```
+
 </details>
 
 ### 3. 📦 As a Go library
@@ -396,11 +404,11 @@ custom fields with your own methods.
 
 These fields are always present in relevant template invocations:
 
-* Access instance data with the `.X` field. See [DotX]
-* Access request details with the `.Req` field. See [DotReq]
-* Control the HTTP response in buffered template handlers with the `.Resp`
+- Access instance data with the `.X` field. See [DotX]
+- Access request details with the `.Req` field. See [DotReq]
+- Control the HTTP response in buffered template handlers with the `.Resp`
   field. See [DotResp]
-* Control flushing behavior for flushing template handlers (i.e. SSE) with the
+- Control flushing behavior for flushing template handlers (i.e. SSE) with the
   `.Flush` field. See [DotFlush]
 
 [DotX]: https://pkg.go.dev/github.com/infogulch/xtemplate#DotX
@@ -413,9 +421,9 @@ These fields are always present in relevant template invocations:
 These optional value providers can be configured with any field name, and can be
 configured multiple times with different configurations.
 
-* Read and list files. See [DotFS]
-* Query and execute SQL statements. See [DotDB]
-* Read template-level key-value map. See [DotKV]
+- Read and list files. See [DotFS]
+- Query and execute SQL statements. See [DotDB]
+- Read template-level key-value map. See [DotKV]
 
 [DotFS]: https://pkg.go.dev/github.com/infogulch/xtemplate/providers#DotFS
 [DotDB]: https://pkg.go.dev/github.com/infogulch/xtemplate/providers#DotDB
@@ -435,15 +443,15 @@ sprig library, and custom functions added by xtemplate.
 
 You can custom FuncMaps by configuring the `Config.FuncMaps` field.
 
-* 📏 `xtemplate` includes funcs to render markdown, sanitize html, convert
+- 📏 `xtemplate` includes funcs to render markdown, sanitize html, convert
   values to human-readable forms, and to try to call a function to handle an
   error within the template. See the free functions named [`FuncXYZ(...)` in
   xtemplate's Go docs][funcgodoc] for details.
-* 📏 Sprig publishes a library of useful template funcs that enable templates to
+- 📏 Sprig publishes a library of useful template funcs that enable templates to
   manipulate strings, integers, floating point numbers, and dates, as well as
   perform encoding tasks, manipulate lists and dicts, converting types,
   and manipulate file paths See [Sprig Function Documentation][sprig].
-* 📏 Go's built in functions add logic and basic printing functionality.
+- 📏 Go's built in functions add logic and basic printing functionality.
   See: [text/template#Functions][gofuncs].
 
 [funcgodoc]: https://pkg.go.dev/github.com/infogulch/xtemplate#FuncHumanize
@@ -452,9 +460,9 @@ You can custom FuncMaps by configuring the `Config.FuncMaps` field.
 
 ## 🏆 Users
 
-* [PixyBlue/lazy-lob-web](https://github.com/PixyBlue/lazy-lob-web), a fullstack web lob framework.
-* [infogulch/xrss](https://github.com/infogulch/xrss), an rss feed reader built with htmx and inline css.
-* [infogulch/todos](https://github.com/infogulch/todos), a demo todomvc application.
+- [PixyBlue/lazy-lob-web](https://github.com/PixyBlue/lazy-lob-web), a fullstack web lob framework.
+- [infogulch/xrss](https://github.com/infogulch/xrss), an rss feed reader built with htmx and inline css.
+- [infogulch/todos](https://github.com/infogulch/todos), a demo todomvc application.
 
 ## 👷‍♀️ Development
 
@@ -462,20 +470,20 @@ You can custom FuncMaps by configuring the `Config.FuncMaps` field.
 
 xtemplate is split into the following packages:
 
-* `github.com/infogulch/xtemplate` is a library that exports the `Instance`
+- `github.com/infogulch/xtemplate` is a library that exports the `Instance`
   struct which can load template files and implements `http.Handler` that
   routes requests to templates and serves static files, the `Server` struct
   which can atomically reload an `Instance` on demand, and a number of built-in
   providers.
-* `./app` is a library that contains an exported `Main` function which
+- `./app` is a library that contains an exported `Main` function which
   configures and starts xtemplate with CLI args and accepts config override
   parameters. This `Main` fucntion can be used as a reference for using the
   `xtemplate` API in advanced use-cases.
-* `./cmd` is a binary that simply imports a database driver and runs
+- `./cmd` is a binary that simply imports a database driver and runs
   `xtemplate/app.Main()`. The recommended way to begin customizing
   xtemplate is to copy the `./cmd` package to your own repo, then add your
   own database driver, provide custom config overrides, etc.
-* `./caddy` is a [Caddy module](https://caddyserver.com/docs/extending-caddy)
+- `./caddy` is a [Caddy module](https://caddyserver.com/docs/extending-caddy)
   package that uses xtemplate's Go library API to integrate xtemplate into Caddy
   server.
 
