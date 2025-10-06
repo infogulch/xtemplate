@@ -1,4 +1,5 @@
-package xtemplate_caddy
+// Package xtemplatecaddy provides Caddy integration for the xtemplate module.
+package xtemplatecaddy
 
 import (
 	"strconv"

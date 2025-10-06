@@ -40,10 +40,11 @@ import (
 //
 // See also [Server] which manages instances and enables reloading them.
 type Instance struct {
-	config Config
-	id     int64
+	id      int64
+	handler http.Handler
 
-	router    *http.ServeMux
+	config Config
+
 	files     map[string]*fileInfo
 	templates *template.Template
 	funcs     template.FuncMap
@@ -222,6 +223,17 @@ func (c *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Instance
 			slog.Int("staticFilesAlternateEncodings", build.StaticFilesAlternateEncodings),
 		))
 
+	if !c.CrossOrigin.Disabled {
+		handler := http.NewCrossOriginProtection()
+		for _, origin := range c.CrossOrigin.TrustedOrigins {
+			handler.AddTrustedOrigin(origin)
+		}
+		for _, pattern := range c.CrossOrigin.InsecureBypassPatterns {
+			handler.AddInsecureBypassPattern(pattern)
+		}
+		build.handler = handler.Handler(build.router)
+	}
+
 	return build.Instance, build.InstanceStats, build.routes, nil
 }
 
@@ -267,7 +279,7 @@ func (i *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log := i.config.Logger.With(slog.Group("serve",
 		slog.String("requestid", rid),
 	))
-	log.LogAttrs(r.Context(), slog.LevelDebug, "serving request",
+	log.LogAttrs(ctx, slog.LevelDebug, "serving request",
 		slog.String("user-agent", r.Header.Get("User-Agent")),
 		slog.String("method", r.Method),
 		slog.String("requestPath", r.URL.Path),
@@ -275,9 +287,9 @@ func (i *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx = context.WithValue(ctx, loggerKey, log)
 
 	r = r.WithContext(ctx)
-	metrics := httpsnoop.CaptureMetrics(i.router, w, r)
+	metrics := httpsnoop.CaptureMetrics(i.handler, w, r)
 
-	log.LogAttrs(r.Context(), levelDebug2, "request served",
+	log.LogAttrs(ctx, levelDebug2, "request served",
 		slog.Group("response",
 			slog.Duration("duration", metrics.Duration),
 			slog.Int("statusCode", metrics.Code),
