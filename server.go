@@ -27,16 +27,16 @@ type Server struct {
 	config Config
 }
 
-// Build creates a new Server from an xtemplate.Config.
-func (config Config) Server(cfgs ...Option) (*Server, error) {
-	if _, err := config.Defaults().Options(cfgs...); err != nil {
+// Server creates a new Server from an xtemplate.Config.
+func (c Config) Server(cfgs ...Option) (*Server, error) {
+	if _, err := c.Defaults().Options(cfgs...); err != nil {
 		return nil, err
 	}
 
-	config.Logger = config.Logger.WithGroup("xtemplate")
+	c.Logger = c.Logger.WithGroup("xtemplate")
 
 	server := &Server{
-		config: config,
+		config: c,
 	}
 	err := server.Reload()
 
@@ -53,9 +53,9 @@ func (x *Server) Instance() *Instance {
 }
 
 // Serve opens a net listener on `listen_addr` and serves requests from it.
-func (x *Server) Serve(listen_addr string) error {
+func (x *Server) Serve(listenAddr string) error {
 	x.config.Logger.Info("starting server")
-	return http.ListenAndServe(listen_addr, x.Handler())
+	return http.ListenAndServe(listenAddr, x.Handler())
 }
 
 // Handler returns a `http.Handler` that always routes new requests to the

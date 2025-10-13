@@ -30,9 +30,9 @@ type CleanupDotProvider interface {
 func makeDot(dps []DotConfig) dot {
 	fields := make([]reflect.StructField, 0, len(dps))
 	cleanups := []cleanup{}
-	mockHttpRequest := httptest.NewRequest("GET", "/", nil)
+	mockHTTPRequest := httptest.NewRequest("GET", "/", nil)
 	for i, dp := range dps {
-		mockRequest := Request{dp, context.Background(), mockResponseWriter{}, mockHttpRequest}
+		mockRequest := Request{dp, context.Background(), mockResponseWriter{}, mockHTTPRequest}
 		a, _ := dp.Value(mockRequest)
 		t := reflect.TypeOf(a)
 		if t.Kind() == reflect.Interface && t.NumMethod() == 0 {

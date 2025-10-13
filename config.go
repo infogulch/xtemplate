@@ -1,4 +1,4 @@
-// xtemplate extends Go's html/template to be capable enough to define an entire
+// Package xtemplate extends Go's html/template to be capable enough to define an entire
 // server-side application with a directory of Go templates.
 package xtemplate
 
@@ -14,7 +14,7 @@ import (
 func New() (c *Config) {
 	c = &Config{}
 	c.Defaults()
-	return
+	return c
 }
 
 type Config struct {
@@ -61,33 +61,33 @@ type CrossOriginConfig struct {
 	InsecureBypassPatterns []string `json:"insecure_bypass_patterns" arg:"--insecure-bypass-pattern,separate"`
 }
 
-// FillDefaults sets default values for unset fields
-func (config *Config) Defaults() *Config {
-	if config.TemplatesDir == "" {
-		config.TemplatesDir = "templates"
+// Defaults sets default values for unset fields
+func (c *Config) Defaults() *Config {
+	if c.TemplatesDir == "" {
+		c.TemplatesDir = "templates"
 	}
 
-	if config.TemplateExtension == "" {
-		config.TemplateExtension = ".html"
+	if c.TemplateExtension == "" {
+		c.TemplateExtension = ".html"
 	}
 
-	if config.LDelim == "" {
-		config.LDelim = "{{"
+	if c.LDelim == "" {
+		c.LDelim = "{{"
 	}
 
-	if config.RDelim == "" {
-		config.RDelim = "}}"
+	if c.RDelim == "" {
+		c.RDelim = "}}"
 	}
 
-	if config.Logger == nil {
-		config.Logger = slog.Default()
+	if c.Logger == nil {
+		c.Logger = slog.Default()
 	}
 
-	if config.Ctx == nil {
-		config.Ctx = context.Background()
+	if c.Ctx == nil {
+		c.Ctx = context.Background()
 	}
 
-	return config
+	return c
 }
 
 func (c *Config) Options(options ...Option) (*Config, error) {

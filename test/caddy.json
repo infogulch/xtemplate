@@ -21,7 +21,7 @@
                   "directories": [
                     {
                       "name": "FS",
-                      "path": "data"
+                      "path": "./data"
                     },
                     {
                       "name": "FSW",

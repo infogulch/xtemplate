@@ -1,3 +1,4 @@
+// Package app provides the main entry point and CLI handling for the xtemplate application.
 package app
 
 import (
@@ -51,7 +52,7 @@ var defaultArgs = Args{WatchTemplates: defaultWatchTemplates == "true", Listen: 
 //
 //	app.Main(xtemplate.WithFooConfig())
 func Main(overrides ...xtemplate.Option) {
-	var config Args = defaultArgs
+	var config = defaultArgs
 	var log *slog.Logger
 
 	{
@@ -61,7 +62,7 @@ func Main(overrides ...xtemplate.Option) {
 		level := config.LogLevel
 		log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(level)}))
 
-		var jsonConfig Args = defaultArgs
+		var jsonConfig = defaultArgs
 		var decoded bool
 		for _, name := range config.ConfigFiles {
 			func() {

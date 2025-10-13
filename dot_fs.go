@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/afero"
 )
 
-// Dir
+// Dir represents a directory abstraction using afero.Fs and provides file operations.
 type Dir struct {
 	fs     afero.Fs
 	log    *slog.Logger

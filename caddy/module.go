@@ -1,4 +1,4 @@
-package xtemplate_caddy
+package xtemplatecaddy
 
 import (
 	"context"
