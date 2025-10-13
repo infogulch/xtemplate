@@ -9,9 +9,10 @@ import (
 	"time"
 
 	"github.com/infogulch/xtemplate"
+	"github.com/infogulch/xtemplate/backends"
+	"github.com/infogulch/xtemplate/backends/filesystem"
 
 	"github.com/alexflint/go-arg"
-	"github.com/infogulch/watch"
 )
 
 type Args struct {
@@ -106,22 +107,46 @@ func Main(overrides ...xtemplate.Option) {
 		log.Debug("loaded configuration", slog.Any("config", &config))
 	}
 
+	// Create server with overrides applied
 	server, err := config.Server(overrides...)
 	if err != nil {
 		log.Error("failed to load xtemplate", slog.Any("error", err))
 		os.Exit(2)
 	}
 
-	if config.WatchTemplates && config.TemplatesFS == nil {
-		config.Watch = append(config.Watch, config.TemplatesDir)
+	// Set up watcher if backend provides one
+	// Note: Backend is set by providers during Init() or defaults to filesystem in instance.go
+	var watcher backends.Watcher
+	if server.Backend() != nil {
+		watcher = server.Backend().Watcher()
 	}
-	if len(config.Watch) != 0 {
-		_, err := watch.Watch(config.Watch, 200*time.Millisecond, log.WithGroup("fswatch"), func() bool {
+	if watcher == nil && len(config.Watch) > 0 {
+		// If backend doesn't provide a watcher but user requested watch dirs,
+		// create a filesystem backend with watch support
+		watchDirs := []string{}
+		if config.WatchTemplates && config.TemplatesFS == nil {
+			watchDirs = append(watchDirs, config.TemplatesDir)
+		}
+		watchDirs = append(watchDirs, config.Watch...)
+
+		backend := filesystem.New(config.TemplatesDir, watchDirs)
+		log.Info("created filesystem backend with watcher", "path", config.TemplatesDir, "watch_dirs", watchDirs)
+
+		err = server.Reload()
+		if err != nil {
+			log.Error("failed to reload xtemplate with filesystem backend", slog.Any("error", err))
+			os.Exit(2)
+		}
+		watcher = backend.Watcher()
+	}
+
+	if watcher != nil {
+		_, err := watcher.Start(200*time.Millisecond, log.WithGroup("watcher"), func() bool {
 			server.Reload()
 			return true
 		})
 		if err != nil {
-			log.Info("failed to watch directories", slog.Any("error", err), slog.Any("directories", config.Watch))
+			log.Error("failed to start watcher", slog.Any("error", err), slog.Any("directories", config.Watch))
 			os.Exit(4)
 		}
 	}

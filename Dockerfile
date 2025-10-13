@@ -13,6 +13,7 @@ FROM deps AS build
 ARG LDFLAGS
 
 COPY app ./app/
+COPY backends ./backends/
 COPY cmd ./cmd/
 COPY *.go ./
 RUN GOOS=linux \

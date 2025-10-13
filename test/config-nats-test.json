@@ -1,0 +1,19 @@
+{
+  "listen": "localhost:8080",
+  "directories": [
+    {
+      "name": "FS",
+      "path": "./data"
+    }
+  ],
+  "flags": [
+    {
+      "name": "Flags",
+      "values": {
+        "a": "1",
+        "b": "2",
+        "hello": "world"
+      }
+    }
+  ]
+}

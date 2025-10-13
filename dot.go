@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"sync"
+	"unicode"
 )
 
 type Request struct {
@@ -18,7 +20,7 @@ type Request struct {
 
 type DotConfig interface {
 	FieldName() string
-	Init(context.Context) error
+	Init(context.Context, *Config) error
 	Value(Request) (any, error)
 }
 
@@ -38,8 +40,13 @@ func makeDot(dps []DotConfig) dot {
 		if t.Kind() == reflect.Interface && t.NumMethod() == 0 {
 			t = t.Elem()
 		}
+		// Capitalize field name to ensure it's exported (required by reflect.StructOf)
+		fieldName := dp.FieldName()
+		if len(fieldName) > 0 && unicode.IsLower(rune(fieldName[0])) {
+			fieldName = strings.ToUpper(fieldName[:1]) + fieldName[1:]
+		}
 		f := reflect.StructField{
-			Name:      dp.FieldName(),
+			Name:      fieldName,
 			Type:      t,
 			Anonymous: false, // alas
 		}

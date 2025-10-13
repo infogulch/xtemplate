@@ -31,5 +31,5 @@ type DotFlagsConfig struct {
 var _ DotConfig = &DotFlagsConfig{}
 
 func (d *DotFlagsConfig) FieldName() string            { return d.Name }
-func (d *DotFlagsConfig) Init(_ context.Context) error { return nil }
+func (d *DotFlagsConfig) Init(_ context.Context, _ *Config) error { return nil }
 func (d *DotFlagsConfig) Value(_ Request) (any, error) { return DotFlags{d.Values}, nil }

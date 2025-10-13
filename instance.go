@@ -19,6 +19,7 @@ import (
 
 	"github.com/Masterminds/sprig/v3"
 	"github.com/felixge/httpsnoop"
+	"github.com/infogulch/xtemplate/backends"
 	"github.com/spf13/afero"
 
 	"github.com/google/uuid"
@@ -52,6 +53,11 @@ type Instance struct {
 	flusherDot dot
 }
 
+// Backend returns the backend configured for this instance, if any.
+func (i *Instance) Backend() backends.Backend {
+	return i.config.Backend
+}
+
 // Instance creates a new *Instance from the given config
 func (c *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []InstanceRoute, error) {
 	start := time.Now()
@@ -71,10 +77,62 @@ func (c *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Instance
 	build.config.Logger = build.config.Logger.With(slog.Int64("instance", build.id))
 	build.config.Logger.Info("initializing")
 
-	if build.config.TemplatesFS == nil {
-		build.config.TemplatesFS = afero.NewBasePathFs(afero.NewOsFs(), build.config.TemplatesDir)
+	// Initialize providers FIRST (before backend FS access)
+	// This allows backends to use provider infrastructure (like NATS connections)
+	var dot []DotConfig
+
+	{
+		names := map[string]int{}
+		for _, d := range build.config.Databases {
+			dot = append(dot, &d)
+			names[d.FieldName()] += 1
+		}
+		for _, d := range build.config.Flags {
+			dot = append(dot, &d)
+			names[d.FieldName()] += 1
+		}
+		for _, d := range build.config.Directories {
+			dot = append(dot, &d)
+			names[d.FieldName()] += 1
+		}
+		for _, d := range build.config.Nats {
+			dot = append(dot, d)
+			names[d.FieldName()] += 1
+		}
+		for _, d := range build.config.CustomProviders {
+			dot = append(dot, d)
+			names[d.FieldName()] += 1
+		}
+		for name, count := range names {
+			if count > 1 {
+				return nil, nil, nil, fmt.Errorf("dot field name '%s' is used %d times", name, count)
+			}
+		}
+		for _, d := range dot {
+			start := time.Now()
+			err := d.Init(build.config.Ctx, &build.config)
+			build.config.Logger.Debug("initialized provider", "name", d.FieldName(), "type", reflect.TypeOf(d).String(), "duration", time.Since(start))
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("failed to initialize dot field '%s': %w", d.FieldName(), err)
+			}
+		}
 	}
 
+	// Initialize TemplatesFS from backend or default to filesystem
+	if build.config.TemplatesFS == nil {
+		if build.config.Backend != nil {
+			// Use the provided backend
+			build.config.TemplatesFS = build.config.Backend.FS()
+			build.config.Logger.Info("using backend", "name", build.config.Backend.Name())
+		} else {
+			// Default to filesystem - no watch support
+			// For watch support, set Backend explicitly or use app.Main()
+			build.config.TemplatesFS = afero.NewBasePathFs(afero.NewOsFs(), build.config.TemplatesDir)
+			build.config.Logger.Info("using default filesystem", "path", build.config.TemplatesDir)
+		}
+	}
+
+	// Set up template functions and infrastructure
 	{
 		build.funcs = template.FuncMap{}
 		maps.Copy(build.funcs, xtemplateFuncs)
@@ -99,6 +157,7 @@ func (c *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Instance
 		build.m = m
 	}
 
+	// Load templates from backend FS
 	if err := afero.Walk(build.config.TemplatesFS, ".", func(path_ string, d fs.FileInfo, err error) error {
 		path_ = strings.ReplaceAll(path_, "\\", "/")
 		if err != nil || d.IsDir() {
@@ -111,52 +170,17 @@ func (c *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Instance
 		}
 		return err
 	}); err != nil {
-		return nil, nil, nil, fmt.Errorf("error scanning files: %w", err)
+		// If the backend is empty (e.g., NATS object store with no objects),
+		// we still want to create the instance so the watcher can reload when files are added
+		build.config.Logger.Warn("failed to scan templates", "error", err)
+		// Don't return error - allow instance creation with no templates
 	}
 
+	// Create built-in dot providers
 	dcInstance := dotXProvider{build.Instance}
 	dcReq := dotReqProvider{}
 	dcResp := dotRespProvider{}
 	dcFlush := dotFlushProvider{}
-
-	var dot []DotConfig
-
-	{
-		names := map[string]int{}
-		for _, d := range build.config.Databases {
-			dot = append(dot, &d)
-			names[d.FieldName()] += 1
-		}
-		for _, d := range build.config.Flags {
-			dot = append(dot, &d)
-			names[d.FieldName()] += 1
-		}
-		for _, d := range build.config.Directories {
-			dot = append(dot, &d)
-			names[d.FieldName()] += 1
-		}
-		for _, d := range build.config.Nats {
-			dot = append(dot, &d)
-			names[d.FieldName()] += 1
-		}
-		for _, d := range build.config.CustomProviders {
-			dot = append(dot, d)
-			names[d.FieldName()] += 1
-		}
-		for name, count := range names {
-			if count > 1 {
-				return nil, nil, nil, fmt.Errorf("dot field name '%s' is used %d times", name, count)
-			}
-		}
-		for _, d := range dot {
-			start := time.Now()
-			err := d.Init(build.config.Ctx)
-			build.config.Logger.Debug("initialized provider", "name", d.FieldName(), "type", reflect.TypeOf(d).String(), "duration", time.Since(start))
-			if err != nil {
-				return nil, nil, nil, fmt.Errorf("failed to initialize dot field '%s': %w", d.FieldName(), err)
-			}
-		}
-	}
 
 	build.bufferDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, dot, []DotConfig{dcResp}))
 	build.flusherDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, dot, []DotConfig{dcFlush}))

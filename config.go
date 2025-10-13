@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"log/slog"
 
+	"github.com/infogulch/xtemplate/backends"
 	"github.com/spf13/afero"
 )
 
@@ -24,6 +25,10 @@ type Config struct {
 	// The FS to load templates from. Default: a FS made from the current working directory.
 	TemplatesFS afero.Fs `json:"-" arg:"-"`
 
+	// Backend provides the template storage backend (filesystem, NATS Object Store, etc.)
+	// If nil, defaults to filesystem backend
+	Backend backends.Backend `json:"-" arg:"-"`
+
 	// File extension to search for to find template files. Default `.html`.
 	TemplateExtension string `json:"template_extension,omitempty" arg:"--template-ext" default:".html"`
 
@@ -35,7 +40,7 @@ type Config struct {
 	Databases       []DotDBConfig    `json:"databases" arg:"-"`
 	Flags           []DotFlagsConfig `json:"flags" arg:"-"`
 	Directories     []DotDirConfig   `json:"directories" arg:"-"`
-	Nats            []DotNatsConfig  `json:"nats" arg:"-"`
+	Nats            []*DotNatsConfig `json:"nats" arg:"-"`
 	CustomProviders []DotConfig      `json:"-" arg:"-"`
 
 	// Left template action delimiter. Default `{{`.

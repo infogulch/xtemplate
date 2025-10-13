@@ -29,7 +29,7 @@ type DotDBConfig struct {
 var _ CleanupDotProvider = &DotDBConfig{}
 
 func (d *DotDBConfig) FieldName() string { return d.Name }
-func (d *DotDBConfig) Init(ctx context.Context) error {
+func (d *DotDBConfig) Init(ctx context.Context, config *Config) error {
 	if d.DB != nil {
 		return nil
 	}

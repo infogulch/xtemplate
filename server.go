@@ -7,6 +7,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/infogulch/xtemplate/backends"
 )
 
 // Server is a configured, *reloadable*, xtemplate request handler ready to
@@ -41,8 +43,20 @@ func (c Config) Server(cfgs ...Option) (*Server, error) {
 	err := server.Reload()
 
 	if err != nil {
-		return nil, err
+		// Log the error but don't fail server creation, as it is/might be from no templates being present
+		// The watcher will trigger a reload when templates become available
+		c.Logger.Warn("initial template load failed, server will retry when templates are available", slog.Any("error", err))
 	}
+
+	// Update server's config with backend from the instance if one was created
+	// This happens when providers create backends during initialization
+	if server.instance.Load() != nil {
+		instance := server.instance.Load()
+		if instance.config.Backend != nil && server.config.Backend == nil {
+			server.config.Backend = instance.config.Backend
+		}
+	}
+
 	return server, nil
 }
 
@@ -52,6 +66,11 @@ func (x *Server) Instance() *Instance {
 	return x.instance.Load()
 }
 
+// Backend returns the backend from the server's configuration.
+func (x *Server) Backend() backends.Backend {
+	return x.config.Backend
+}
+
 // Serve opens a net listener on `listen_addr` and serves requests from it.
 func (x *Server) Serve(listenAddr string) error {
 	x.config.Logger.Info("starting server")
@@ -59,10 +78,15 @@ func (x *Server) Serve(listenAddr string) error {
 }
 
 // Handler returns a `http.Handler` that always routes new requests to the
-// current Instance.
+// current Instance. If no instance is loaded yet, returns 503 Service Unavailable.
 func (x *Server) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		x.Instance().ServeHTTP(w, r)
+		instance := x.Instance()
+		if instance == nil {
+			http.Error(w, "Service Unavailable: No templates loaded yet", http.StatusServiceUnavailable)
+			return
+		}
+		instance.ServeHTTP(w, r)
 	})
 }
 
@@ -87,6 +111,16 @@ func (x *Server) Reload(cfgs ...Option) error {
 		config := x.config
 		config.Ctx, newcancel = context.WithCancel(x.config.Ctx)
 		new_, _, _, err = config.Instance(cfgs...)
+
+		// Update server's config with backend from the instance
+		// Providers may create backends during Init(), so we need to propagate it to the server
+		// This must happen even if Instance() fails (e.g., empty template store)
+		// The instance has its own config copy, so we need to get the backend from it
+		if new_ != nil && new_.Backend() != nil && x.config.Backend == nil {
+			x.config.Backend = new_.Backend()
+			log.Info("updated server backend from instance", "backend", x.config.Backend.Name())
+		}
+
 		if err != nil {
 			newcancel()
 			log.Info("failed to load", slog.Any("error", err), slog.Duration("rebuild_time", time.Since(start)))

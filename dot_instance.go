@@ -13,8 +13,8 @@ type dotXProvider struct {
 	instance *Instance
 }
 
-func (dotXProvider) FieldName() string            { return "X" }
-func (dotXProvider) Init(_ context.Context) error { return nil }
+func (dotXProvider) FieldName() string                   { return "X" }
+func (dotXProvider) Init(_ context.Context, _ *Config) error { return nil }
 func (p dotXProvider) Value(Request) (any, error) { return DotX(p), nil }
 
 func (dotXProvider) Cleanup(_ any, err error) error {
