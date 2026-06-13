@@ -27,6 +27,12 @@ func (dotRespProvider) Value(r Request) (any, error) {
 
 func (dotRespProvider) Cleanup(v any, err error) error {
 	d := v.(DotResp)
+	if d.served {
+		// The response was already fully written by ServeContent (which calls
+		// WriteHeader itself); writing headers or status again here would cause
+		// a superfluous WriteHeader call.
+		return err
+	}
 	var errSt ErrorStatus
 	if errors.As(err, &errSt) {
 		// headers?
@@ -44,6 +50,7 @@ var _ CleanupDotProvider = dotRespProvider{}
 type DotResp struct {
 	http.Header
 	status int
+	served bool
 	w      http.ResponseWriter
 	r      *http.Request
 	log    *slog.Logger
@@ -64,6 +71,7 @@ func (d *DotResp) ServeContent(path_ string, modtime time.Time, content any) (st
 	d.log.Debug("serving content response", slog.String("path", path_))
 	maps.Copy(d.w.Header(), d.Header)
 	http.ServeContent(d.w, d.r, path_, modtime, reader)
+	d.served = true
 	return "", ReturnError{}
 }
 
