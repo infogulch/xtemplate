@@ -5,4 +5,5 @@ set -euo pipefail
 source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
 cd "$ROOT"
 
-go test -race ./...
+go test -race -coverprofile="$DIST_DIR/cover.out" ./...
+go tool cover -func="$DIST_DIR/cover.out" | tail -n 1
