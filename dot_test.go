@@ -2,6 +2,7 @@ package xtemplate
 
 import (
 	"context"
+	"fmt"
 	"net/http/httptest"
 	"reflect"
 	"testing"
@@ -23,7 +24,10 @@ func (p testDotProvider) Value(Request) (any, error) {
 
 func TestMakeDotHappyPath(t *testing.T) {
 	provider := testDotProvider{field: "Test"}
-	d := makeDot([]DotConfig{provider})
+	d, err := makeDot([]DotConfig{provider})
+	if err != nil {
+		t.Fatalf("unexpected error from makeDot: %v", err)
+	}
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/", nil)
@@ -56,5 +60,31 @@ func TestMakeDotHappyPath(t *testing.T) {
 	}
 	if greeting.String() != "hi" {
 		t.Errorf("Greeting = %q, want %q", greeting.String(), "hi")
+	}
+}
+
+// testNilDotProvider is a DotConfig whose Value returns (nil, err), simulating
+// a custom provider that fails during type inference.
+type testNilDotProvider struct {
+	field string
+}
+
+func (p testNilDotProvider) FieldName() string          { return p.field }
+func (p testNilDotProvider) Init(context.Context) error { return nil }
+func (p testNilDotProvider) Value(Request) (any, error) {
+	return nil, fmt.Errorf("boom")
+}
+
+func TestMakeDotNilProvider(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("makeDot panicked instead of returning an error: %v", r)
+		}
+	}()
+
+	provider := testNilDotProvider{field: "Test"}
+	_, err := makeDot([]DotConfig{provider})
+	if err == nil {
+		t.Fatal("expected a non-nil error when a provider returns a nil value, got nil")
 	}
 }

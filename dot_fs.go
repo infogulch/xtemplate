@@ -12,8 +12,11 @@ import (
 
 // Dir
 type Dir struct {
-	fs     afero.Fs
-	log    *slog.Logger
+	fs  afero.Fs
+	log *slog.Logger
+	// opened is written without synchronization. This is safe only because
+	// template execution for a single request runs on a single goroutine, so
+	// there are no concurrent writers to this map.
 	opened map[afero.File]struct{}
 }
 

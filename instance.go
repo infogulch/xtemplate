@@ -163,8 +163,13 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 		}
 	}
 
-	build.bufferDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, dot, []DotConfig{dcResp}))
-	build.flusherDot = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, dot, []DotConfig{dcFlush}))
+	var err error
+	if build.bufferDot, err = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, dot, []DotConfig{dcResp})); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to build buffer dot: %w", err)
+	}
+	if build.flusherDot, err = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, dot, []DotConfig{dcFlush})); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to build flusher dot: %w", err)
+	}
 
 	{
 		// Invoke all initilization templates, aka any template whose name starts

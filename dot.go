@@ -19,6 +19,11 @@ type Request struct {
 type DotConfig interface {
 	FieldName() string
 	Init(context.Context) error
+	// Value returns the value to assign to this provider's dot field for a
+	// given request. It must return a stable, non-nil concrete type: makeDot
+	// calls it once with a mock request purely to infer the field type via
+	// reflection, so a nil return (e.g. on error during inference) cannot be
+	// used to build the dot struct.
 	Value(Request) (any, error)
 }
 
@@ -27,7 +32,7 @@ type CleanupDotProvider interface {
 	Cleanup(any, error) error
 }
 
-func makeDot(dps []DotConfig) dot {
+func makeDot(dps []DotConfig) (dot, error) {
 	fields := make([]reflect.StructField, 0, len(dps))
 	cleanups := []cleanup{}
 	mockHttpRequest := httptest.NewRequest("GET", "/", nil)
@@ -35,8 +40,8 @@ func makeDot(dps []DotConfig) dot {
 		mockRequest := Request{dp, context.Background(), mockResponseWriter{}, mockHttpRequest}
 		a, _ := dp.Value(mockRequest)
 		t := reflect.TypeOf(a)
-		if t.Kind() == reflect.Interface && t.NumMethod() == 0 {
-			t = t.Elem()
+		if t == nil {
+			return dot{}, fmt.Errorf("dot provider %q (%T) returned a nil value during type inference; Value must return a non-nil typed value", dp.FieldName(), dp)
 		}
 		f := reflect.StructField{
 			Name:      dp.FieldName(),
@@ -49,7 +54,7 @@ func makeDot(dps []DotConfig) dot {
 		}
 	}
 	typ := reflect.StructOf(fields)
-	return dot{dps, cleanups, &sync.Pool{New: func() any { v := reflect.New(typ).Elem(); return &v }}}
+	return dot{dps, cleanups, &sync.Pool{New: func() any { v := reflect.New(typ).Elem(); return &v }}}, nil
 }
 
 type dot struct {
