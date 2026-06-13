@@ -1,0 +1,200 @@
+package xtemplate
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/spf13/afero"
+)
+
+// newMemFS returns an in-memory afero.Fs populated with the given files. Each
+// key is a path and each value is the file's contents.
+func newMemFS(t *testing.T, files map[string]string) afero.Fs {
+	t.Helper()
+	fs := afero.NewMemMapFs()
+	for name, content := range files {
+		if err := afero.WriteFile(fs, name, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write file %q to mem fs: %v", name, err)
+		}
+	}
+	return fs
+}
+
+// buildInstance builds an Instance from an in-memory template fs and any extra
+// options, failing the test if construction fails.
+func buildInstance(t *testing.T, files map[string]string, opts ...Option) *Instance {
+	t.Helper()
+	fs := newMemFS(t, files)
+	cfg := New()
+	allOpts := append([]Option{WithTemplateFS(fs)}, opts...)
+	inst, _, _, err := cfg.Instance(allOpts...)
+	if err != nil {
+		t.Fatalf("failed to build instance: %v", err)
+	}
+	return inst
+}
+
+// doRequest issues an in-process request against the instance and returns the
+// recorder.
+func doRequest(inst *Instance, method, target string) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(method, target, nil)
+	inst.ServeHTTP(w, r)
+	return w
+}
+
+func TestServeHTTP_IndexRoute(t *testing.T) {
+	inst := buildInstance(t, map[string]string{
+		"index.html": "INDEX-MARKER",
+	})
+
+	w := doRequest(inst, http.MethodGet, "/")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if body := w.Body.String(); !strings.Contains(body, "INDEX-MARKER") {
+		t.Errorf("body = %q, want it to contain %q", body, "INDEX-MARKER")
+	}
+}
+
+func TestServeHTTP_NamedFileRoute(t *testing.T) {
+	inst := buildInstance(t, map[string]string{
+		"hello.html": "HELLO-MARKER",
+	})
+
+	w := doRequest(inst, http.MethodGet, "/hello")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if body := w.Body.String(); !strings.Contains(body, "HELLO-MARKER") {
+		t.Errorf("body = %q, want it to contain %q", body, "HELLO-MARKER")
+	}
+}
+
+func TestServeHTTP_HiddenFileNotRouted(t *testing.T) {
+	inst := buildInstance(t, map[string]string{
+		".secret.html": "SECRET-MARKER",
+	})
+
+	w := doRequest(inst, http.MethodGet, "/.secret")
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
+	}
+}
+
+func TestServeHTTP_StaticFileAndHash(t *testing.T) {
+	const css = "body { color: red; }\n"
+	inst := buildInstance(t, map[string]string{
+		"style.css": css,
+		// template that exposes the precomputed hash of the static file
+		"hash.html": `{{.X.StaticFileHash "/style.css"}}`,
+	})
+
+	// Static asset is served with the right content type and an Etag.
+	w := doRequest(inst, http.MethodGet, "/style.css")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if got := w.Body.String(); got != css {
+		t.Errorf("body = %q, want %q", got, css)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "text/css; charset=utf-8" {
+		t.Errorf("Content-Type = %q, want %q", ct, "text/css; charset=utf-8")
+	}
+	etag := w.Header().Get("Etag")
+	if etag == "" {
+		t.Fatalf("Etag header is empty, want a hash")
+	}
+	if !strings.HasPrefix(etag, `"sha384-`) {
+		t.Errorf("Etag = %q, want it to start with %q", etag, `"sha384-`)
+	}
+
+	// The hash exposed to templates matches the Etag value (sans quotes).
+	w2 := doRequest(inst, http.MethodGet, "/hash")
+	if w2.Code != http.StatusOK {
+		t.Fatalf("hash template status = %d, want %d", w2.Code, http.StatusOK)
+	}
+	wantHash := strings.Trim(etag, `"`)
+	if got := strings.TrimSpace(w2.Body.String()); got != wantHash {
+		t.Errorf("StaticFileHash = %q, want %q", got, wantHash)
+	}
+}
+
+func TestServeHTTP_FlagsProvider(t *testing.T) {
+	inst := buildInstance(t,
+		map[string]string{
+			"greet.html": `{{.Flags.Value "greeting"}}`,
+		},
+		WithFlags("Flags", map[string]string{"greeting": "hi"}),
+	)
+
+	w := doRequest(inst, http.MethodGet, "/greet")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if body := w.Body.String(); !strings.Contains(body, "hi") {
+		t.Errorf("body = %q, want it to contain %q", body, "hi")
+	}
+}
+
+func TestServeHTTP_DirProvider(t *testing.T) {
+	dataFS := newMemFS(t, map[string]string{
+		"message.txt": "FILE-CONTENT",
+	})
+	inst := buildInstance(t,
+		map[string]string{
+			"read.html": `{{.Files.Read "message.txt"}}`,
+		},
+		WithDir("Files", dataFS),
+	)
+
+	w := doRequest(inst, http.MethodGet, "/read")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if body := w.Body.String(); !strings.Contains(body, "FILE-CONTENT") {
+		t.Errorf("body = %q, want it to contain %q", body, "FILE-CONTENT")
+	}
+}
+
+func TestServer_Lifecycle(t *testing.T) {
+	fs := newMemFS(t, map[string]string{
+		"index.html": "INDEX-MARKER",
+	})
+	cfg := New()
+	server, err := cfg.Server(WithTemplateFS(fs))
+	if err != nil {
+		t.Fatalf("failed to build server: %v", err)
+	}
+
+	inst := server.Instance()
+	if inst == nil {
+		t.Fatalf("server.Instance() = nil after build, want non-nil")
+	}
+
+	// Requests routed through the handler reach the current instance.
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	server.Handler().ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	// Reload succeeds and yields a non-nil (possibly new) instance.
+	if err := server.Reload(); err != nil {
+		t.Fatalf("server.Reload() failed: %v", err)
+	}
+	if server.Instance() == nil {
+		t.Fatalf("server.Instance() = nil after Reload, want non-nil")
+	}
+
+	// After Stop the instance pointer is cleared. Do NOT route a request
+	// through the handler after Stop: Server.Stop currently stores nil and the
+	// handler would panic. Only assert the instance is nil.
+	server.Stop()
+	if server.Instance() != nil {
+		t.Errorf("server.Instance() = %v after Stop, want nil", server.Instance())
+	}
+}
