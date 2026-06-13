@@ -1,7 +1,13 @@
-GET http://localhost:8080/nats
+GET http://localhost:8080/nats/
 HTTP 200
 [Asserts]
 body contains "multi-user realtime chat"
+
+
+GET http://localhost:8080/nats
+HTTP 301
+[Asserts]
+header "Location" == "/nats/"
 
 
 GET http://localhost:8080/nats/messages

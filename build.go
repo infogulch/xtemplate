@@ -213,13 +213,21 @@ func (b *builder) addTemplateHandler(path_ string) error {
 			routePath := strings.TrimSuffix(path_, b.config.TemplateExtension)
 			// files named 'index' handle requests to the directory
 			base := path.Base(routePath)
-			if base == "index" {
-				routePath = path.Dir(routePath) + "/"
+			switch base {
+			case "index", "index{$}":
+				// index handles the directory at its canonical trailing-slash URL as an
+				// exact match. ServeMux auto-redirects the slashless form (/dir -> /dir/).
+				// It is NOT a subtree, so unmatched sub-paths fall through to 404; use a
+				// path variable (e.g. {path...}) for catch-all behavior.
+				dir := path.Clean(path.Dir(routePath))
+				if dir == "/" {
+					routePath = "/{$}"
+				} else {
+					routePath = dir + "/{$}"
+				}
+			default:
+				routePath = path.Clean(routePath)
 			}
-			if base == "index{$}" {
-				routePath = path.Dir(routePath) + "/{$}"
-			}
-			routePath = path.Clean(routePath)
 			pattern = "GET " + routePath
 			handler = bufferingTemplateHandler(b.Instance, tmpl)
 		} else if matches := routeMatcher.FindStringSubmatch(name); len(matches) == 3 {

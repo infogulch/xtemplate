@@ -59,6 +59,36 @@ func TestServeHTTP_IndexRoute(t *testing.T) {
 	}
 }
 
+func TestServeHTTP_DirIndexRoute(t *testing.T) {
+	inst := buildInstance(t, map[string]string{
+		"dir/index.html": "DIR-INDEX-MARKER",
+	})
+
+	// The directory's index is served at its canonical trailing-slash URL.
+	w := doRequest(inst, http.MethodGet, "/dir/")
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /dir/ status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if body := w.Body.String(); !strings.Contains(body, "DIR-INDEX-MARKER") {
+		t.Errorf("body = %q, want it to contain %q", body, "DIR-INDEX-MARKER")
+	}
+
+	// ServeMux auto-redirects the slashless form to the canonical URL.
+	w = doRequest(inst, http.MethodGet, "/dir")
+	if w.Code != http.StatusMovedPermanently {
+		t.Fatalf("GET /dir status = %d, want %d", w.Code, http.StatusMovedPermanently)
+	}
+	if loc := w.Header().Get("Location"); loc != "/dir/" {
+		t.Errorf("GET /dir Location = %q, want %q", loc, "/dir/")
+	}
+
+	// The index route is an exact match, NOT a subtree: unmatched sub-paths 404.
+	w = doRequest(inst, http.MethodGet, "/dir/nonexistent")
+	if w.Code != http.StatusNotFound {
+		t.Errorf("GET /dir/nonexistent status = %d, want %d", w.Code, http.StatusNotFound)
+	}
+}
+
 func TestServeHTTP_NamedFileRoute(t *testing.T) {
 	inst := buildInstance(t, map[string]string{
 		"hello.html": "HELLO-MARKER",

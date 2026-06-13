@@ -6,11 +6,18 @@ HTTP 200
 body contains "<p>Hello world!"
 
 # routing
-GET http://localhost:8080/routing
+GET http://localhost:8080/routing/
 
 HTTP 200
 [Asserts]
 body contains "routing"
+
+# slashless directory path redirects to canonical trailing-slash URL
+GET http://localhost:8080/routing
+
+HTTP 301
+[Asserts]
+header "Location" == "/routing/"
 
 GET http://localhost:8080/routing/file
 
@@ -45,4 +52,3 @@ HTTP 404
 GET http://localhost:8080/routing/.hidden
 
 HTTP 404
-
