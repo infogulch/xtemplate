@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#MISE description="Push the xtemplate Docker image tags (run after build-docker)"
+set -euo pipefail
+# shellcheck source=/dev/null
+source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
+cd "$ROOT"
+
+ver="$(xt_version)"
+
+docker push "infogulch/xtemplate:${ver}"
+if [ "$ver" = "$(xt_latest_tag)" ]; then
+	docker push "infogulch/xtemplate:latest"
+fi

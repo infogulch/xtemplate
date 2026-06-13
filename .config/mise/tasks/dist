@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+#MISE description="Cross-compile release archives for all platforms"
+set -euo pipefail
+# shellcheck source=/dev/null
+source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
+cd "$ROOT"
+
+ver="$(xt_version)"
+ldflags="$(xt_ldflags)"
+
+echo "Building xtemplate ${ver} for all platforms..."
+
+for os in linux darwin windows; do
+	for arch in amd64 arm64; do
+		name="xtemplate-${arch}-${os}"
+		dir="$DIST_DIR/$name"
+		exe="xtemplate"
+		[ "$os" = "windows" ] && exe="xtemplate.exe"
+
+		printf '  %-28s building...' "$name"
+		start=$SECONDS
+		rm -rf "$dir"
+		mkdir -p "$dir"
+		GOOS="$os" GOARCH="$arch" go build -ldflags "$ldflags" -buildmode exe -o "$dir/$exe" ./cmd
+		cp README.md LICENSE "$dir"
+		(cd "$DIST_DIR" && zip -jqr6 "${name}_${ver}.zip" "$name")
+		printf ' done (%ss)\n' "$((SECONDS - start))"
+	done
+done
+
+echo "Archives written to $DIST_DIR/"

@@ -1,5 +1,5 @@
 go.work*
 xtemplate
 xtemplate.*
-dist
+/dist
 __debug_bin*

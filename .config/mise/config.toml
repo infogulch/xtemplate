@@ -1,0 +1,20 @@
+# mise configuration for xtemplate.
+#
+# Tooling is pinned here so local and CI runs use identical versions, and tasks
+# live as standalone shell scripts under .config/mise/tasks/ (lint-able with
+# shellcheck, runnable on their own). Run `mise tasks` to list them, `mise run
+# <task>` to execute one, and `mise run ci` for the full pipeline.
+
+[tools]
+go = "1.24"
+hurl = "latest"
+shellcheck = "latest"
+"go:github.com/caddyserver/xcaddy/cmd/xcaddy" = "latest"
+
+# The full pipeline. `depends` run first (in parallel where independent); only
+# if they all succeed do the `depends_post` artifact builds run. This replaces
+# the CUE `pass` gate.
+[tasks.ci]
+description = "Full pipeline: lint + test every target, then build artifacts"
+depends = ["lint", "gotest", "test-cli", "test-caddy", "test-docker"]
+depends_post = ["dist", "build-docker"]

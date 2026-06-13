@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#MISE description="Run the hurl suite against an already-running server"
+#USAGE flag "--port <port>" help="Port the server is listening on" default="8080"
+#USAGE flag "--report <dir>" help="HTML report output directory" default="dist/report"
+set -euo pipefail
+# shellcheck source=/dev/null
+source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
+
+run_hurl "${usage_port:-8080}" "${usage_report:-$DIST_DIR/report}"

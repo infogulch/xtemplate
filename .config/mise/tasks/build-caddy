@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#MISE description="Build Caddy with the xtemplate module via xcaddy"
+#MISE sources=["**/*.go", "go.mod", "go.sum"]
+#MISE outputs=["dist/caddy"]
+set -euo pipefail
+# shellcheck source=/dev/null
+source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
+cd "$ROOT"
+
+xcaddy build \
+	--with github.com/infogulch/xtemplate/caddy=./caddy \
+	--with github.com/infogulch/xtemplate=. \
+	--with github.com/ncruces/go-sqlite3/driver \
+	--with github.com/ncruces/go-sqlite3/embed \
+	--output "$DIST_DIR/caddy"

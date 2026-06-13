@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#MISE description="Build and integration-test the Caddy module"
+#MISE depends=["build-caddy"]
+set -euo pipefail
+# shellcheck source=/dev/null
+source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
+
+work="$(new_run_dir test-caddy)"
+copy_fixtures "$work"
+
+# `caddy start` daemonizes, so stop it via `caddy stop` on exit.
+trap '"$DIST_DIR/caddy" stop 2>/dev/null || true' EXIT
+(cd "$work" && "$DIST_DIR/caddy" start --config caddy.json &>caddy.log)
+
+wait_ready 8082
+run_hurl 8082 "$work/report"

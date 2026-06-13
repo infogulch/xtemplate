@@ -488,10 +488,24 @@ xtemplate is split into the following packages:
 
 ### Testing
 
-xtemplate is tested by running [`./test/test.go`](./test/test.go) which runs
-xtemplate configured to use `test/templates` as the templates dir and
-`test/context` as the FS dot provider, and runs hurl files from the `test/tests`
-directory.
+Tasks are managed with [mise](https://mise.jdx.dev). The task definitions live
+as shell scripts under [`.config/mise/tasks`](./.config/mise/tasks) and the tool
+versions (Go, hurl, shellcheck, xcaddy) are pinned in
+[`.config/mise/config.toml`](./.config/mise/config.toml), so local and CI runs
+use identical versions. List the available tasks with `mise tasks`.
+
+The integration tests run xtemplate configured to use `test/templates` as the
+templates dir and `test/context` as the FS dot provider, then run the hurl files
+from the `test/tests` directory against the running server. The same suite is
+exercised against all three deployment targets:
+
+* `mise run test-cli` builds and tests the standalone CLI binary.
+* `mise run test-caddy` builds and tests the Caddy module.
+* `mise run test-docker` builds and tests the Docker image.
+
+`mise run ci` runs the whole pipeline: shellcheck (`lint`), `go test`
+(`gotest`), the three integration targets, and then the release `dist` and
+Docker image builds.
 
 ### 👩‍⚕️ Writing a custom `DotProvider`
 

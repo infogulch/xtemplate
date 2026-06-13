@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#MISE description="Build, serve, and integration-test the CLI binary"
+#MISE depends=["build"]
+set -euo pipefail
+# shellcheck source=/dev/null
+source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
+
+work="$(new_run_dir test-cli)"
+copy_fixtures "$work"
+
+# Start the server from the working dir so its relative config paths resolve.
+(cd "$work" && exec "$DIST_DIR/xtemplate" --loglevel -4 --config-file config.json) \
+	&>"$work/xtemplate.log" &
+server=$!
+trap 'kill "$server" 2>/dev/null || true' EXIT
+
+wait_ready 8080
+run_hurl 8080 "$work/report"

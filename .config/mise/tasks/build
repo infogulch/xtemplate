@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE description="Build the xtemplate CLI binary into dist/"
+#MISE sources=["**/*.go", "go.mod", "go.sum"]
+#MISE outputs=["dist/xtemplate"]
+set -euo pipefail
+# shellcheck source=/dev/null
+source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
+cd "$ROOT"
+
+go build -ldflags "$(xt_ldflags)" -buildmode exe -o "$DIST_DIR/xtemplate" ./cmd
