@@ -86,13 +86,21 @@ var markdownConfigs map[string]goldmark.Markdown = map[string]goldmark.Markdown{
 	)...),
 }
 
-// AddMarkdownConifg adds a custom markdown configuration to xtemplate's
+// AddMarkdownConfig adds a custom markdown configuration to xtemplate's
 // markdown config map, available to all xtemplate instances.
-func AddMarkdownConifg(name string, md goldmark.Markdown) {
+func AddMarkdownConfig(name string, md goldmark.Markdown) {
 	if old, ok := markdownConfigs[name]; ok {
 		panic(fmt.Sprintf("markdown policy with name %s already exists: %v", name, old))
 	}
 	markdownConfigs[name] = md
+}
+
+// AddMarkdownConifg is a deprecated alias for [AddMarkdownConfig].
+//
+// Deprecated: use [AddMarkdownConfig]. This misspelled name is retained for
+// backward compatibility and will be removed in a future release.
+func AddMarkdownConifg(name string, md goldmark.Markdown) {
+	AddMarkdownConfig(name, md)
 }
 
 // markdown renders the given Markdown text as HTML and returns it. This uses
