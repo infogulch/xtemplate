@@ -102,7 +102,7 @@ func staticFileHandler(fs afero.Fs, fileinfo *fileInfo) http.HandlerFunc {
 		}
 
 		// negotiate encoding between the client's q value preference and fileinfo.encodings ordering (prefer earlier listed encodings first)
-		encoding, err := negiotiateEncoding(r.Header["Accept-Encoding"], fileinfo.encodings)
+		encoding, err := negotiateEncoding(r.Header["Accept-Encoding"], fileinfo.encodings)
 		if err != nil {
 			log.LogAttrs(r.Context(), slog.LevelWarn, "error selecting encoding to serve", slog.Any("error", err))
 		}
@@ -147,7 +147,7 @@ func staticFileHandler(fs afero.Fs, fileinfo *fileInfo) http.HandlerFunc {
 	}
 }
 
-func negiotiateEncoding(acceptHeaders []string, encodings []encodingInfo) (*encodingInfo, error) {
+func negotiateEncoding(acceptHeaders []string, encodings []encodingInfo) (*encodingInfo, error) {
 	var err error
 	// shortcuts
 	if len(encodings) == 0 {

@@ -2,7 +2,7 @@ package xtemplate
 
 import "testing"
 
-func TestNegiotiateEncoding(t *testing.T) {
+func TestNegotiateEncoding(t *testing.T) {
 	// Common encoding sets used across cases.
 	identityOnly := []encodingInfo{{encoding: "identity"}}
 	gzipOnly := []encodingInfo{{encoding: "gzip"}}
@@ -77,7 +77,7 @@ func TestNegiotiateEncoding(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := negiotiateEncoding(tt.acceptHeader, tt.encodings)
+			got, err := negotiateEncoding(tt.acceptHeader, tt.encodings)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("error = %v, wantErr = %v", err, tt.wantErr)
 			}

@@ -312,7 +312,7 @@ func (r *result) OK() bool {
 // make text/template/parse.Parse parse correctly because the number of
 // arguments is checked at parse time, but they are never called and the
 // argument types are not checked, just their number.
-var buliltinsSkeleton template.FuncMap = template.FuncMap{
+var builtinsSkeleton template.FuncMap = template.FuncMap{
 	"and":      func(any, ...any) any { return nil },
 	"call":     func(any, ...any) (any, error) { return nil, nil },
 	"html":     template.HTMLEscaper,

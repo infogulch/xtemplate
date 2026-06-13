@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
-	"log"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -169,7 +168,7 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 	}
 
 	{
-		// Invoke all initilization templates, aka any template whose name starts
+		// Invoke all initialization templates, aka any template whose name starts
 		// with "INIT ".
 		makeDot := func() (*reflect.Value, error) {
 			w, r := httptest.NewRecorder(), httptest.NewRequest("", "/", nil)
@@ -207,13 +206,6 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 		))
 
 	return build.Instance, build.InstanceStats, build.routes, nil
-}
-
-func must[V any](v V, err error) V {
-	if err != nil {
-		log.Fatal(err)
-	}
-	return v
 }
 
 // Counter to assign a unique id to each instance of xtemplate created when

@@ -184,7 +184,7 @@ func (b *builder) addTemplateHandler(path_ string) error {
 	path_ = path.Clean("/" + path_)
 	// parse each template file manually to have more control over its final
 	// names in the template namespace.
-	newtemplates, err := parse.Parse(path_, string(content), b.config.LDelim, b.config.RDelim, b.funcs, buliltinsSkeleton)
+	newtemplates, err := parse.Parse(path_, string(content), b.config.LDelim, b.config.RDelim, b.funcs, builtinsSkeleton)
 	if err != nil {
 		return fmt.Errorf("could not parse template file '%s': %v", path_, err)
 	}
@@ -193,7 +193,7 @@ func (b *builder) addTemplateHandler(path_ string) error {
 	// add parsed templates, register handlers
 	for name, tree := range newtemplates {
 		if b.templates.Lookup(name) != nil {
-			b.config.Logger.Debug("overriding named template '%s' with definition from file: %s", name, path_)
+			b.config.Logger.Debug("overriding named template", slog.String("name", name), slog.String("file", path_))
 		}
 		tmpl, err := b.templates.AddParseTree(name, tree)
 		if err != nil {

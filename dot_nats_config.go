@@ -49,7 +49,7 @@ func (d *DotNatsConfig) Init(ctx context.Context) error {
 		return nil
 	}
 	if d.NatsConfig == nil {
-		return fmt.Errorf("no nats client and no config provided to initialzie nats client")
+		return fmt.Errorf("no nats client and no config provided to initialize nats client")
 	}
 	var connOpt nats.Options
 	if d.NatsConfig.ConnOptions == nil {

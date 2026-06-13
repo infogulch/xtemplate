@@ -133,7 +133,7 @@ func (c *DotDB) commit() error {
 	return nil
 }
 
-// Rollback manually rolls back any implicit tranactions opened by this DotDB.
+// Rollback manually rolls back any implicit transactions opened by this DotDB.
 // This is called automatically if there were any errors that occurred during
 // template exeuction.
 func (c *DotDB) Rollback() (string, error) {
