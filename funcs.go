@@ -181,8 +181,19 @@ func FuncTrustSrcSet(s string) template.Srcset {
 // pipeline, for example:
 //
 //	{{generate-list | idx 5}}
-func FuncIdx(idx int, arr any) any {
-	return reflect.ValueOf(arr).Index(idx).Interface()
+//
+// Returns an error if the value is not indexable or the index is out of range.
+func FuncIdx(idx int, arr any) (any, error) {
+	v := reflect.ValueOf(arr)
+	switch v.Kind() {
+	case reflect.Array, reflect.Slice, reflect.String:
+	default:
+		return nil, fmt.Errorf("idx: cannot index value of type %T", arr)
+	}
+	if idx < 0 || idx >= v.Len() {
+		return nil, fmt.Errorf("idx: index %d out of range (length %d)", idx, v.Len())
+	}
+	return v.Index(idx).Interface(), nil
 }
 
 // humanize transforms size and time inputs to a human readable format using

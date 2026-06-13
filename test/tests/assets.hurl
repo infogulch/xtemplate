@@ -3,8 +3,8 @@ GET http://localhost:8080/assets/file.txt
 
 HTTP 200
 Content-Type: text/plain; charset=utf-8
-Content-Encoding: identity
 [Asserts]
+header "Content-Encoding" not exists
 body == "testing"
 
 
@@ -25,7 +25,8 @@ Accept-Encoding: gzip, identity
 
 HTTP 200
 Content-Type: text/plain; charset=utf-8
-Content-Encoding: identity
+[Asserts]
+header "Content-Encoding" not exists
 
 
 # accept gzip or identity with 0.09 pref to gzip should return identity
@@ -34,7 +35,8 @@ Accept-Encoding: gzip;q=0.5, identity;q=0.41
 
 HTTP 200
 Content-Type: text/plain; charset=utf-8
-Content-Encoding: identity
+[Asserts]
+header "Content-Encoding" not exists
 
 
 # accept gzip or identity with 0.11 pref to gzip should return gzip
@@ -52,7 +54,8 @@ Accept-Encoding: br
 
 HTTP 200
 Content-Type: text/plain; charset=utf-8
-Content-Encoding: identity
+[Asserts]
+header "Content-Encoding" not exists
 
 
 # Empty file
@@ -60,8 +63,8 @@ GET http://localhost:8080/assets/empty.txt
 
 HTTP 200
 Content-Type: text/plain; charset=utf-8
-Content-Encoding: identity
 [Asserts]
+header "Content-Encoding" not exists
 body == ""
 
 
@@ -111,7 +114,8 @@ HTTP 404
 GET http://localhost:8080/assets/standalone.gz
 
 HTTP 200
-Content-Encoding: identity
+[Asserts]
+header "Content-Encoding" not exists
 
 # check that index includes integrity attribute and hash parameter
 GET http://localhost:8080/

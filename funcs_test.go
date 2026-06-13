@@ -127,8 +127,23 @@ func TestFuncTry(t *testing.T) {
 
 func TestFuncIdx(t *testing.T) {
 	arr := []string{"a", "b", "c", "d"}
-	got := FuncIdx(2, arr)
+	got, err := FuncIdx(2, arr)
+	if err != nil {
+		t.Errorf("FuncIdx(2, %v) returned unexpected error: %v", arr, err)
+	}
 	if got != "c" {
 		t.Errorf("FuncIdx(2, %v) = %v, want %q", arr, got, "c")
+	}
+
+	if _, err := FuncIdx(99, arr); err == nil {
+		t.Errorf("FuncIdx(99, %v) expected an out-of-range error, got nil", arr)
+	}
+
+	if _, err := FuncIdx(-1, arr); err == nil {
+		t.Errorf("FuncIdx(-1, %v) expected an out-of-range error, got nil", arr)
+	}
+
+	if _, err := FuncIdx(0, 42); err == nil {
+		t.Errorf("FuncIdx(0, 42) expected a non-indexable error, got nil")
 	}
 }

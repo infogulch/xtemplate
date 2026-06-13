@@ -133,7 +133,9 @@ func staticFileHandler(fs afero.Fs, fileinfo *fileInfo) http.HandlerFunc {
 
 		w.Header().Add("Etag", `"`+fileinfo.hash+`"`)
 		w.Header().Add("Content-Type", fileinfo.contentType)
-		w.Header().Add("Content-Encoding", encoding.encoding)
+		if encoding.encoding != "identity" {
+			w.Header().Add("Content-Encoding", encoding.encoding)
+		}
 		w.Header().Add("Vary", "Accept-Encoding")
 		// w.Header().Add("Access-Control-Allow-Origin", "*") // ???
 		if queryhash != "" {

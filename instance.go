@@ -127,31 +127,28 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 	var dot []DotConfig
 
 	{
-		names := map[string]int{}
 		for _, d := range build.config.Databases {
 			dot = append(dot, &d)
-			names[d.FieldName()] += 1
 		}
 		for _, d := range build.config.Flags {
 			dot = append(dot, &d)
-			names[d.FieldName()] += 1
 		}
 		for _, d := range build.config.Directories {
 			dot = append(dot, &d)
-			names[d.FieldName()] += 1
 		}
 		for _, d := range build.config.Nats {
 			dot = append(dot, &d)
-			names[d.FieldName()] += 1
 		}
 		for _, d := range build.config.CustomProviders {
 			dot = append(dot, d)
-			names[d.FieldName()] += 1
 		}
-		for name, count := range names {
-			if count > 1 {
-				return nil, nil, nil, fmt.Errorf("dot field name '%s' is used %d times", name, count)
+		seen := map[string]bool{}
+		for _, d := range dot {
+			name := d.FieldName()
+			if seen[name] {
+				return nil, nil, nil, fmt.Errorf("dot field name '%s' is used more than once", name)
 			}
+			seen[name] = true
 		}
 		for _, d := range dot {
 			start := time.Now()
