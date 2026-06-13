@@ -228,3 +228,31 @@ func TestServer_Lifecycle(t *testing.T) {
 		t.Errorf("server.Instance() = %v after Stop, want nil", server.Instance())
 	}
 }
+
+func TestServer_HandlerAfterStop(t *testing.T) {
+	fs := newMemFS(t, map[string]string{
+		"index.html": "INDEX-MARKER",
+	})
+	cfg := New()
+	server, err := cfg.Server(WithTemplateFS(fs))
+	if err != nil {
+		t.Fatalf("failed to build server: %v", err)
+	}
+
+	server.Stop()
+
+	// Routing a request through the handler after Stop must not panic and must
+	// respond with 503 Service Unavailable instead of dereferencing a nil
+	// instance.
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	defer func() {
+		if p := recover(); p != nil {
+			t.Fatalf("handler panicked after Stop: %v", p)
+		}
+	}()
+	server.Handler().ServeHTTP(w, r)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}

@@ -62,7 +62,12 @@ func (x *Server) Serve(listen_addr string) error {
 // current Instance.
 func (x *Server) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		x.Instance().ServeHTTP(w, r)
+		instance := x.Instance()
+		if instance == nil {
+			http.Error(w, "server stopped", http.StatusServiceUnavailable)
+			return
+		}
+		instance.ServeHTTP(w, r)
 	})
 }
 
