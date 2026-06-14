@@ -1,8 +1,8 @@
 package app
 
 import (
-	"bytes"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -33,6 +33,49 @@ func (Args) Epilogue() string {
 
     Parse template files matching a custom extension and minify them:
     $ ./xtemplate --template-ext ".go.html" --minify`
+}
+
+// mergeConfig resolves the final configuration by applying JSON sources named by
+// the already-parsed CLI flags onto a fresh defaults base, then re-applying the
+// CLI args so flags take precedence over JSON. The resulting precedence is
+// CLI flags > JSON (--config-file files, then --config values) > defaults.
+//
+// readFile loads --config-file contents (injectable for testing); it may be nil
+// when there are no config files to read.
+func mergeConfig(argv []string, cli Args, readFile func(string) ([]byte, error)) (Args, error) {
+	jsonConfig := defaultArgs
+	decoded := false
+	for _, name := range cli.ConfigFiles {
+		data, err := readFile(name)
+		if err != nil {
+			return Args{}, fmt.Errorf("failed to read config file %q: %w", name, err)
+		}
+		if err := json.Unmarshal(data, &jsonConfig); err != nil {
+			return Args{}, fmt.Errorf("failed to decode config file %q: %w", name, err)
+		}
+		decoded = true
+	}
+	for _, conf := range cli.Configs {
+		if err := json.Unmarshal([]byte(conf), &jsonConfig); err != nil {
+			return Args{}, fmt.Errorf("failed to decode --config value: %w", err)
+		}
+		decoded = true
+	}
+	if !decoded {
+		return cli, nil
+	}
+
+	// Re-apply the CLI flags over the JSON-derived config. go-arg treats the
+	// nonzero fields already present in jsonConfig as defaults, so JSON values
+	// survive unless a corresponding flag was passed.
+	p, err := arg.NewParser(arg.Config{}, &jsonConfig)
+	if err != nil {
+		return Args{}, err
+	}
+	if err := p.Parse(argv); err != nil {
+		return Args{}, fmt.Errorf("failed to re-apply cli flags over json config: %w", err)
+	}
+	return jsonConfig, nil
 }
 
 var version = "development"
@@ -71,40 +114,12 @@ func Main(overrides ...xtemplate.Option) {
 		level := config.LogLevel
 		log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(level)}))
 
-		var jsonConfig Args = defaultArgs
-		var decoded bool
-		for _, name := range config.ConfigFiles {
-			func() {
-				file, err := os.OpenFile(name, os.O_RDONLY, 0)
-				if err != nil {
-					log.Error("failed to open config file", slog.String("filename", name), slog.Any("error", err))
-					os.Exit(1)
-				}
-				defer file.Close()
-				err = json.NewDecoder(file).Decode(&jsonConfig)
-				if err != nil {
-					log.Error("failed to decode args from json file", slog.String("filename", name), slog.Any("error", err))
-					os.Exit(1)
-				}
-				decoded = true
-				log.Debug("incorporated json file", slog.String("filename", name), slog.Any("config", &jsonConfig))
-			}() // use func to close file on every iteration
+		merged, err := mergeConfig(os.Args[1:], config, os.ReadFile)
+		if err != nil {
+			log.Error("failed to load configuration", slog.Any("error", err))
+			os.Exit(1)
 		}
-
-		for _, conf := range config.Configs {
-			err := json.NewDecoder(bytes.NewBuffer([]byte(conf))).Decode(&jsonConfig)
-			if err != nil {
-				log.Error("failed to decode arg from json flag", slog.Any("error", err))
-				os.Exit(1)
-			}
-			decoded = true
-			log.Debug("incorporated json value", slog.String("json_string", conf), slog.Any("config", &jsonConfig))
-		}
-
-		if decoded {
-			arg.MustParse(&jsonConfig)
-			config = jsonConfig
-		}
+		config = merged
 
 		if config.LogLevel != level {
 			log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(config.LogLevel)}))
