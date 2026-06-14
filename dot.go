@@ -76,6 +76,10 @@ func (d *dot) value(sctx context.Context, w http.ResponseWriter, r *http.Request
 		a, err = dp.Value(Request{dp, sctx, w, r})
 		if err != nil {
 			err = fmt.Errorf("failed to construct dot value for %s (%v): %w", dp.FieldName(), dp, err)
+			// Unwind the providers that were already constructed for this request
+			// (only fields before index i have been set) so they don't leak
+			// resources, e.g. an open DB transaction whose Cleanup rolls back.
+			err = cleanpSlice(d.cleanups[:i], val, err)
 			val.SetZero()
 			d.pool.Put(val)
 			val = nil
@@ -86,10 +90,18 @@ func (d *dot) value(sctx context.Context, w http.ResponseWriter, r *http.Request
 	return
 }
 
-func (d *dot) cleanup(v *reflect.Value, err error) error {
-	for _, cleanup := range d.cleanups {
+// cleanpSlice runs Cleanup for every provided CleanupDotProvider, folding
+// any cleanup errors into err. d.cleanups is ordered by ascending field index,
+// so it can stop early.
+func cleanpSlice(cleanups []cleanup, v *reflect.Value, err error) error {
+	for _, cleanup := range cleanups {
 		err = cleanup.Cleanup(v.Field(cleanup.idx).Interface(), err)
 	}
+	return err
+}
+
+func (d *dot) cleanup(v *reflect.Value, err error) error {
+	err = cleanpSlice(d.cleanups, v, err)
 	v.SetZero()
 	d.pool.Put(v)
 	return err

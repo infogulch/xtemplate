@@ -75,6 +75,73 @@ func (p testNilDotProvider) Value(Request) (any, error) {
 	return nil, fmt.Errorf("boom")
 }
 
+// cleanupRecorder captures whether Cleanup ran and the error it received.
+type cleanupRecorder struct {
+	called bool
+	gotErr error
+}
+
+// recordingCleanupProvider is a CleanupDotProvider that records its Cleanup
+// invocation, used to verify partially-constructed dot values are unwound.
+type recordingCleanupProvider struct {
+	field string
+	rec   *cleanupRecorder
+}
+
+func (p recordingCleanupProvider) FieldName() string          { return p.field }
+func (p recordingCleanupProvider) Init(context.Context) error { return nil }
+func (p recordingCleanupProvider) Value(Request) (any, error) { return struct{}{}, nil }
+func (p recordingCleanupProvider) Cleanup(_ any, err error) error {
+	p.rec.called = true
+	p.rec.gotErr = err
+	return err
+}
+
+var _ CleanupDotProvider = recordingCleanupProvider{}
+
+// failingValueProvider returns a typed value (so makeDot can infer its field
+// type) but always fails at request time, simulating a provider whose Value
+// errors after earlier providers have already been constructed.
+type failingValueProvider struct {
+	field string
+	err   error
+}
+
+func (p failingValueProvider) FieldName() string          { return p.field }
+func (p failingValueProvider) Init(context.Context) error { return nil }
+func (p failingValueProvider) Value(Request) (any, error) { return struct{}{}, p.err }
+
+// TestDotValuePartialCleanup verifies that when a provider's Value fails partway
+// through constructing a dot value, the providers that were already built get
+// their Cleanup called (with the construction error) so they don't leak
+// resources such as open DB transactions.
+func TestDotValuePartialCleanup(t *testing.T) {
+	rec := &cleanupRecorder{}
+	d, err := makeDot([]DotConfig{
+		recordingCleanupProvider{field: "A", rec: rec},
+		failingValueProvider{field: "B", err: fmt.Errorf("boom")},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error from makeDot: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/", nil)
+	val, err := d.value(context.Background(), w, r)
+	if err == nil {
+		t.Fatal("expected an error when a later provider's Value fails, got nil")
+	}
+	if val != nil {
+		t.Errorf("expected a nil dot value on error, got %v", val)
+	}
+	if !rec.called {
+		t.Error("expected the earlier provider's Cleanup to run during partial unwind")
+	}
+	if rec.gotErr == nil {
+		t.Error("expected the construction error to be passed to Cleanup")
+	}
+}
+
 func TestMakeDotNilProvider(t *testing.T) {
 	defer func() {
 		if r := recover(); r != nil {
