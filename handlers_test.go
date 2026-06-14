@@ -2,91 +2,86 @@ package xtemplate
 
 import "testing"
 
+// encs builds an encodingInfo slice from coding names, in the given order. The
+// order matters: negotiateEncoding breaks q-value ties toward earlier entries,
+// and the builder sorts real encodings size-ascending.
+func encs(names ...string) []encodingInfo {
+	out := make([]encodingInfo, len(names))
+	for i, n := range names {
+		out[i] = encodingInfo{encoding: n}
+	}
+	return out
+}
+
 func TestNegotiateEncoding(t *testing.T) {
-	// Common encoding sets used across cases.
-	identityOnly := []encodingInfo{{encoding: "identity"}}
-	gzipOnly := []encodingInfo{{encoding: "gzip"}}
-	identityGzip := []encodingInfo{{encoding: "identity"}, {encoding: "gzip"}}
-	full := []encodingInfo{{encoding: "identity"}, {encoding: "gzip"}, {encoding: "br"}}
-	noIdentity := []encodingInfo{{encoding: "gzip"}, {encoding: "br"}}
+	// For a tiny file, gzip overhead makes the compressed copy larger than the
+	// original, so identity sorts first.
+	tiny := encs("identity", "gzip")
+	// For a real CSS file, br < gzip < identity by size.
+	css := encs("br", "gzip", "identity")
 
 	tests := []struct {
-		name         string
-		acceptHeader []string
-		encodings    []encodingInfo
-		wantEncoding string
-		wantErr      bool
+		name    string
+		encs    []encodingInfo
+		accept  []string
+		want    string // expected encoding; "" with wantNil means 406
+		wantNil bool
 	}{
-		{
-			name:         "empty accept headers defaults to identity",
-			acceptHeader: nil,
-			encodings:    identityGzip,
-			wantEncoding: "identity",
-		},
-		{
-			name:         "single identity encoding",
-			acceptHeader: []string{"gzip"},
-			encodings:    identityOnly,
-			wantEncoding: "identity",
-		},
-		{
-			name:         "single non-identity encoding returns it with error",
-			acceptHeader: nil,
-			encodings:    gzipOnly,
-			wantEncoding: "gzip",
-			wantErr:      true,
-		},
-		{
-			name:         "accept gzip selects gzip",
-			acceptHeader: []string{"gzip"},
-			encodings:    full,
-			wantEncoding: "gzip",
-		},
-		{
-			name:         "accept gzip or identity prefers identity by ordering",
-			acceptHeader: []string{"gzip, identity"},
-			encodings:    full,
-			wantEncoding: "identity",
-		},
-		{
-			name:         "q within 0.1 band prefers earlier listed identity",
-			acceptHeader: []string{"gzip;q=0.5, identity;q=0.41"},
-			encodings:    full,
-			wantEncoding: "identity",
-		},
-		{
-			name:         "q outside 0.1 band keeps gzip",
-			acceptHeader: []string{"gzip;q=0.5, identity;q=0.39"},
-			encodings:    full,
-			wantEncoding: "gzip",
-		},
-		{
-			name:         "unknown requested encoding falls back to identity",
-			acceptHeader: []string{"br"},
-			encodings:    identityGzip,
-			wantEncoding: "identity",
-		},
-		{
-			name:         "no identity entry returns non-nil encoding with error",
-			acceptHeader: nil,
-			encodings:    noIdentity,
-			wantEncoding: "br",
-			wantErr:      true,
-		},
+		// Behaviors locked in by test/tests/assets.hurl.
+		{"no header serves identity", tiny, nil, "identity", false},
+		{"empty header serves identity", tiny, []string{""}, "identity", false},
+		{"gzip requested", tiny, []string{"gzip"}, "gzip", false},
+		{"gzip or identity prefers identity (earlier in list)", tiny, []string{"gzip, identity"}, "identity", false},
+		{"0.09 gzip pref still identity (within tie threshold)", tiny, []string{"gzip;q=0.5, identity;q=0.41"}, "identity", false},
+		{"0.11 gzip pref selects gzip (beyond threshold)", tiny, []string{"gzip;q=0.5, identity;q=0.39"}, "gzip", false},
+		{"unavailable coding falls back to identity", tiny, []string{"br"}, "identity", false},
+		{"css gzip", css, []string{"gzip"}, "gzip", false},
+		{"css gzip or br prefers br (earlier/smaller)", css, []string{"gzip, br"}, "br", false},
+
+		// New: q=0 means "not acceptable" (RFC 7231 §5.3.4).
+		{"identity refused selects available gzip", tiny, []string{"gzip, identity;q=0"}, "gzip", false},
+		{"identity refused with no alternative is 406", tiny, []string{"identity;q=0"}, "", true},
+		{"gzip refused falls back to identity", tiny, []string{"gzip;q=0"}, "identity", false},
+
+		// New: wildcard support.
+		{"wildcard accepts smallest available", css, []string{"*"}, "br", false},
+		{"wildcard q=0 refuses everything", tiny, []string{"*;q=0"}, "", true},
+		{"explicit overrides wildcard refusal", tiny, []string{"*;q=0, gzip"}, "gzip", false},
+		{"wildcard refuses identity but names gzip", tiny, []string{"*;q=0, gzip;q=1"}, "gzip", false},
+		{"identity explicit survives wildcard q=0", tiny, []string{"*;q=0, identity"}, "identity", false},
+
+		// Multiple header lines are combined.
+		{"split across header lines", tiny, []string{"gzip;q=0.5", "identity;q=0.39"}, "gzip", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := negotiateEncoding(tt.acceptHeader, tt.encodings)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("error = %v, wantErr = %v", err, tt.wantErr)
+			got, err := negotiateEncoding(tt.accept, tt.encs)
+			if tt.wantNil {
+				if got != nil {
+					t.Fatalf("expected nil (406) result, got %q (err=%v)", got.encoding, err)
+				}
+				if err == nil {
+					t.Error("expected a non-nil error explaining why nothing is acceptable")
+				}
+				return
 			}
 			if got == nil {
-				t.Fatalf("expected non-nil encoding, got nil")
+				t.Fatalf("got nil result, want %q (err=%v)", tt.want, err)
 			}
-			if got.encoding != tt.wantEncoding {
-				t.Errorf("encoding = %q, want %q", got.encoding, tt.wantEncoding)
+			if got.encoding != tt.want {
+				t.Errorf("encoding = %q, want %q", got.encoding, tt.want)
 			}
 		})
+	}
+}
+
+func TestNegotiateEncoding_NoEncodings(t *testing.T) {
+	got, err := negotiateEncoding(nil, nil)
+	if got != nil {
+		t.Errorf("expected nil result for empty encodings, got %v", got)
+	}
+	if err == nil {
+		t.Error("expected an error for empty encodings")
 	}
 }

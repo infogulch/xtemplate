@@ -86,6 +86,12 @@ func (b *builder) addStaticFileHandler(path_ string) error {
 	var reader io.Reader = fsfile
 	encoding = "identity"
 	var exists bool
+	// This relies on the identity file (e.g. "foo.css") being walked before any of
+	// its compressed siblings ("foo.css.gz", "foo.css.zst", "foo.css.br"). afero.Walk
+	// visits entries in lexical order, and the identity name is a prefix of each
+	// compressed name, so it always sorts first. If that ordering ever changed, a
+	// compressed file could be processed before its identity entry exists here and
+	// would be misregistered as its own identity file.
 	file, exists = b.files[identityPath]
 	if exists {
 		switch ext {
@@ -119,7 +125,8 @@ func (b *builder) addStaticFileHandler(path_ string) error {
 	// Save precalculated file size, modtime, hash, content type, and encoding
 	// info to enable efficient content negotiation at request time.
 	if encoding == "identity" {
-		// note: identity file will always be found first because fs.WalkDir sorts files in lexical order
+		// identity is always processed first (see the lexical-ordering note above),
+		// so this is where a file's canonical metadata is established.
 		file.hash = sri
 		file.identityPath = identityPath
 		if ctype, ok := extensionContentTypes[ext]; ok {

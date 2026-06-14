@@ -103,13 +103,16 @@ func staticFileHandler(fs afero.Fs, fileinfo *fileInfo) http.HandlerFunc {
 
 		// negotiate encoding between the client's q value preference and fileinfo.encodings ordering (prefer earlier listed encodings first)
 		encoding, err := negotiateEncoding(r.Header["Accept-Encoding"], fileinfo.encodings)
-		if err != nil {
-			log.LogAttrs(r.Context(), slog.LevelWarn, "error selecting encoding to serve", slog.Any("error", err))
-		}
-		// we may have gotten an encoding even if there was an error; test separately
 		if encoding == nil {
-			http.Error(w, "internal server error", 500)
+			// The client refused every encoding we can serve (e.g. identity;q=0
+			// with no acceptable alternative); per RFC 7231 respond 406.
+			log.LogAttrs(r.Context(), slog.LevelDebug, "no acceptable encoding for request", slog.Any("error", err))
+			http.Error(w, "not acceptable", http.StatusNotAcceptable)
 			return
+		}
+		if err != nil {
+			// We still selected an encoding despite an anomaly (e.g. identity missing).
+			log.LogAttrs(r.Context(), slog.LevelWarn, "encoding negotiation anomaly", slog.Any("error", err))
 		}
 
 		log.LogAttrs(r.Context(), slog.LevelDebug, "serving file request", slog.String("encoding", encoding.encoding), slog.String("contenttype", fileinfo.contentType))
@@ -147,81 +150,112 @@ func staticFileHandler(fs afero.Fs, fileinfo *fileInfo) http.HandlerFunc {
 	}
 }
 
+// negotiateEncoding selects which of the available encodings to serve based on
+// the request's Accept-Encoding header(s), following RFC 7231 §5.3.4. It honors
+// q values (q=0 means "not acceptable") and the "*" wildcard. identity is
+// acceptable by default unless specifically refused via identity;q=0 or, when no
+// identity entry is present, *;q=0.
+//
+// Among acceptable encodings the highest q wins; q values within 0.1 of each
+// other are treated as a tie and broken toward the encoding listed earlier in
+// encodings (which is size-ascending, so smaller payloads are preferred). It
+// returns nil when the client accepts nothing we can serve, so the caller can
+// respond 406 Not Acceptable.
 func negotiateEncoding(acceptHeaders []string, encodings []encodingInfo) (*encodingInfo, error) {
-	var err error
-	// shortcuts
 	if len(encodings) == 0 {
 		return nil, fmt.Errorf("impossible condition, fileInfo contains no encodings")
 	}
-	if len(encodings) == 1 {
-		if encodings[0].encoding != "identity" {
-			// identity should always be present, but return whatever we got anyway
-			err = fmt.Errorf("identity encoding missing")
-		}
-		return &encodings[0], err
-	}
 
-	// default to identity encoding, q = 0.0
-	var maxq float64
-	var maxqIdx int = -1
-	for i, e := range encodings {
-		if e.encoding == "identity" {
-			maxqIdx = i
-			break
-		}
-	}
-	if maxqIdx == -1 {
-		err = fmt.Errorf("identity encoding missing")
-		maxqIdx = len(encodings) - 1
-	}
-
+	// Parse the header(s) into explicit per-coding q values plus an optional
+	// wildcard q that applies to any coding not named explicitly.
+	explicit := map[string]float64{}
+	starQ, hasStar := 0.0, false
 	for _, header := range acceptHeaders {
-		header = strings.TrimSpace(header)
-		if header == "" {
-			continue
-		}
-		for _, requestedEncoding := range strings.Split(header, ",") {
-			requestedEncoding = strings.TrimSpace(requestedEncoding)
-			if requestedEncoding == "" {
+		for _, tok := range strings.Split(header, ",") {
+			tok = strings.TrimSpace(tok)
+			if tok == "" {
 				continue
 			}
-
-			parts := strings.Split(requestedEncoding, ";")
-			encpart := strings.TrimSpace(parts[0])
-			requestedIdx := -1
-
-			// find out if we can provide that encoding
-			for i, e := range encodings {
-				if e.encoding == encpart {
-					requestedIdx = i
-					break
-				}
+			parts := strings.Split(tok, ";")
+			coding := strings.TrimSpace(parts[0])
+			if coding == "" {
+				continue
 			}
-			if requestedIdx == -1 {
-				continue // we don't support that encoding, try next
-			}
-
-			// determine q value
-			q := 1.0 // default 1.0
-			for _, part := range parts[1:] {
-				part = strings.TrimSpace(part)
-				if strings.HasPrefix(part, "q=") {
-					part = strings.TrimSpace(strings.TrimPrefix(part, "q="))
-					if parsed, err := strconv.ParseFloat(part, 64); err == nil {
+			q := 1.0 // default when no q parameter is given
+			for _, p := range parts[1:] {
+				if v, ok := strings.CutPrefix(strings.TrimSpace(p), "q="); ok {
+					if parsed, perr := strconv.ParseFloat(strings.TrimSpace(v), 64); perr == nil {
 						q = parsed
 						break
 					}
 				}
 			}
-
-			// use this encoding over previously selected encoding if:
-			// 1. client has a strong preference for this encoding, OR
-			// 2. client's preference is small and this encoding is listed earlier
-			if q-maxq > 0.1 || (math.Abs(q-maxq) <= 0.1 && requestedIdx < maxqIdx) {
-				maxq = q
-				maxqIdx = requestedIdx
+			if coding == "*" {
+				starQ, hasStar = q, true
+			} else {
+				explicit[coding] = q
 			}
 		}
 	}
-	return &encodings[maxqIdx], err
+
+	// qOf returns the negotiated q for an available coding and whether it is
+	// acceptable. identity gets a 0.0 baseline (so any explicitly-requested coding
+	// outranks it) but remains acceptable unless specifically refused.
+	qOf := func(coding string) (q float64, acceptable bool) {
+		if v, ok := explicit[coding]; ok {
+			return v, v > 0
+		}
+		if hasStar {
+			return starQ, starQ > 0
+		}
+		if coding == "identity" {
+			return 0, true
+		}
+		return 0, false
+	}
+
+	identityIdx := -1
+	for i, e := range encodings {
+		if e.encoding == "identity" {
+			identityIdx = i
+			break
+		}
+	}
+
+	var err error
+	bestIdx, bestQ := -1, 0.0
+	if identityIdx >= 0 {
+		if q, ok := qOf("identity"); ok {
+			bestIdx, bestQ = identityIdx, q
+		}
+	} else {
+		// identity should always be present for served files; note the anomaly
+		// but still try to pick an acceptable alternative below.
+		err = fmt.Errorf("identity encoding missing")
+	}
+
+	for i, e := range encodings {
+		if i == identityIdx {
+			continue
+		}
+		q, ok := qOf(e.encoding)
+		if !ok {
+			continue
+		}
+		if bestIdx == -1 {
+			bestIdx, bestQ = i, q
+			continue
+		}
+		if q-bestQ > 0.1 || (math.Abs(q-bestQ) <= 0.1 && i < bestIdx) {
+			bestIdx, bestQ = i, q
+		}
+	}
+
+	if bestIdx == -1 {
+		if err == nil {
+			err = fmt.Errorf("no acceptable encoding")
+		}
+		return nil, err
+	}
+	return &encodings[bestIdx], err
 }
