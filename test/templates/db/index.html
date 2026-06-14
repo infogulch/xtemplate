@@ -1,3 +1,11 @@
 <!DOCTYPE html>
 
 <p>Current user_version: {{.DB.QueryVal `PRAGMA user_version`}}</p>
+
+{{define "INIT db-setup"}}{{$_ := .DB.Exec "CREATE TABLE IF NOT EXISTS items (name TEXT)"}}{{end}}
+
+{{define "POST /db/items"}}{{.Req.ParseForm}}{{$_ := .DB.Exec "INSERT INTO items (name) VALUES (?)" (.Req.FormValue "name")}}ok{{end}}
+
+{{define "POST /db/items-fail"}}{{.Req.ParseForm}}{{$_ := .DB.Exec "INSERT INTO items (name) VALUES (?)" (.Req.FormValue "name")}}{{failf "intentional failure"}}{{end}}
+
+{{define "GET /db/count"}}{{.DB.QueryVal "SELECT count(*) FROM items"}}{{end}}
