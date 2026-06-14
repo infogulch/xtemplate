@@ -92,7 +92,7 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 	build.router = http.NewServeMux()
 	build.templates = template.New(".").Delims(build.config.LDelim, build.config.RDelim).Funcs(build.funcs)
 
-	if config.Minify {
+	if build.config.Minify != nil && *build.config.Minify {
 		m := minify.New()
 		m.Add("text/css", &css.Minifier{})
 		m.Add("image/svg+xml", &svg.Minifier{})

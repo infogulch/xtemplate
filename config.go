@@ -14,11 +14,6 @@ import (
 func New() (c *Config) {
 	c = &Config{}
 	c.Defaults()
-	// Minify is a bool, so Defaults() can't distinguish "unset" from an explicit
-	// false and must leave it alone (Server/Instance re-apply Defaults and would
-	// otherwise clobber a caller's explicit false). Default it to true here in the
-	// constructor instead, matching the CLI's default:"true" tag.
-	c.Minify = true
 	return
 }
 
@@ -33,7 +28,13 @@ type Config struct {
 	TemplateExtension string `json:"template_extension,omitempty" arg:"--template-ext" default:".html"`
 
 	// Whether html templates are minified at load time. Default `true`.
-	Minify bool `json:"minify,omitempty" arg:"-m,--minify" default:"true"`
+	//
+	// This is a *bool so that Defaults() can distinguish "unset" (nil, which
+	// becomes true) from an explicit false. A plain bool could not: Server and
+	// Instance re-apply Defaults internally, so a zero-valued false would be
+	// indistinguishable from unset and could never be honored, and the
+	// documented default of true would only hold when constructing via New().
+	Minify *bool `json:"minify,omitempty" arg:"-m,--minify" default:"true"`
 
 	Databases       []DotDBConfig    `json:"databases" arg:"-"`
 	Flags           []DotFlagsConfig `json:"flags" arg:"-"`
@@ -82,6 +83,11 @@ func (config *Config) Defaults() *Config {
 
 	if config.Ctx == nil {
 		config.Ctx = context.Background()
+	}
+
+	if config.Minify == nil {
+		defaultMinify := true
+		config.Minify = &defaultMinify
 	}
 
 	return config
