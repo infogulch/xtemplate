@@ -14,6 +14,11 @@ import (
 func New() (c *Config) {
 	c = &Config{}
 	c.Defaults()
+	// Minify is a bool, so Defaults() can't distinguish "unset" from an explicit
+	// false and must leave it alone (Server/Instance re-apply Defaults and would
+	// otherwise clobber a caller's explicit false). Default it to true here in the
+	// constructor instead, matching the CLI's default:"true" tag.
+	c.Minify = true
 	return
 }
 
