@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+#MISE description="Push each unpushed commit individually so CI runs on every commit"
+set -euo pipefail
+# shellcheck source=/dev/null
+source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
+cd "$ROOT"
+
+upstream="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}')"
+remote="${upstream%%/*}"
+branch="${upstream#*/}"
+
+if ! git merge-base --is-ancestor "$upstream" HEAD; then
+	echo "error: $upstream is not an ancestor of HEAD" >&2
+	exit 1
+fi
+
+mapfile -t commits < <(git rev-list --reverse "$upstream..HEAD")
+
+for sha in "${commits[@]}"; do
+	git push "$remote" "$sha:refs/heads/$branch"
+done
