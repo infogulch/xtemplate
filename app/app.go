@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime/debug"
 	"time"
 
 	"github.com/infogulch/xtemplate"
@@ -78,10 +79,43 @@ func mergeConfig(argv []string, cli Args, readFile func(string) ([]byte, error))
 	return jsonConfig, nil
 }
 
-var version = "development"
+// version is stamped at build time for releases via
+// -ldflags="-X 'github.com/infogulch/xtemplate/app.version=v1.2.3'". When unset
+// (e.g. `go install ...@version` or a plain `go build`), Version() falls back to
+// the module/VCS info embedded by the Go toolchain.
+var version = ""
 
 func (Args) Version() string {
-	return version
+	if version != "" {
+		return version
+	}
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "development"
+	}
+	// Set for module-based installs, e.g. `go install ...@v0.8.4`.
+	if v := bi.Main.Version; v != "" && v != "(devel)" {
+		return v
+	}
+	// Otherwise derive from the VCS info the toolchain stamps into the binary.
+	var rev, dirty string
+	for _, s := range bi.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			rev = s.Value
+		case "vcs.modified":
+			if s.Value == "true" {
+				dirty = "-dirty"
+			}
+		}
+	}
+	if rev != "" {
+		if len(rev) > 12 {
+			rev = rev[:12]
+		}
+		return "devel-" + rev + dirty
+	}
+	return "development"
 }
 
 var defaultWatchTemplates = "true"

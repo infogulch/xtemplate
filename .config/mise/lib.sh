@@ -15,15 +15,34 @@ export TEST_DIR="$ROOT/test"
 
 mkdir -p "$DIST_DIR"
 
-# Derive the version from git only (no network / `go list`), matching the CUE
-# build's intent without its unconditional module resolution.
+# Emit a clean release version only when building exactly at a v* tag. Otherwise
+# print nothing: the binary's Version() falls back to the module/VCS info the Go
+# toolchain embeds (see app.version), so non-tag builds get a useful commit-based
+# version without us inventing one here.
 xt_version() {
-	git -C "$ROOT" describe --tags --exact-match --match='v*' 2>/dev/null ||
-		echo "detached-$(git -C "$ROOT" rev-parse --short HEAD)"
+	git -C "$ROOT" describe --tags --exact-match --match='v*' 2>/dev/null || true
 }
 
+# Build the -ldflags string. When xt_version is empty (non-tag build) this emits
+# nothing, leaving app.version unset so the ReadBuildInfo fallback takes over.
 xt_ldflags() {
-	printf -- "-X 'github.com/infogulch/xtemplate/app.version=%s'" "$(xt_version)"
+	local v
+	v="$(xt_version)"
+	[ -n "$v" ] || return 0
+	printf -- "-X 'github.com/infogulch/xtemplate/app.version=%s'" "$v"
+}
+
+# Docker image tag: the release version when building at a v* tag, otherwise a
+# commit-based dev tag. Unlike xt_version this is always non-empty, so
+# `docker build -t infogulch/xtemplate:<tag>` is always valid.
+xt_image_tag() {
+	local v
+	v="$(xt_version)"
+	if [ -n "$v" ]; then
+		printf '%s\n' "$v"
+	else
+		printf 'dev-%s\n' "$(git -C "$ROOT" rev-parse --short HEAD)"
+	fi
 }
 
 # The most recent v* tag, used to decide whether to also tag/push :latest.

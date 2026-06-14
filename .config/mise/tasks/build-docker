@@ -5,7 +5,7 @@ set -euo pipefail
 source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
 cd "$ROOT"
 
-ver="$(xt_version)"
+ver="$(xt_image_tag)"
 
 tags=(-t "infogulch/xtemplate:${ver}")
 if [ "$ver" = "$(xt_latest_tag)" ]; then
