@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	_ "github.com/ncruces/go-sqlite3/driver"
-	_ "github.com/ncruces/go-sqlite3/embed"
 )
 
 // newTestDB returns an in-memory sqlite DB seeded with a users table containing
