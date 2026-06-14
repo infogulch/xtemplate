@@ -14,9 +14,11 @@ jobs:
           # Full history + tags so `git describe` can derive the version.
           fetch-depth: 0
 
-      # Installs every tool pinned in .config/mise/config.toml (go, hurl,
-      # shellcheck, xcaddy) and caches them.
+      # Installs tools pinned by mise, from cache if available
       - uses: jdx/mise-action@v2
+
+      - name: Save/restore prebuild cache
+        uses: ./.github/actions/ci-cache
 
       - name: Check secrets availability
         id: secrets_available
@@ -30,7 +32,6 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # lint + gotest + test {cli,caddy,docker}, then dist + build-docker.
       - run: mise run ci
 
       - name: Push Docker image

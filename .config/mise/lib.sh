@@ -102,3 +102,20 @@ run_hurl() {
 		--connect-to "localhost:8080:localhost:${port}" \
 		"$TEST_DIR"/tests/*.hurl
 }
+
+# xt_precache_deps [FLAGS] — compile stdlib and external dependencies into the
+# Go build cache.  Set GOOS/GOARCH in the environment to target a specific
+# platform; any FLAGS are forwarded to both go build invocations (e.g. -race).
+xt_precache_deps() {
+	go build "$@" std
+	local pkgs
+	pkgs=$(go list -deps -f '{{if and .Module (not .Module.Main)}}{{.ImportPath}}{{end}}' ./... | grep . || true)
+	echo "$pkgs" | xargs --no-run-if-empty go build "$@"
+}
+
+# xt_prebuild_hash — return a content hash of the current Go version plus
+# go.mod and go.sum.  Used by prebuild tasks to key Go/Docker caches.
+xt_prebuild_hash() {
+	{ go version; cat "$ROOT/go.mod" "$ROOT/go.sum"; } |
+		sha256sum | awk '{print $1}'
+}

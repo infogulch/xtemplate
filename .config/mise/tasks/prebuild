@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+#MISE description="Download Go modules, pre-compile dependencies, and build the Docker deps stage"
+#MISE sources=["go.mod", "go.sum"]
+set -euo pipefail
+# shellcheck source=/dev/null
+source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
+cd "$ROOT"
+
+# Compute a stable hash of the dependency inputs (includes go version).
+# Do this before redirecting stdout so the sub-task output is captured.
+sum=$(xt_prebuild_hash)
+
+# Redirect all build tool output to stderr so stdout carries only the final hash.
+exec 3>&1 1>&2
+
+# Download all module dependency sources into the module cache.
+go mod download
+
+# Pre-compile only external dependency packages for every release platform to
+# warm the Go build cache.  Excludes this module's own packages (.Module.Main)
+# so the cache isn't polluted with a potentially stale project build.
+for os in linux darwin windows; do
+    for arch in amd64 arm64; do
+        echo "  pre-compiling deps for $os/$arch"
+        GOOS=$os GOARCH=$arch xt_precache_deps
+    done
+done
+
+# Pre-compile with the race detector and coverage for the host platform, which
+# is what gotest uses.  Both flags produce separate cache entries from a plain
+# build, so without this gotest recompiles everything from scratch.
+echo "  pre-compiling deps for host (race + cover)"
+xt_precache_deps -race -cover
+
+# Build and tag the Dockerfile deps stage (copies go.mod/go.sum and runs
+# go mod download inside the container image layer cache).
+docker build --target deps -t "infogulch/xtemplate:deps" .
+
+# Emit the hash to stdout (fd 3).
+printf '%s\n' "$sum" >&3
