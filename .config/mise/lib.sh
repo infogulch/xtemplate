@@ -89,18 +89,13 @@ copy_fixtures() {
 		"$dest"
 }
 
-# wait_ready PORT — block until the server answers /ready (or give up).
-wait_ready() {
-	local port="$1"
-	curl -fsS --retry 10 --retry-all-errors --retry-connrefused --retry-delay 1 \
-		"http://localhost:${port}/ready" >/dev/null
-}
-
 # run_hurl PORT REPORT_DIR — run the whole hurl suite against a running server.
 # The .hurl files hardcode localhost:8080, so --connect-to remaps that to the
 # target's actual port.
 run_hurl() {
 	local port="$1" report="$2"
+	curl -fsS --retry 10 --retry-all-errors --retry-connrefused --retry-delay 1 \
+		"http://localhost:${port}/ready" >/dev/null
 	mkdir -p "$report"
 	hurl --continue-on-error --no-output --test \
 		--report-html "$report" \

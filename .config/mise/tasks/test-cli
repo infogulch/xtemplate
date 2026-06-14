@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Build, serve, and integration-test the CLI binary"
-#MISE depends=["build"]
+#MISE depends=["build-cli"]
 set -euo pipefail
 # shellcheck source=/dev/null
 source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
@@ -14,5 +14,4 @@ copy_fixtures "$work"
 server=$!
 trap 'kill "$server" 2>/dev/null || true' EXIT
 
-wait_ready 8080
 run_hurl 8080 "$work/report"

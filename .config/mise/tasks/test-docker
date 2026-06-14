@@ -15,5 +15,4 @@ docker rm -f xtemplate-test 2>/dev/null || true
 docker run -d --name xtemplate-test -p 8081:80 -v "$work:/app/dataw" xtemplate-test
 trap 'docker logs xtemplate-test &>"$work/docker.log" || true; docker rm -f xtemplate-test 2>/dev/null || true' EXIT
 
-wait_ready 8081
 run_hurl 8081 "$work/report"
