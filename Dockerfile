@@ -9,7 +9,7 @@ RUN apk add --no-cache build-base
 
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN go mod download -x
+RUN go mod download
 
 ###
 
@@ -22,7 +22,7 @@ COPY cmd ./cmd/
 COPY *.go ./
 RUN GOOS=linux \
     GOARCH=amd64 \
-    go build -x -ldflags="${LDFLAGS} -X 'github.com/infogulch/xtemplate/app.defaultWatchTemplates=false' -X 'github.com/infogulch/xtemplate/app.defaultListenAddress=0.0.0.0:80'" -o /build/xtemplate ./cmd
+    go build -ldflags="${LDFLAGS} -X 'github.com/infogulch/xtemplate/app.defaultWatchTemplates=false' -X 'github.com/infogulch/xtemplate/app.defaultListenAddress=0.0.0.0:80'" -o /build/xtemplate ./cmd
 
 ###
 
