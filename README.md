@@ -72,7 +72,7 @@ integrity.
 > clients will automatically reload when the server does:
 >
 > ```html
-> {{- define "SSE /reload"}}{{.WaitForServerStop}}data: reload{{printf "\n\n"}}{{end}}
+> {{- define "SSE /reload"}}{{.Flush.WaitForServerStop}}data: reload{{printf "\n\n"}}{{end}}
 > <script>new EventSource("/reload").onmessage = () => location.reload()</script>
 > <!-- Maybe not a great idea for production, but you do you. -->
 > ```
@@ -116,7 +116,7 @@ integrity.
 > <!-- match on any http method -->
 > {{define "DELETE /contact/{id}"}}
 > {{$_ := .DB.Exec `DELETE from contacts WHERE id=?` (.Req.PathValue "id")}}
-> {{.RespStatus 204}}
+> {{.Resp.SetStatus 204}}
 > {{end}}
 > ```
 
@@ -129,7 +129,7 @@ integrity.
 > All html files under the template root directory are available to invoke by
 > their full path relative to the template root dir starting with `/`:
 >
-> ```html
+> ```html skip_test
 > <html>
 >   <title>Home</title>
 >   <!-- import the contents of another file -->
@@ -178,7 +178,7 @@ integrity.
 >
 > ```html
 > <ul>
->   {{range .DB.Query `SELECT id,name FROM contacts`}}
+>   {{range .DB.QueryRows `SELECT id,name FROM contacts`}}
 >   <li><a href="/contact/{{.id}}">{{.name}}</a></li>
 >   {{end}}
 > </ul>
@@ -194,7 +194,7 @@ integrity.
 > ```html
 > <p>Here are the files:
 > <ol>
-> {{range .FS.List "dir/"}}
+> {{range .FS.ReadDir "dir/"}}
 >   <li>{{.Name}}</li>
 > {{end}}
 > </ol>

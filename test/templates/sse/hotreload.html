@@ -1,5 +1,2 @@
-<!DOCTYPE html>
-<script>new EventSource("/reload").onmessage = () => location.reload()</script>
-{{- define "SSE /reload"}}{{.Block}}data: reload{{printf "\n\n"}}{{end}}
-
-{{now}}
+<script>new EventSource("/reload").onmessage = () => location.reload();</script>
+{{- define "SSE /reload"}}{{.Flush.WaitForServerStop}}data: reload{{printf "\n\n"}}{{end}}
