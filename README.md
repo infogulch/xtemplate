@@ -413,13 +413,13 @@ These fields are always present in relevant template invocations:
 These optional value providers can be configured with any field name, and can be
 configured multiple times with different configurations.
 
-* Read and list files. See [DotFS]
+* Read and list files. See [Dir]
 * Query and execute SQL statements. See [DotDB]
 * Read template-level key-value map. See [DotKV]
 
-[DotFS]: https://pkg.go.dev/github.com/infogulch/xtemplate/providers#DotFS
-[DotDB]: https://pkg.go.dev/github.com/infogulch/xtemplate/providers#DotDB
-[DotKV]: https://pkg.go.dev/github.com/infogulch/xtemplate/providers#DotKV
+[Dir]: https://pkg.go.dev/github.com/infogulch/xtemplate#Dir
+[DotDB]: https://pkg.go.dev/github.com/infogulch/xtemplate#DotDB
+[DotKV]: https://pkg.go.dev/github.com/infogulch/xtemplate#DotKV
 
 #### ✏️ Custom dot fields
 

@@ -54,6 +54,16 @@ func Main(overrides ...xtemplate.Option) {
 	var config Args = defaultArgs
 	var log *slog.Logger
 
+	// Configuration precedence, highest priority first:
+	//
+	//  1. CLI flags
+	//  2. JSON from --config values and --config-file files (later sources
+	//     override earlier ones; files are applied before inline values)
+	//  3. built-in defaults (defaultArgs + struct `default` tags)
+	//
+	// This is implemented with a two-pass parse: parse the CLI once to discover
+	// which config files/values to load, decode those onto a fresh defaults base,
+	// then re-parse the CLI over the decoded result so flags win over JSON.
 	{
 		arg.MustParse(&config)
 		config.Defaults()

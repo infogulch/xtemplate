@@ -245,7 +245,7 @@ func FuncHumanize(formatType, data string) (string, error) {
 		return humanize.Time(dataint), nil
 	}
 
-	return "", fmt.Errorf("no know function was given")
+	return "", fmt.Errorf("humanize: unknown format type %q (want \"size\" or \"time\")", parts[0])
 }
 
 // The try template func accepts a fallible function object and calls it with
