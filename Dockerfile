@@ -3,7 +3,7 @@
 # change net/http behavior; e.g. Go 1.26 changed ServeMux's trailing-slash
 # redirect status from 301 to 307, which diverges from the other build targets
 # and breaks the hurl integration tests.
-FROM golang:1.24-alpine AS deps
+FROM golang:1.25-alpine AS deps
 
 RUN apk add --no-cache build-base
 
