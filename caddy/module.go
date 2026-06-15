@@ -39,8 +39,7 @@ type XTemplateModule struct {
 
 // Validate ensures t has a valid configuration. Implements caddy.Validator.
 func (m *XTemplateModule) Validate() error {
-	// todo: process FuncsModules
-	return nil
+	return validateFuncsModules(m.FuncsModules)
 }
 
 // Provision provisions t. Implements caddy.Provisioner.
@@ -52,7 +51,19 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 	m.Defaults()
 	m.Ctx, m.cancel = context.WithCancel(ctx.Context)
 
-	server, err := m.Server()
+	// Resolve any `xtemplate.funcs.*` modules into template FuncMaps and pass
+	// them to the server as options so they're available to all templates.
+	funcMaps, err := resolveFuncsModules(ctx, m.FuncsModules)
+	if err != nil {
+		m.cancel()
+		return err
+	}
+	var opts []xtemplate.Option
+	if len(funcMaps) > 0 {
+		opts = append(opts, xtemplate.WithFuncMaps(funcMaps...))
+	}
+
+	server, err := m.Server(opts...)
 	if err != nil {
 		m.cancel()
 		return err
