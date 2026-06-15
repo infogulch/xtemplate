@@ -50,8 +50,8 @@
   - Parse().Tree.Root.(*ListNode).[].(recurse) where NodeType()==NodeIdentifier replace with StringNode
 - [ ] Modify relative path invocations to point to the local path. https://pkg.go.dev/text/template/parse@go1.22.1#TemplateNode
   - Should be fine?
-- [ ] See if its possible to implement sql queryrows with https://go.dev/wiki/RangefuncExperiment
-  - Not until caddy releases 2.8.0 and upgrades to 1.22.
+- [x] See if its possible to implement sql queryrows with https://go.dev/wiki/RangefuncExperiment
+  - Done: QueryRows returns an iter.Seq[map[string]any] and scans rows lazily.
 - [ ] Add a way to register additional routes dynamically during init
 - [ ] Organize docs according to https://diataxis.fr/
 - [ ] Research alternative template loading strategies:
