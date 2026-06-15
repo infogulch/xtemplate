@@ -109,8 +109,16 @@ new_run_dir() {
 # target's actual port.
 run_hurl() {
 	local port="$1" report="$2"
-	curl -fsS --retry 10 --retry-all-errors --retry-connrefused --retry-delay 1 \
-		"http://localhost:${port}/ready" >/dev/null
+	# Wait for the server to accept requests. curl retries through the brief
+	# startup window, during which connection errors are expected; capture its
+	# output and surface it only if the probe ultimately fails, so those
+	# transient retry messages don't clutter the log.
+	local probe_err
+	if ! probe_err="$(curl -fsS --retry 10 --retry-all-errors --retry-connrefused --retry-delay 1 \
+		"http://localhost:${port}/ready" 2>&1 >/dev/null)"; then
+		printf '%s\n' "$probe_err" >&2
+		return 1
+	fi
 	mkdir -p "$report"
 	hurl --continue-on-error --no-output --test \
 		--report-html "$report" \
