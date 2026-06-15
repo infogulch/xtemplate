@@ -26,11 +26,16 @@ for os in linux darwin windows; do
     done
 done
 
-# Pre-compile with the race detector and coverage for the host platform, which
-# is what gotest uses.  Both flags produce separate cache entries from a plain
-# build, so without this gotest recompiles everything from scratch.
-echo "  pre-compiling deps for host (race + cover)"
-xt_precache_deps -race -cover
+# Compile all test binaries for the host platform to warm the Go build cache.
+# go build -cover produces different cache entries from go test -cover because
+# go test only instruments the package under test, not its imported deps.  So
+# xt_precache_deps -race -cover was a cache miss for nearly everything go test
+# looked up.  Running go test with -count=0 (compile only, no execution) uses
+# the exact same flags and build graph as the real gotest run, so every package
+# compilation is a cache hit and gotest only needs to execute the tests (~6s)
+# instead of compiling + running them (~49s).
+echo "  compiling test binaries for host (race + cover)"
+go test -race -cover -run='^$' -count=0 ./...
 
 # Build and tag the Dockerfile deps stage (copies go.mod/go.sum and runs
 # go mod download inside the container image layer cache).
