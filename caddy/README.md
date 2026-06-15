@@ -30,8 +30,8 @@ route {
 }
 ```
 
-Place `.html` files in the directory specified by the `xtemplate.templates_dir`
-key in your caddy config (default "templates"). The config above would load
+Place `.html` files in the directory specified by the `templates_dir`
+option in your caddy config (default "templates"). The config above would load
 templates from the `./templates` directory, relative to the current working
 directory.
 
@@ -51,18 +51,45 @@ Here are the xtemplate configs available to a Caddyfile:
 
 > [!NOTE]
 >
-> `xtemplate/caddy` currently does not support configuring the dot context in
-> the Caddyfile format. To access all configuration options you must use Caddy's
-> json configuration. See example xtemplate/caddy configuration at: [caddy.json](test\caddy.json)
+> The Caddyfile format does not support configuring the dot context (databases,
+> directories, flags, nats). To access those configuration options you must use
+> Caddy's json configuration. See example xtemplate/caddy configuration at:
+> [caddy.json](../test/caddy.json)
 
 ```Caddy
 xtemplate {
-    templates_path <string>                  # The path to the templates directory. Default: "templates".
-    watch_template_path <bool>               # Reload templates if anything in templates_path changes. Default: true
+    templates_dir <string>                   # The path to the templates directory. Default: "templates".
+    watch_template_path <bool>               # Reload templates if anything in templates_dir changes. Default: true
     template_extension <string>              # File extension to search for to find template files. Default ".html".
+    minify <bool>                            # Minify html templates at load time. Default: true.
     delimiters <Left:string> <Right:string>  # The template action delimiters, default "{{" and "}}".
+
+    crossorigin {
+        disabled <bool>                      # Disable Go 1.25 cross-origin (CSRF) protection. Default: false.
+        trusted_origins <origin...>          # Origins allowed to make unsafe cross-origin requests.
+        insecure_bypass_patterns <pattern...> # Request path patterns exempt from cross-origin protection.
+    }
 }
 ```
+
+> `templates_path` is accepted as a deprecated alias for `templates_dir`.
+
+### Custom template functions
+
+You can add custom template functions by writing a Caddy module in the
+`xtemplate.funcs` namespace that implements the `FuncsProvider` interface
+(`Funcs() template.FuncMap`), then referencing it by name with the
+`funcs_modules` option in Caddy's json configuration:
+
+```json
+{
+    "handler": "xtemplate",
+    "funcs_modules": ["myfuncs"]
+}
+```
+
+This loads the module registered as `xtemplate.funcs.myfuncs` and merges the
+functions it returns into the template execution context.
 
 ## Build
 
