@@ -59,6 +59,76 @@ func TestDotDB_Query(t *testing.T) {
 	}
 }
 
+// TestDotDB_QueryRowsStream renders every row yielded by the QueryRows iterator.
+func TestDotDB_QueryRowsStream(t *testing.T) {
+	db := newTestDB(t)
+	inst := buildInstance(t,
+		map[string]string{
+			"names.html": `{{range .DB.QueryRows "SELECT name FROM users ORDER BY name"}}{{.name}},{{end}}`,
+		},
+		WithDB("DB", db, nil),
+	)
+
+	w := doRequest(inst, http.MethodGet, "/names")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if got := w.Body.String(); got != "alice,bob," {
+		t.Errorf("body = %q, want %q", got, "alice,bob,")
+	}
+}
+
+// TestDotDB_QueryRowsIterationError verifies that an error encountered partway
+// through iterating the QueryRows result (here a SQLite integer-overflow raised
+// while stepping the second row) aborts template execution cleanly. The
+// iterator can't return the error, so it panics with template.ExecError, which
+// the template engine must recover and turn into a normal execution error
+// rather than letting the panic escape ServeHTTP.
+func TestDotDB_QueryRowsIterationError(t *testing.T) {
+	db := newTestDB(t)
+	inst := buildInstance(t,
+		map[string]string{
+			// The first row (n=1) is yielded successfully; stepping to the
+			// second row triggers a runtime error in SQLite.
+			"boom.html": `{{range .DB.QueryRows "SELECT 1 AS n UNION ALL SELECT abs(-9223372036854775808)"}}{{.n}}{{end}}`,
+		},
+		WithDB("DB", db, nil),
+	)
+
+	w := doRequest(inst, http.MethodGet, "/boom")
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusInternalServerError)
+	}
+}
+
+// TestDotDB_QueryRowWrongCount verifies QueryRow rejects results that don't
+// contain exactly one row, aborting template execution in both the zero-row and
+// multiple-row cases.
+func TestDotDB_QueryRowWrongCount(t *testing.T) {
+	db := newTestDB(t)
+	for _, tc := range []struct {
+		name  string
+		query string
+	}{
+		{"zero rows", "SELECT name FROM users WHERE name='nobody'"},
+		{"multiple rows", "SELECT name FROM users"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			inst := buildInstance(t,
+				map[string]string{
+					"row.html": `{{$r := .DB.QueryRow "` + tc.query + `"}}{{$r.name}}`,
+				},
+				WithDB("DB", db, nil),
+			)
+
+			w := doRequest(inst, http.MethodGet, "/row")
+			if w.Code != http.StatusInternalServerError {
+				t.Fatalf("status = %d, want %d", w.Code, http.StatusInternalServerError)
+			}
+		})
+	}
+}
+
 // TestDotDB_AutoCommit verifies the implicit transaction is committed when the
 // template completes without error, persisting writes.
 func TestDotDB_AutoCommit(t *testing.T) {

@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"iter"
 	"log/slog"
+	"text/template"
 	"time"
 )
 
@@ -44,47 +46,69 @@ func (c *DotDB) Exec(query string, params ...any) (result sql.Result, err error)
 	return c.tx.Exec(query, params...)
 }
 
-// QueryRows executes a query and buffers all rows into a []map[string]any object.
-func (c *DotDB) QueryRows(query string, params ...any) (rows []map[string]any, err error) {
-	if err = c.makeTx(); err != nil {
-		return
+// QueryRows executes a query and returns an iterator that yields one
+// map[string]any per result row. Rows are scanned lazily as the sequence is
+// consumed instead of being buffered up front, so a `{{range}}` over the result
+// only holds a single row in memory at a time.
+//
+// Errors that occur before iteration starts (opening the transaction, executing
+// the query, reading column metadata) are returned directly. Errors that occur
+// while scanning rows can't be returned from the iterator, so they are raised
+// via panic(template.ExecError{...}); the template engine recovers these and
+// returns them from template execution, aborting it just like a normal error
+// return would.
+func (c *DotDB) QueryRows(query string, params ...any) (iter.Seq[map[string]any], error) {
+	if err := c.makeTx(); err != nil {
+		return nil, err
 	}
 
-	defer func(start time.Time) {
+	start := time.Now()
+	log := func(err error) {
 		c.log.Debug("QueryRows", slog.String("query", query), slog.Any("params", params), slog.Any("error", err), slog.Duration("queryduration", time.Since(start)))
-	}(time.Now())
+	}
 
 	result, err := c.tx.Query(query, params...)
 	if err != nil {
+		log(err)
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
-	defer func() { _ = result.Close() }()
 
-	var columns []string
-
-	// prepare scan output array
-	columns, err = result.Columns()
+	columns, err := result.Columns()
 	if err != nil {
+		_ = result.Close()
+		log(err)
 		return nil, err
 	}
-	n := len(columns)
-	out := make([]any, n)
-	for i := range columns {
-		out[i] = new(any)
-	}
 
-	for result.Next() {
-		err = result.Scan(out...)
-		if err != nil {
-			return nil, err
+	return func(yield func(map[string]any) bool) {
+		var err error
+		defer func() {
+			_ = result.Close()
+			log(err)
+		}()
+
+		n := len(columns)
+		out := make([]any, n)
+		for i := range out {
+			out[i] = new(any)
 		}
-		row := make(map[string]any, n)
-		for i, c := range columns {
-			row[c] = *out[i].(*any)
+
+		for result.Next() {
+			if err = result.Scan(out...); err != nil {
+				panic(template.ExecError{Name: "QueryRows", Err: err})
+			}
+			row := make(map[string]any, n)
+			for i, col := range columns {
+				row[col] = *out[i].(*any)
+			}
+			if !yield(row) {
+				return
+			}
 		}
-		rows = append(rows, row)
-	}
-	return rows, result.Err()
+		if err = result.Err(); err != nil {
+			panic(template.ExecError{Name: "QueryRows", Err: err})
+		}
+	}, nil
 }
 
 // QueryRow executes a query, which must return one row, and returns it as a
@@ -94,10 +118,19 @@ func (c *DotDB) QueryRow(query string, params ...any) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(rows) != 1 {
-		return nil, fmt.Errorf("query returned %d rows, expected exactly 1 row", len(rows))
+	var row map[string]any
+	count := 0
+	for r := range rows {
+		count++
+		if count > 1 {
+			return nil, fmt.Errorf("query returned more than 1 row, expected exactly 1 row")
+		}
+		row = r
 	}
-	return rows[0], nil
+	if count != 1 {
+		return nil, fmt.Errorf("query returned %d rows, expected exactly 1 row", count)
+	}
+	return row, nil
 }
 
 // QueryVal executes a query, which must return one row with one column, and
