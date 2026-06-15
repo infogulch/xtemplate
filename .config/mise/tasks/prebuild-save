@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#MISE description="Save Go build cache and docker deps build cache to ~/.cache/xtemplate"
+set -euo pipefail
+# shellcheck source=/dev/null
+source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
+cd "$ROOT"
+
+# Go marks module-cache files and their directories read-only, so a plain
+# `rm -rf` of a previous save fails with "Permission denied". Restore write
+# permission first so the directory can actually be removed.
+if [ -e ~/.cache/xtemplate ]; then
+	chmod -R u+w ~/.cache/xtemplate
+	rm -rf ~/.cache/xtemplate
+fi
+mkdir -p ~/.cache/xtemplate/go/pkg
+cp -r ~/.cache/go-build ~/.cache/xtemplate/go-build
+cp -r ~/.local/go/pkg/mod ~/.cache/xtemplate/go/pkg/mod
+cp -r "$ROOT/dist/buildx-cache" ~/.cache/xtemplate/buildx-cache

@@ -11,6 +11,12 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 
+# Pre-compile stdlib unconditionally
+RUN GOOS=linux GOARCH=amd64 go build std
+
+ARG PRECACHE_PKGS=""
+RUN echo "${PRECACHE_PKGS}" | GOOS=linux GOARCH=amd64 xargs --no-run-if-empty go build
+
 ###
 
 FROM deps AS build

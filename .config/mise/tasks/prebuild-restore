@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+#MISE description="Restore Go build cache and docker deps build cache from ~/.cache/xtemplate"
+set -euo pipefail
+# shellcheck source=/dev/null
+source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
+cd "$ROOT"
+
+# Remove the destinations first so `cp -r src dest` recreates them rather than
+# copying *into* an existing directory. `go clean -cache` empties GOCACHE but
+# leaves the ~/.cache/go-build directory in place, so without this the cache
+# would land at ~/.cache/go-build/go-build/ where Go never looks for it.
+# The module cache is marked read-only by Go, so restore write permission
+# before removing it (a plain `rm -rf` would fail with "Permission denied").
+rm -rf ~/.cache/go-build
+if [ -e ~/.local/go/pkg/mod ]; then
+	chmod -R u+w ~/.local/go/pkg/mod
+	rm -rf ~/.local/go/pkg/mod
+fi
+mkdir -p ~/.local/go/pkg
+cp -r ~/.cache/xtemplate/go-build ~/.cache/go-build
+cp -r ~/.cache/xtemplate/go/pkg/mod ~/.local/go/pkg/mod
+
+# Restore the Docker deps build cache; build-docker/test-docker read it via
+# --cache-from. No `docker load` needed: BuildKit imports the cache directly.
+rm -rf "$ROOT/dist/buildx-cache"
+cp -r ~/.cache/xtemplate/buildx-cache "$ROOT/dist/buildx-cache"

@@ -6,7 +6,14 @@ source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
 cd "$ROOT"
 
 ver="$(xt_version)"
-ldflags="$(xt_ldflags)"
+# -w omits the DWARF symbol table. On darwin this avoids a slow Mach-O
+# post-edit step that embeds DWARF into the binary (Go issue #12259).
+# Release binaries don't need debug info, so strip it on all platforms.
+ldflags="-w $(xt_ldflags)"
+
+# Build with each platform's default buildmode (exe on linux/windows, pie on
+# darwin). Forcing -buildmode=exe overrides darwin's pie default which
+# invalidates prebuild caches.
 
 echo "Building xtemplate ${ver} for all platforms..."
 
@@ -21,7 +28,7 @@ for os in linux darwin windows; do
 		start=$SECONDS
 		rm -rf "$dir"
 		mkdir -p "$dir"
-		GOOS="$os" GOARCH="$arch" go build -ldflags "$ldflags" -buildmode exe -o "$dir/$exe" ./cmd
+		GOOS="$os" GOARCH="$arch" go build -ldflags "$ldflags" -o "$dir/$exe" ./cmd
 		cp README.md LICENSE "$dir"
 		(cd "$DIST_DIR" && zip -jqr6 "${name}_${ver}.zip" "$name")
 		printf ' done (%ss)\n' "$((SECONDS - start))"

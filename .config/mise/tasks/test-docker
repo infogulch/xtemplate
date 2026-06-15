@@ -6,10 +6,8 @@ source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
 cd "$ROOT"
 
 work="$(new_run_dir test-docker)"
-copy_fixtures "$work"
 
-docker build -t xtemplate-test --target test \
-	--build-arg "LDFLAGS=$(xt_ldflags)" .
+build-docker --target test -t xtemplate-test
 
 docker rm -f xtemplate-test 2>/dev/null || true
 docker run -d --name xtemplate-test -p 8081:80 -v "$work:/app/dataw" xtemplate-test
