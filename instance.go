@@ -134,9 +134,7 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 		for _, d := range build.config.Nats {
 			dot = append(dot, &d)
 		}
-		for _, d := range build.config.CustomProviders {
-			dot = append(dot, d)
-		}
+		dot = append(dot, build.config.CustomProviders...)
 		seen := map[string]bool{}
 		for _, d := range dot {
 			name := d.FieldName()
@@ -204,7 +202,7 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 	if !config.CrossOrigin.Disabled {
 		handler := http.NewCrossOriginProtection()
 		for _, origin := range config.CrossOrigin.TrustedOrigins {
-			handler.AddTrustedOrigin(origin)
+			_ = handler.AddTrustedOrigin(origin)
 		}
 		for _, pattern := range config.CrossOrigin.InsecureBypassPatterns {
 			handler.AddInsecureBypassPattern(pattern)

@@ -19,7 +19,7 @@ func newTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("failed to open sqlite: %v", err)
 	}
 	db.SetMaxOpenConns(1)
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	if _, err := db.Exec(`CREATE TABLE users (name TEXT)`); err != nil {
 		t.Fatalf("failed to create table: %v", err)

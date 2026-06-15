@@ -14,7 +14,7 @@ golangci-lint = "latest"
 
 [tasks.lint]
 description = "Run lint checks"
-depends = ["lint-shell"]
+depends = ["lint-shell", "lint-go"]
 
 [tasks.test]
 description = "Run all tests and lints"

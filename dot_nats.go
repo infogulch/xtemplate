@@ -18,14 +18,14 @@ type DotNats struct {
 
 func (d *DotNats) Subscribe(subject string) (<-chan *nats.Msg, error) {
 	ch := make(chan *nats.Msg)
-	sub, err := d.Conn.ChanSubscribe(subject, ch)
+	sub, err := d.ChanSubscribe(subject, ch)
 	if err != nil {
 		return nil, err
 	}
 	done := d.ctx.Done()
 	go func() {
 		<-done
-		sub.Unsubscribe()
+		_ = sub.Unsubscribe()
 		close(ch)
 	}()
 	return ch, nil

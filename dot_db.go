@@ -58,7 +58,7 @@ func (c *DotDB) QueryRows(query string, params ...any) (rows []map[string]any, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
-	defer result.Close()
+	defer func() { _ = result.Close() }()
 
 	var columns []string
 

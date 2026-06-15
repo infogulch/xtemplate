@@ -128,7 +128,7 @@ var defaultArgs = Args{WatchTemplates: defaultWatchTemplates == "true", Listen: 
 //
 //	app.Main(xtemplate.WithFooConfig())
 func Main(overrides ...xtemplate.Option) {
-	var config Args = defaultArgs
+	config := defaultArgs
 	var log *slog.Logger
 
 	// Configuration precedence, highest priority first:
@@ -175,7 +175,7 @@ func Main(overrides ...xtemplate.Option) {
 	}
 	if len(config.Watch) != 0 {
 		_, err := watch.Watch(config.Watch, 200*time.Millisecond, log.WithGroup("fswatch"), func() bool {
-			server.Reload()
+			_ = server.Reload()
 			return true
 		})
 		if err != nil {

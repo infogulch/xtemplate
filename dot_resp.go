@@ -79,7 +79,7 @@ func (d *DotResp) ServeContent(path_ string, modtime time.Time, content any) (st
 // existing values for that field. It returns an
 // empty string.
 func (h *DotResp) AddHeader(field, val string) string {
-	h.Header.Add(field, val)
+	h.Add(field, val)
 	return ""
 }
 
@@ -87,13 +87,13 @@ func (h *DotResp) AddHeader(field, val string) string {
 // other values for that field. It returns an
 // empty string.
 func (h *DotResp) SetHeader(field, val string) string {
-	h.Header.Set(field, val)
+	h.Set(field, val)
 	return ""
 }
 
 // DelHeader deletes a header field. It returns an empty string.
 func (h *DotResp) DelHeader(field string) string {
-	h.Header.Del(field)
+	h.Del(field)
 	return ""
 }
 

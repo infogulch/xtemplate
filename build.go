@@ -69,7 +69,7 @@ func (b *builder) addStaticFileHandler(path_ string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open static file '%s': %w", path_, err)
 	}
-	defer fsfile.Close()
+	defer func() { _ = fsfile.Close() }()
 	seeker := fsfile.(io.ReadSeeker)
 	stat, err := fsfile.Stat()
 	if err != nil {
@@ -134,7 +134,7 @@ func (b *builder) addStaticFileHandler(path_ string) error {
 			file.contentType = ctype
 		} else {
 			content := make([]byte, 512)
-			seeker.Seek(0, io.SeekStart)
+			_, _ = seeker.Seek(0, io.SeekStart)
 			count, err := seeker.Read(content)
 			if err != nil && err != io.EOF {
 				return fmt.Errorf("failed to read file to guess content type '%s': %w", path_, err)

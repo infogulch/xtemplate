@@ -41,7 +41,7 @@ func (d *DotNatsConfig) Init(ctx context.Context) error {
 		if d.js == nil {
 			var jsOpts []jetstream.JetStreamOpt
 			if d.NatsConfig != nil {
-				jsOpts = d.NatsConfig.JetStreamOptions
+				jsOpts = d.JetStreamOptions
 			}
 			d.js, err = jetstream.New(d.Conn, jsOpts...)
 			return err
@@ -52,14 +52,14 @@ func (d *DotNatsConfig) Init(ctx context.Context) error {
 		return fmt.Errorf("no nats client and no config provided to initialize nats client")
 	}
 	var connOpt nats.Options
-	if d.NatsConfig.ConnOptions == nil {
+	if d.ConnOptions == nil {
 		connOpt = nats.GetDefaultOptions()
 	} else {
-		connOpt = *d.NatsConfig.ConnOptions
+		connOpt = *d.ConnOptions
 	}
-	if d.NatsConfig.InProcessServerOptions != nil {
+	if d.InProcessServerOptions != nil {
 		// start an internal server for this instance
-		d.server, err = server.NewServer(d.NatsConfig.InProcessServerOptions)
+		d.server, err = server.NewServer(d.InProcessServerOptions)
 		if err != nil {
 			return fmt.Errorf("failed to start in-process nats server: %w", err)
 		}
@@ -74,13 +74,13 @@ func (d *DotNatsConfig) Init(ctx context.Context) error {
 			}()
 		}
 
-		nats.InProcessServer(d.server)(&connOpt)
+		_ = nats.InProcessServer(d.server)(&connOpt)
 	}
 	d.Conn, err = connOpt.Connect()
 	if err != nil {
 		return fmt.Errorf("failed to connect to in-process server: %w", err)
 	}
-	d.js, err = jetstream.New(d.Conn, d.NatsConfig.JetStreamOptions...)
+	d.js, err = jetstream.New(d.Conn, d.JetStreamOptions...)
 	return err
 }
 func (d *DotNatsConfig) Value(r Request) (any, error) {

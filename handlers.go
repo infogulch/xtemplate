@@ -47,7 +47,7 @@ func bufferingTemplateHandler(server *Instance, tmpl *template.Template) http.Ha
 			return
 		}
 
-		w.Write(buf.Bytes())
+		_, _ = w.Write(buf.Bytes())
 	}
 }
 
@@ -122,7 +122,7 @@ func staticFileHandler(fs afero.Fs, fileinfo *fileInfo) http.HandlerFunc {
 			http.Error(w, "internal server error", 500)
 			return
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		// check if file was modified since loading it
 		{

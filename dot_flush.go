@@ -63,25 +63,25 @@ func (f *DotFlush) SendSSE(args ...string) error {
 	}
 	written := false
 	if event != "" {
-		fmt.Fprintf(f.flusher, "event: %s\n", strings.SplitN(event, "\n", 2)[0])
+		_, _ = fmt.Fprintf(f.flusher, "event: %s\n", strings.SplitN(event, "\n", 2)[0])
 		written = true
 	}
 	if data != "" {
 		for _, line := range strings.Split(data, "\n") {
-			fmt.Fprintf(f.flusher, "data: %s\n", line)
+			_, _ = fmt.Fprintf(f.flusher, "data: %s\n", line)
 			written = true
 		}
 	}
 	if id != "" {
-		fmt.Fprintf(f.flusher, "id: %s\n", strings.SplitN(id, "\n", 2)[0])
+		_, _ = fmt.Fprintf(f.flusher, "id: %s\n", strings.SplitN(id, "\n", 2)[0])
 		written = true
 	}
 	if retry != "" {
-		fmt.Fprintf(f.flusher, "retry: %s\n", strings.SplitN(retry, "\n", 2)[0])
+		_, _ = fmt.Fprintf(f.flusher, "retry: %s\n", strings.SplitN(retry, "\n", 2)[0])
 		written = true
 	}
 	if written {
-		fmt.Fprintf(f.flusher, "\n\n")
+		_, _ = fmt.Fprintf(f.flusher, "\n\n")
 		f.flusher.Flush()
 	}
 	return nil

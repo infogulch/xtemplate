@@ -49,10 +49,10 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 	log := slog.New(zapslog.NewHandler(ctx.Logger().Core())).WithGroup("xtemplate-caddy")
 
 	m.Logger = log
-	m.Config.Defaults()
-	m.Config.Ctx, m.cancel = context.WithCancel(ctx.Context)
+	m.Defaults()
+	m.Ctx, m.cancel = context.WithCancel(ctx.Context)
 
-	server, err := m.Config.Server()
+	server, err := m.Server()
 	if err != nil {
 		m.cancel()
 		return err
