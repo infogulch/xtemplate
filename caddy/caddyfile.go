@@ -25,7 +25,7 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 	for h.Next() {
 		for h.NextBlock(0) {
 			switch h.Val() {
-			case "templates_path":
+			case "templates_dir", "templates_path":
 				if !h.AllArgs(&t.TemplatesDir) {
 					return nil, h.ArgErr()
 				}
@@ -37,20 +37,68 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 				if !h.AllArgs(&t.LDelim, &t.RDelim) {
 					return nil, h.ArgErr()
 				}
-			case "watch_template_path":
-				var boolstr string
-				if !h.AllArgs(&boolstr) {
-					return nil, h.ArgErr()
-				}
-				b, err := strconv.ParseBool(boolstr)
+			case "minify":
+				b, err := parseBoolArg(h)
 				if err != nil {
-					return nil, h.Errf("arg must be bool, got `%s`: %s", boolstr, err)
+					return nil, err
+				}
+				t.Minify = &b
+			case "watch_template_path":
+				b, err := parseBoolArg(h)
+				if err != nil {
+					return nil, err
 				}
 				t.WatchTemplatePath = b
+			case "crossorigin":
+				if err := parseCrossOrigin(h, &t.CrossOrigin); err != nil {
+					return nil, err
+				}
 			default:
 				return nil, h.Errf("unknown config option")
 			}
 		}
 	}
 	return t, nil
+}
+
+// parseCrossOrigin parses the `crossorigin` block into a CrossOriginConfig.
+func parseCrossOrigin(h httpcaddyfile.Helper, cors *xtemplate.CrossOriginConfig) error {
+	for h.NextBlock(1) {
+		switch h.Val() {
+		case "disabled":
+			b, err := parseBoolArg(h)
+			if err != nil {
+				return err
+			}
+			cors.Disabled = b
+		case "trusted_origins":
+			args := h.RemainingArgs()
+			if len(args) == 0 {
+				return h.ArgErr()
+			}
+			cors.TrustedOrigins = append(cors.TrustedOrigins, args...)
+		case "insecure_bypass_patterns":
+			args := h.RemainingArgs()
+			if len(args) == 0 {
+				return h.ArgErr()
+			}
+			cors.InsecureBypassPatterns = append(cors.InsecureBypassPatterns, args...)
+		default:
+			return h.Errf("unknown crossorigin option '%s'", h.Val())
+		}
+	}
+	return nil
+}
+
+// parseBoolArg reads a single boolean argument from the current directive.
+func parseBoolArg(h httpcaddyfile.Helper) (bool, error) {
+	var boolstr string
+	if !h.AllArgs(&boolstr) {
+		return false, h.ArgErr()
+	}
+	b, err := strconv.ParseBool(boolstr)
+	if err != nil {
+		return false, h.Errf("arg must be bool, got `%s`: %s", boolstr, err)
+	}
+	return b, nil
 }
