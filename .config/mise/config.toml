@@ -9,18 +9,23 @@
 go = "1.25"
 hurl = "latest"
 shellcheck = "latest"
+golangci-lint = "latest"
 "go:github.com/caddyserver/xcaddy/cmd/xcaddy" = "latest"
+
+[tasks.lint]
+description = "Run lint checks"
+depends = ["lint-shell"]
 
 [tasks.test]
 description = "Run all tests and lints"
-depends = ["lint", "gotest", "build-caddy", "build-cli", "build-docker", "test-caddy", "test-cli", "test-docker"]
+depends = ["lint", "gotest", "test-caddy", "test-cli", "test-docker"]
 
 # The full pipeline. `depends` run first (in parallel where independent); only
 # if they all succeed do the `depends_post` artifact builds run. This replaces
 # the CUE `pass` gate.
 [tasks.ci]
 description = "Full pipeline: lint + test every target, then build artifacts"
-depends = ["lint", "gotest", "test-cli", "test-caddy", "test-docker"]
+depends = ["test"]
 depends_post = ["dist", "build-docker"]
 
 [settings.task]

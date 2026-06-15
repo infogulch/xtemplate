@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#MISE description="Aggressively clean all build outputs"
+set -euo pipefail
+# shellcheck source=/dev/null
+source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
+cd "$ROOT"
+
+go clean -cache -modcache
+rm -rf "$ROOT/dist/"
+mkdir -p "$ROOT/dist/"
+
+docker images --format "{{.Repository}}:{{.Tag}}" | grep xtemplate | xargs --no-run-if-empty docker rmi || true
+docker builder prune -af

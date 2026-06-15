@@ -5,9 +5,6 @@ set -euo pipefail
 source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
 cd "$ROOT"
 
-ver="$(xt_image_tag)"
-
-docker push "infogulch/xtemplate:${ver}"
-if [ "$ver" = "$(xt_latest_tag)" ]; then
-	docker push "infogulch/xtemplate:latest"
-fi
+xt_image_tags | while IFS= read -r tag; do
+	docker push "$tag"
+done

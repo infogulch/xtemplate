@@ -6,7 +6,6 @@ set -euo pipefail
 source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
 
 work="$(new_run_dir test-caddy)"
-copy_fixtures "$work"
 
 # `caddy start` daemonizes, so stop it via `caddy stop` on exit.
 trap '"$DIST_DIR/caddy" stop 2>/dev/null || true' EXIT

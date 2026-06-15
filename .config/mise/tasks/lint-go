@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="Run golangci-lint on Go sources"
+set -euo pipefail
+# shellcheck source=/dev/null
+source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
+cd "$ROOT"
+
+golangci-lint run ./...

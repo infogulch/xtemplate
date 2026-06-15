@@ -5,11 +5,12 @@ set -euo pipefail
 source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
 cd "$ROOT"
 
-ver="$(xt_image_tag)"
-
-tags=(-t "infogulch/xtemplate:${ver}")
-if [ "$ver" = "$(xt_latest_tag)" ]; then
-	tags+=(-t "infogulch/xtemplate:latest")
+# With no args, build and tag the production image. Any args (e.g. from
+# test-docker: `--target test -t xtemplate-test`) are forwarded to docker build
+# and replace the default version tags, so callers can build a different stage
+# without mislabeling it as a release.
+if [ "$#" -eq 0 ]; then
+	while IFS= read -r tag; do set -- "$@" -t "$tag"; done < <(xt_image_tags)
 fi
 
-docker build "${tags[@]}" --build-arg "LDFLAGS=$(xt_ldflags)" .
+docker build --build-arg "LDFLAGS=$(xt_ldflags)" "$@" .

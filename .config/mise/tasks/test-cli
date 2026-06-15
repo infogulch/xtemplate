@@ -6,7 +6,6 @@ set -euo pipefail
 source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
 
 work="$(new_run_dir test-cli)"
-copy_fixtures "$work"
 
 # Start the server from the working dir so its relative config paths resolve.
 (cd "$work" && exec "$DIST_DIR/xtemplate" --loglevel -4 --config-file config.json) \

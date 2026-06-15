@@ -15,6 +15,15 @@ export TEST_DIR="$ROOT/test"
 
 mkdir -p "$DIST_DIR"
 
+# add an alias for every task in .config/mise/tasks/ so tasks can invoke each
+# other by name. Bash only expands aliases in interactive shells unless this is
+# set, and mise runs tasks non-interactively, so enable it explicitly.
+shopt -s expand_aliases
+for task in "$MISE_PROJECT_ROOT/.config/mise/tasks/"*; do
+    #shellcheck disable=SC2139
+    alias "$(basename "$task")"="$task"
+done
+
 # Emit a clean release version only when building exactly at a v* tag. Otherwise
 # print nothing: the binary's Version() falls back to the module/VCS info the Go
 # toolchain embeds (see app.version), so non-tag builds get a useful commit-based
@@ -50,6 +59,17 @@ xt_latest_tag() {
 	git -C "$ROOT" tag -l --sort=-version:refname | head -n1
 }
 
+# xt_image_tags — print the Docker image tags to build/push, one per line:
+# always the version tag, plus :latest when building at the most recent v*
+# release tag. Centralized so build-docker and push-docker can't disagree on
+# which tags exist; read into an array with `mapfile -t`.
+xt_image_tags() {
+	local ver
+	ver="$(xt_image_tag)"
+	printf 'infogulch/xtemplate:%s\n' "$ver"
+	[ "$ver" = "$(xt_latest_tag)" ] && printf 'infogulch/xtemplate:latest\n'
+}
+
 # new_run_dir TARGET — create a working/log directory for one test run, grouped
 # under dist/runs/ and prefixed with a sortable timestamp so runs list in
 # chronological order (newest last). Maintains a `latest-<target>` symlink and
@@ -63,6 +83,14 @@ new_run_dir() {
 	stamp="$(date +%Y%m%d-%H%M%S)"
 	dir="$(mktemp -d "$runs/${stamp}-${target}-XXXX")"
 
+	cp -r \
+		"$TEST_DIR/templates" \
+		"$TEST_DIR/data" \
+		"$TEST_DIR/migrations" \
+		"$TEST_DIR/caddy.json" \
+		"$TEST_DIR/config.json" \
+		"$dir"
+
 	# Convenience pointer to the most recent run for this target.
 	ln -sfn "$dir" "$runs/latest-${target}"
 
@@ -74,19 +102,6 @@ new_run_dir() {
 	done
 
 	printf '%s\n' "$dir"
-}
-
-# copy_fixtures DEST — stage the test fixtures into a working directory, the way
-# each server target expects to be run.
-copy_fixtures() {
-	local dest="$1"
-	cp -r \
-		"$TEST_DIR/templates" \
-		"$TEST_DIR/data" \
-		"$TEST_DIR/migrations" \
-		"$TEST_DIR/caddy.json" \
-		"$TEST_DIR/config.json" \
-		"$dest"
 }
 
 # run_hurl PORT REPORT_DIR — run the whole hurl suite against a running server.
