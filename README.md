@@ -523,15 +523,35 @@ Docker image builds.
 
 ### 👩‍⚕️ Writing a custom `DotProvider`
 
-Implement the `xtemplate.RegisteredDotProvider` interface on your type and
-register it with `xtemplate.Register()`. Optionally implement
-`encoding.TextMarshaller` and `encoding.TextUnmarshaller` to round-trip
-configuration from cli flags.
+Implement the `xtemplate.DotConfig` interface on your type:
 
-On startup xtemplate will create a struct that includes your value as a field.
-For every request your DotProvider.Value method is called with request details
-and its return value is assigned onto the struct which is passed to
-`html/template` as the dot value `{{.}}`.
+```go
+type DotConfig interface {
+    FieldName() string            // the dot field name, e.g. "Shop" for {{.Shop}}
+    Init(context.Context) error   // called once at instance load
+    Value(Request) (any, error)   // called per request; its return is assigned to the dot field
+}
+```
+
+Register it by passing `xtemplate.WithProvider(yourConfig)` as an option to
+`config.Server(...)`, `config.Instance(...)`, or `app.Main(...)`:
+
+```go
+app.Main(xtemplate.WithProvider(&ShopConfig{}))
+```
+
+On startup xtemplate creates a struct that includes your value as a field named
+by `FieldName()`. For every request your `Value` method is called with request
+details and its return value is assigned onto that struct, which is passed to
+`html/template` as the dot value `{{.}}`. `Value` must return a stable, non-nil
+concrete type: it is called once with a mock request at load time to infer the
+field type via reflection.
+
+Optionally implement `xtemplate.CleanupDotProvider` to run per-request cleanup
+(e.g. rolling back a transaction), the way the built-in `DotDB` provider does.
+
+See [`examples/dotprovider`](./examples/dotprovider/) for a complete, runnable
+example.
 
 ## ✅ Project history and license
 
