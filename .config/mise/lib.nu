@@ -98,12 +98,50 @@ export def new-run-dir [target: string]: nothing -> string {
     $dir
 }
 
+# Wait for a server to accept requests on its /ready endpoint. curl retries
+# through the brief startup window, where connection errors are expected;
+# capture curl's output and surface it only if the probe ultimately fails, so
+# those transient retry messages don't clutter the log.
+export def wait-ready [port: int, retries: int = 10] {
+    let probe = (^curl -fsS --retry $retries --retry-all-errors --retry-connrefused --retry-delay 1 $"http://localhost:($port)/ready" | complete)
+    if $probe.exit_code != 0 {
+        print -e $probe.stderr
+        error make --unspanned { msg: $"readiness probe for port ($port) failed" }
+    }
+}
+
 # Run the whole hurl suite against a running server. The .hurl files hardcode
 # localhost:8080, so --connect-to remaps that to the target's actual port.
 export def run-hurl [port: int, report: string] {
-    ^curl -fsS --retry 10 --retry-all-errors --retry-connrefused --retry-delay 1 $"http://localhost:($port)/ready" | ignore
+    wait-ready $port 10
     mkdir $report
     ^hurl --continue-on-error --no-output --test --report-html $report --connect-to $"localhost:8080:localhost:($port)" ...(glob $"($env.TEST_DIR)/tests/*.hurl")
+}
+
+# Copy an example app's directory (examples/<name>/) into a fresh run dir under
+# dist/runs and return its path, so integration runs get a clean working copy
+# (fresh sqlite, etc.) and can run in parallel without stepping on each other.
+# Mirrors new-run-dir. Keeps only the 5 newest runs per example.
+export def new-example-dir [name: string]: nothing -> string {
+    let runs = ($env.DIST_DIR | path join runs)
+    mkdir $runs
+    let stamp = (date now | format date '%Y%m%d-%H%M%S')
+    let dir = ($runs | path join $"($stamp)-example-($name)")
+    ^cp -r ($env.ROOT | path join examples $name) $dir
+    ^ln -sfn $dir ($runs | path join $"latest-example-($name)")
+    glob $"($runs)/[0-9]*-example-($name)" | sort | reverse | skip 5 | each { |old| rm -rf $old }
+    $dir
+}
+
+# Poll an example server's /ready endpoint, then run its hurl suite (the .hurl
+# files under <dir>/tests/) against the given port. Example .hurl files hardcode
+# localhost:8080; --connect-to remaps that to the example's actual port, the
+# same convention run-hurl uses for the main suite.
+export def run-example [port: int, dir: string] {
+    wait-ready $port 30
+    let report = ($dir | path join report)
+    mkdir $report
+    ^hurl --continue-on-error --no-output --test --report-html $report --connect-to $"localhost:8080:localhost:($port)" ...(glob $"($dir)/tests/*.hurl")
 }
 
 # List external dep packages for the current platform, configured by setting
