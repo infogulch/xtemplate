@@ -57,7 +57,6 @@ func (d Dir) Read(name string) (string, error) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer bufPool.Put(buf)
-	defer buf.Reset()
 
 	file, err := d.fs.Open(name)
 	if err != nil {

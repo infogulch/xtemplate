@@ -91,28 +91,33 @@ func init() {
 	caddy.RegisterModule(testFuncsModule{})
 }
 
-func TestValidateFuncsModules(t *testing.T) {
-	if err := validateFuncsModules([]string{"testfuncs"}); err != nil {
-		t.Errorf("validateFuncsModules([testfuncs]) = %v, want nil", err)
+func TestResolveFuncsModules(t *testing.T) {
+	fps, err := resolveFuncsModules([]string{"testfuncs"})
+	if err != nil {
+		t.Fatalf("resolveFuncsModules([testfuncs]) = %v, want nil", err)
 	}
-	if err := validateFuncsModules([]string{"does_not_exist"}); err == nil {
-		t.Error("validateFuncsModules([does_not_exist]) = nil, want an error")
+	if len(fps) != 1 {
+		t.Fatalf("got %d providers, want 1", len(fps))
+	}
+
+	if _, err := resolveFuncsModules([]string{"does_not_exist"}); err == nil {
+		t.Error("resolveFuncsModules([does_not_exist]) = nil error, want an error")
 	}
 }
 
-func TestResolveFuncsModules(t *testing.T) {
-	funcMaps, err := resolveFuncsModules(caddy.Context{}, []string{"testfuncs"})
+func TestProvisionFuncsModules(t *testing.T) {
+	fps, err := resolveFuncsModules([]string{"testfuncs"})
 	if err != nil {
 		t.Fatalf("resolveFuncsModules error: %v", err)
+	}
+	funcMaps, err := provisionFuncsModules(caddy.Context{}, fps)
+	if err != nil {
+		t.Fatalf("provisionFuncsModules error: %v", err)
 	}
 	if len(funcMaps) != 1 {
 		t.Fatalf("got %d func maps, want 1", len(funcMaps))
 	}
 	if _, ok := funcMaps[0]["testfunc"]; !ok {
 		t.Errorf("func map = %v, want it to contain 'testfunc'", funcMaps[0])
-	}
-
-	if _, err := resolveFuncsModules(caddy.Context{}, []string{"does_not_exist"}); err == nil {
-		t.Error("resolveFuncsModules([does_not_exist]) = nil error, want an error")
 	}
 }

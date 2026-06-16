@@ -95,14 +95,6 @@ func AddMarkdownConfig(name string, md goldmark.Markdown) {
 	markdownConfigs[name] = md
 }
 
-// AddMarkdownConifg is a deprecated alias for [AddMarkdownConfig].
-//
-// Deprecated: use [AddMarkdownConfig]. This misspelled name is retained for
-// backward compatibility and will be removed in a future release.
-func AddMarkdownConifg(name string, md goldmark.Markdown) {
-	AddMarkdownConfig(name, md)
-}
-
 // markdown renders the given Markdown text as HTML and returns it. This uses
 // the Goldmark library, which is CommonMark compliant. If an alternative
 // markdown policy is not named, it uses the default policy which has these
