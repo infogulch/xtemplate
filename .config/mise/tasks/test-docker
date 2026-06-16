@@ -1,16 +1,21 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nu
 #MISE description="Build and integration-test the Docker image"
-set -euo pipefail
-# shellcheck source=/dev/null
-source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
-cd "$ROOT"
+use ../lib.nu *
 
-work="$(new_run_dir test-docker)"
+let work = (new-run-dir test-docker)
 
-build-docker --target test -t xtemplate-test
+xt-build-docker --target test --tags [xtemplate-test]
 
-docker rm -f xtemplate-test 2>/dev/null || true
-docker run -d --name xtemplate-test -p 8081:80 -v "$work:/app/dataw" xtemplate-test
-trap 'docker logs xtemplate-test &>"$work/docker.log" || true; docker rm -f xtemplate-test 2>/dev/null || true' EXIT
+do { ^docker rm -f xtemplate-test } | complete | ignore
+^docker run -d --name xtemplate-test -p 8081:80 -v $"($work):/app/dataw" xtemplate-test
 
-run_hurl 8081 "$work/report"
+# Run the suite, then always capture the container log and remove it, whether
+# the suite passed or failed.
+let outcome = (try { run-hurl 8081 ($work | path join report); "ok" } catch { |e| $e.msg })
+do { ^docker logs xtemplate-test } out+err> ($work | path join docker.log)
+do { ^docker rm -f xtemplate-test } | complete | ignore
+
+if $outcome != "ok" {
+    print -e $"test-docker failed: ($outcome)"
+    exit 1
+}

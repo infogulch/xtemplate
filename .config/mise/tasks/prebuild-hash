@@ -1,8 +1,6 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nu
 #MISE description="Print content hash of go version + go.mod+go.sum for cache keys"
-set -euo pipefail
-# shellcheck source=/dev/null
-source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
-cd "$ROOT"
+use ../lib.nu *
+cd $env.ROOT
 
-xt_prebuild_hash
+xt-prebuild-hash

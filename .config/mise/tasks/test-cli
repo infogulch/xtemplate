@@ -1,16 +1,23 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nu
 #MISE description="Build, serve, and integration-test the CLI binary"
 #MISE depends=["build-cli"]
-set -euo pipefail
-# shellcheck source=/dev/null
-source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
+use ../lib.nu *
 
-work="$(new_run_dir test-cli)"
+let work = (new-run-dir test-cli)
+let bin = ($env.DIST_DIR | path join xtemplate)
 
-# Start the server from the working dir so its relative config paths resolve.
-(cd "$work" && exec "$DIST_DIR/xtemplate" --loglevel -4 --config-file config.json) \
-	&>"$work/xtemplate.log" &
-server=$!
-trap 'kill "$server" 2>/dev/null || true' EXIT
+# Start the server in a background job from the working dir so its relative
+# config paths resolve; its combined output goes to the run's log. `job kill`
+# tears it down whether the suite passes or fails.
+let server = (job spawn {
+    cd $work
+    ^$bin --loglevel -4 --config-file config.json out+err> xtemplate.log
+})
 
-run_hurl 8080 "$work/report"
+let outcome = (try { run-hurl 8080 ($work | path join report); "ok" } catch { |e| $e.msg })
+job kill $server
+
+if $outcome != "ok" {
+    print -e $"test-cli failed: ($outcome)"
+    exit 1
+}

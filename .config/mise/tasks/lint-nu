@@ -1,0 +1,28 @@
+#!/usr/bin/env nu
+#MISE description="Parse-check the nu task library and task scripts"
+use ../lib.nu *
+cd $env.ROOT
+
+# There's no shellcheck equivalent for Nushell, but `nu --ide-check` reports
+# parse/compile diagnostics. Treat any Error-severity diagnostic as a failure.
+let files = ([".config/mise/lib.nu"] ++ (glob ".config/mise/tasks/*"))
+
+let bad = ($files | where { |f|
+    let errors = (^nu --ide-check 1000 $f
+        | lines
+        | where { |l| ($l | str trim) != "" }
+        | each { |l| $l | from json }
+        | where { |d| ($d.type? == "diagnostic") and ($d.severity? == "Error") })
+    if not ($errors | is-empty) {
+        print -e $"($f):"
+        $errors | each { |d| print -e $"  ($d.message)" }
+    }
+    not ($errors | is-empty)
+})
+
+if not ($bad | is-empty) {
+    print -e $"nu parse errors in ($bad | length) file\(s\)"
+    exit 1
+}
+
+print $"checked ($files | length) nu files, no errors"

@@ -1,14 +1,19 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nu
 #MISE description="Build and integration-test the Caddy module"
 #MISE depends=["build-caddy"]
-set -euo pipefail
-# shellcheck source=/dev/null
-source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
+use ../lib.nu *
 
-work="$(new_run_dir test-caddy)"
+let work = (new-run-dir test-caddy)
+let caddy = ($env.DIST_DIR | path join caddy)
 
-# `caddy start` daemonizes, so stop it via `caddy stop` on exit.
-trap '"$DIST_DIR/caddy" stop 2>/dev/null || true' EXIT
-(cd "$work" && "$DIST_DIR/caddy" start --config caddy.json &>caddy.log)
+# `caddy start` daemonizes, so it keeps running after this returns; stop it
+# again once the suite finishes, whether it passes or fails.
+do { cd $work; ^$caddy start --config caddy.json } out+err> ($work | path join caddy.log)
 
-run_hurl 8082 "$work/report"
+let outcome = (try { run-hurl 8082 ($work | path join report); "ok" } catch { |e| $e.msg })
+do { ^$caddy stop } | complete | ignore
+
+if $outcome != "ok" {
+    print -e $"test-caddy failed: ($outcome)"
+    exit 1
+}

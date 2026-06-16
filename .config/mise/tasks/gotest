@@ -1,9 +1,7 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nu
 #MISE description="Run Go unit tests with the race detector"
-set -euo pipefail
-# shellcheck source=/dev/null
-source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
-cd "$ROOT"
+use ../lib.nu *
+cd $env.ROOT
 
-go test -race -coverprofile="$DIST_DIR/cover.out" ./...
-go tool cover -func="$DIST_DIR/cover.out" | tail -n 1
+^go test -race $"-coverprofile=($env.DIST_DIR)/cover.out" ./...
+^go tool cover $"-func=($env.DIST_DIR)/cover.out" | lines | last

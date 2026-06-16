@@ -1,14 +1,8 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nu
 #MISE description="Build Caddy with the xtemplate module via xcaddy"
-set -euo pipefail
-# shellcheck source=/dev/null
-source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
-cd "$ROOT"
+use ../lib.nu *
 
-xcaddy build \
-	--with github.com/infogulch/xtemplate/caddy=./caddy \
-	--with github.com/infogulch/xtemplate=. \
-	--with github.com/ncruces/go-sqlite3/driver \
-	--output "$DIST_DIR/caddy" \
-	"$@" \
-    2>"$DIST_DIR/caddy.build.log"
+# Any extra args are forwarded to `xcaddy build`.
+def main [...extra: string] {
+    xt-build-caddy ...$extra
+}

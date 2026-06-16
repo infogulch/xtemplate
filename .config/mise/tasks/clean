@@ -1,13 +1,16 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nu
 #MISE description="Aggressively clean all build outputs"
-set -euo pipefail
-# shellcheck source=/dev/null
-source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
-cd "$ROOT"
+use ../lib.nu *
+cd $env.ROOT
 
-go clean -cache -modcache
-rm -rf "$ROOT/dist/"
-mkdir -p "$ROOT/dist/"
+^go clean -cache -modcache
+rm -rf ($env.ROOT | path join dist)
+mkdir ($env.ROOT | path join dist)
 
-docker images --format "{{.Repository}}:{{.Tag}}" | grep xtemplate | xargs --no-run-if-empty docker rmi || true
-docker builder prune -af
+# Remove any xtemplate images, then prune the builder cache. Ignore failures
+# (e.g. no matching images) so cleanup never aborts.
+let images = (^docker images --format "{{.Repository}}:{{.Tag}}" | lines | where { |l| $l =~ "xtemplate" })
+if not ($images | is-empty) {
+    do { ^docker rmi ...$images } | complete | ignore
+}
+^docker builder prune -af
