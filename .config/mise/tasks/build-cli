@@ -1,10 +1,8 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nu
 #MISE description="Build the xtemplate CLI binary into dist/"
-set -euo pipefail
-# shellcheck source=/dev/null
-source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
-cd "$ROOT"
+use ../lib.nu *
+cd $env.ROOT
 
 # Use the default buildmode so the build reuses the prebuild cache on every
 # platform (forcing -buildmode=exe defeats it on darwin; see the dist task).
-go build -ldflags "$(xt_ldflags)" -o "$DIST_DIR/xtemplate" ./cmd
+^go build -ldflags (xt-ldflags) -o ($env.DIST_DIR | path join xtemplate) ./cmd

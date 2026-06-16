@@ -1,20 +1,20 @@
 # mise configuration for xtemplate.
 #
 # Tooling is pinned here so local and CI runs use identical versions, and tasks
-# live as standalone shell scripts under .config/mise/tasks/ (lint-able with
-# shellcheck, runnable on their own). Run `mise tasks` to list them, `mise run
-# <task>` to execute one, and `mise run ci` for the full pipeline.
+# live as standalone Nushell scripts under .config/mise/tasks/ (parse-checkable
+# with `nu --ide-check`, runnable on their own). Run `mise tasks` to list them,
+# `mise run <task>` to execute one, and `mise run ci` for the full pipeline.
 
 [tools]
 go = "1.25"
 hurl = "latest"
-shellcheck = "latest"
+"aqua:nushell/nushell" = "latest"
 golangci-lint = "latest"
 "go:github.com/caddyserver/xcaddy/cmd/xcaddy" = "latest"
 
 [tasks.lint]
 description = "Run lint checks"
-depends = ["lint-shell", "lint-go"]
+depends = ["lint-nu", "lint-go"]
 
 [tasks.test]
 description = "Run all tests and lints"

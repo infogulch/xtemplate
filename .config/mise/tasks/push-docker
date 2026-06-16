@@ -1,10 +1,8 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nu
 #MISE description="Push the xtemplate Docker image tags (run after build-docker)"
-set -euo pipefail
-# shellcheck source=/dev/null
-source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
-cd "$ROOT"
+use ../lib.nu *
+cd $env.ROOT
 
-xt_image_tags | while IFS= read -r tag; do
-	docker push "$tag"
-done
+for tag in (xt-image-tags) {
+    ^docker push $tag
+}

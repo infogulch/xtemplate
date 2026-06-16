@@ -1,27 +1,10 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nu
 #MISE description="Build and tag the production Docker image"
-set -euo pipefail
-# shellcheck source=/dev/null
-source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
-cd "$ROOT"
+use ../lib.nu *
 
-# Import the prebuilt deps build cache when present (populated by prebuild,
-# restored from CI cache) so the deps stage is a cache hit; harmless to omit.
-build_args=()
-if [ -d "$DIST_DIR/buildx-cache" ]; then
-	build_args=(--cache-from "type=local,src=$DIST_DIR/buildx-cache")
-fi
-build_args+=(
-	--build-arg "LDFLAGS=$(xt_ldflags)"
-	--build-arg "PRECACHE_PKGS=$(GOOS=linux GOARCH=amd64 xt_precache_pkgs)"
-)
-
-# With no args, build and tag the production image. Any args (e.g. from
-# test-docker: `--target test -t xtemplate-test`) are forwarded to docker build
-# and replace the default version tags, so callers can build a different stage
-# without mislabeling it as a release.
-if [ "$#" -eq 0 ]; then
-	while IFS= read -r tag; do set -- "$@" -t "$tag"; done < <(xt_image_tags)
-fi
-
-docker build -q "${build_args[@]}" "$@" .
+# With no args, build and tag the production image. --target/--cache-to build a
+# different stage, and positional tags replace the default version tags, so
+# callers can build a stage without mislabeling it as a release.
+def main [--target: string = "", --cache-to: string = "", ...tags: string] {
+    xt-build-docker --target $target --cache-to $cache_to --tags $tags
+}

@@ -1,49 +1,53 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nu
 #MISE description="Download Go modules, pre-compile dependencies, and export the Docker deps build cache"
-set -euo pipefail
-# shellcheck source=/dev/null
-source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
-cd "$ROOT"
+use ../lib.nu *
+cd $env.ROOT
 
-# Compute a stable hash of the dependency inputs (includes go version).
-# Do this before redirecting stdout so the sub-task output is captured.
-sum=$(xt_prebuild_hash)
+# Compute a stable hash of the dependency inputs (includes go version) up front.
+let sum = (xt-prebuild-hash)
 
-# Redirect all build tool output to stderr so stdout carries only the final hash.
-exec 3>&1 1>&2
+# All progress goes to stderr so stdout carries only the final hash.
 
 # Download module sources into the cache. -json lets us print a one-line summary
 # and surface per-module failures, which it reports in-band instead of failing.
-dl=$(go mod download -json)
-if errs=$(printf '%s' "$dl" | jq -r 'select(.Error) | "  failed: \(.Path)@\(.Version): \(.Error)"') && [ -n "$errs" ]; then
-    printf '%s\n' "$errs"; exit 1
-fi
-n=$(printf '%s' "$dl" | jq -rs length)
-b=$(printf '%s' "$dl" | jq -r '.Zip // empty' | xargs stat -c%s | awk '{s+=$1} END{print s+0}')
-echo "  downloaded $n modules ($(numfmt --to=iec --suffix=B "$b"))"
+# go emits a stream of concatenated, pretty-printed JSON objects, so stitch them
+# into a single array (objects are flat and delimited by `}\n{` at column 0)
+# before handing the whole thing to `from json`.
+let raw = (^go mod download -json | str trim)
+let joined = ($raw | str replace --all "}\n{" "},{")
+let dl = ($"[($joined)]" | from json)
+let errs = ($dl | where { |m| ($m.Error? | is-not-empty) } | each { |m| $"  failed: ($m.Path)@($m.Version): ($m.Error)" })
+if not ($errs | is-empty) {
+    print -e ($errs | str join "\n")
+    exit 1
+}
+let bytes = ($dl | get Zip? | compact | each { |z| (ls $z | get 0.size) } | math sum)
+print -e $"  downloaded ($dl | length) modules \(($bytes | into filesize))"
 
 # Pre-compile only external dependency packages for every release platform to
 # warm the Go build cache.  Excludes this module's own packages (.Module.Main)
 # so the cache isn't polluted with a potentially stale project build.
-for os in linux darwin windows; do
-    for arch in amd64 arm64; do
-        echo "  pre-compiling deps for $os/$arch"
-        GOOS=$os GOARCH=$arch xt_precache_deps
-    done
-done
+for os in [linux darwin windows] {
+    for arch in [amd64 arm64] {
+        print -e $"  pre-compiling deps for ($os)/($arch)"
+        with-env { GOOS: $os, GOARCH: $arch } { xt-precache-deps }
+    }
+}
 
 # Pre-compile with the race detector for the host platform, used by gotest.
-echo "  pre-compiling deps for host (race)"
-xt_precache_deps -race
+print -e "  pre-compiling deps for host (race)"
+xt-precache-deps --race
 
-# Warm the cache for the xcaddy build.
-echo "  pre-compiling caddy build (xcaddy)"
-build-caddy
+# Warm the cache for the xcaddy build. Route xcaddy's stdout (its post-build
+# `caddy version` check) to stderr so only the hash lands on stdout.
+print -e "  pre-compiling caddy build (xcaddy)"
+xt-build-caddy | print -e
 
 # Build the deps stage and export its BuildKit layer cache to a local directory.
-echo "  exporting docker deps build cache"
-build-docker --target deps \
-    --cache-to "type=local,dest=$DIST_DIR/buildx-cache,mode=max"
+# Send docker's stdout (the image digest from `-q`) to stderr so it doesn't
+# contaminate the hash on stdout.
+print -e "  exporting docker deps build cache"
+xt-build-docker --target deps --cache-to $"type=local,dest=($env.DIST_DIR)/buildx-cache,mode=max" | print -e
 
-# Emit the hash to stdout (fd 3).
-printf '%s\n' "$sum" >&3
+# Emit the hash to stdout.
+print $sum

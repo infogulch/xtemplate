@@ -1,38 +1,38 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nu
 #MISE description="Cross-compile release archives for all platforms"
-set -euo pipefail
-# shellcheck source=/dev/null
-source "$MISE_PROJECT_ROOT/.config/mise/lib.sh"
-cd "$ROOT"
+use ../lib.nu *
+cd $env.ROOT
 
-ver="$(xt_version)"
+let ver = (xt-version)
 # -w omits the DWARF symbol table. On darwin this avoids a slow Mach-O
 # post-edit step that embeds DWARF into the binary (Go issue #12259).
 # Release binaries don't need debug info, so strip it on all platforms.
-ldflags="-w $(xt_ldflags)"
+let ldflags = $"-w (xt-ldflags)"
 
 # Build with each platform's default buildmode (exe on linux/windows, pie on
 # darwin). Forcing -buildmode=exe overrides darwin's pie default which
 # invalidates prebuild caches.
 
-echo "Building xtemplate ${ver} for all platforms..."
+print $"Building xtemplate ($ver) for all platforms..."
 
-for os in linux darwin windows; do
-	for arch in amd64 arm64; do
-		name="xtemplate-${arch}-${os}"
-		dir="$DIST_DIR/$name"
-		exe="xtemplate"
-		[ "$os" = "windows" ] && exe="xtemplate.exe"
+for os in [linux darwin windows] {
+    for arch in [amd64 arm64] {
+        let name = $"xtemplate-($arch)-($os)"
+        let dir = ($env.DIST_DIR | path join $name)
+        let exe = (if $os == "windows" { "xtemplate.exe" } else { "xtemplate" })
 
-		printf '  %-28s building...' "$name"
-		start=$SECONDS
-		rm -rf "$dir"
-		mkdir -p "$dir"
-		GOOS="$os" GOARCH="$arch" go build -ldflags "$ldflags" -o "$dir/$exe" ./cmd
-		cp README.md LICENSE "$dir"
-		(cd "$DIST_DIR" && zip -jqr6 "${name}_${ver}.zip" "$name")
-		printf ' done (%ss)\n' "$((SECONDS - start))"
-	done
-done
+        print -n $"  ($name | fill --alignment left --width 28) building..."
+        let start = (date now)
+        rm -rf $dir
+        mkdir $dir
+        with-env { GOOS: $os, GOARCH: $arch } {
+            ^go build -ldflags $ldflags -o ($dir | path join $exe) ./cmd
+        }
+        ^cp README.md LICENSE $dir
+        do { cd $env.DIST_DIR; ^zip -jqr6 $"($name)_($ver).zip" $name }
+        let secs = ((((date now) - $start) / 1sec) | math round)
+        print $" done \(($secs)s\)"
+    }
+}
 
-echo "Archives written to $DIST_DIR/"
+print $"Archives written to ($env.DIST_DIR)/"
