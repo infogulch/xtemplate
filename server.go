@@ -3,6 +3,7 @@ package xtemplate
 import (
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -54,8 +55,15 @@ func (x *Server) Instance() *Instance {
 
 // Serve opens a net listener on `listen_addr` and serves requests from it.
 func (x *Server) Serve(listen_addr string) error {
-	x.config.Logger.Info("starting server")
-	return http.ListenAndServe(listen_addr, x.Handler())
+	ln, err := net.Listen("tcp", listen_addr)
+	if err != nil {
+		return err
+	}
+	// Log the actual bound address (resolved from listen_addr) so the port is
+	// visible in the logs, including when listen_addr requests an ephemeral
+	// port like ":0".
+	x.config.Logger.Info("starting server", slog.String("address", ln.Addr().String()))
+	return http.Serve(ln, x.Handler())
 }
 
 // Handler returns a `http.Handler` that always routes new requests to the
