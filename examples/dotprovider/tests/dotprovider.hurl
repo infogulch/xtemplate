@@ -4,4 +4,3 @@ HTTP 200
 body contains "Widget"
 body contains "Gadget"
 body contains "Gizmo"
-body contains "Gadget costs"

@@ -1,19 +1,31 @@
 <!doctype html>
 <html>
 <head>
-<title>Shop</title>
-<link rel="stylesheet" href="/assets/app.css" />
+    <title>Shop</title>
+    <link rel="stylesheet" href="/assets/app.css" />
+    <script src="/assets/triptych.js">/* polyfill the Triptych proposals https://triptychproject.org/ */</script>
+    <style>
+        .product-list { max-width: 20rem; }
+        .product-list li { display: flex; align-items: center; }
+        .product-list button { margin-left: auto; }
+    </style>
 </head>
 <body>
 <h1>Products</h1>
-<ul>
+<ul class="product-list">
     {{range .Shop.Products}}
-    <li>{{.Name}} - {{.Price}}</li>
+    <li>{{.Name}}<button action="/products/{{.ID}}" target=".product">View</button></li>
     {{end}}
 </ul>
-<h2>Detail lookup: .Shop.Product 2</h2>
-{{with .Shop.Product 2}}
-<p>{{.Name}} costs {{.Price}}</p>
-{{end}}
+<div class="product"></div>
 </body>
 </html>
+
+{{define "GET /products/{id}"}}
+<div class="product">
+    <h2>Product Detail</h2>
+    {{with .Shop.Product (.Req.PathValue "id" | atoi)}}
+    <p>{{.Name}} costs {{.Price}}</p>
+    {{end}}
+</div>
+{{end}}
