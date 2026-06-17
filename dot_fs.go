@@ -44,6 +44,11 @@ func (d Dir) Exists(filename string) bool {
 	return err == nil
 }
 
+func (d Dir) ExistsDir(dirname string) bool {
+	s, err := d.fs.Stat(dirname)
+	return err == nil && s.IsDir()
+}
+
 // Stat returns Stat of a filename.
 //
 // Note: if you intend to read the file, afterwards, calling .Open instead may
