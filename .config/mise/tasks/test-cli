@@ -11,10 +11,13 @@ let bin = ($env.DIST_DIR | path join xtemplate)
 # tears it down whether the suite passes or fails.
 let server = (job spawn {
     cd $work
-    ^$bin --loglevel -4 --config-file config.json out+err> xtemplate.log
+    ^$bin --loglevel -4 --config-file config.json --listen :0 out+err> xtemplate.log
 })
 
-let outcome = (try { run-hurl 8080 ($work | path join report); "ok" } catch { |e| $e.msg })
+# Bind an ephemeral port and read it back from the logged listen address, so the
+# suite never collides with whatever else is on the host.
+let port = (wait-listen-port ($work | path join xtemplate.log))
+let outcome = (try { run-hurl $port ($work | path join report); "ok" } catch { |e| $e.msg })
 job kill $server
 
 if $outcome != "ok" {

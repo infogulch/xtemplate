@@ -7,11 +7,15 @@ let work = (new-run-dir test-docker)
 xt-build-docker --target test --tags [xtemplate-test]
 
 do { ^docker rm -f xtemplate-test } | complete | ignore
-^docker run -d --name xtemplate-test -p 8081:80 -v $"($work):/app/dataw" xtemplate-test
+# Publish container port 80 to an ephemeral host port (rather than a fixed one)
+# so the suite never collides with whatever else is on the host, then ask docker
+# which port it picked.
+^docker run -d --name xtemplate-test -p 80 -v $"($work):/app/dataw" xtemplate-test
+let port = (^docker port xtemplate-test 80 | lines | first | parse --regex ':(?<port>[0-9]+)' | last | get port | into int)
 
 # Run the suite, then always capture the container log and remove it, whether
 # the suite passed or failed.
-let outcome = (try { run-hurl 8081 ($work | path join report); "ok" } catch { |e| $e.msg })
+let outcome = (try { run-hurl $port ($work | path join report); "ok" } catch { |e| $e.msg })
 do { ^docker logs xtemplate-test } out+err> ($work | path join docker.log)
 do { ^docker rm -f xtemplate-test } | complete | ignore
 

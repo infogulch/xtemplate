@@ -6,11 +6,18 @@ use ../lib.nu *
 let work = (new-run-dir test-caddy)
 let caddy = ($env.DIST_DIR | path join caddy)
 
+# Bind an ephemeral port so the suite never collides with whatever else is on
+# the host: rewrite the fixed listen address in the copied config to :0, then
+# read the port Caddy actually bound back from its log.
+let cfg = ($work | path join caddy.json)
+open --raw $cfg | str replace ':8082' ':0' | save -f $cfg
+
 # `caddy start` daemonizes, so it keeps running after this returns; stop it
 # again once the suite finishes, whether it passes or fails.
 do { cd $work; ^$caddy start --config caddy.json } out+err> ($work | path join caddy.log)
 
-let outcome = (try { run-hurl 8082 ($work | path join report); "ok" } catch { |e| $e.msg })
+let port = (wait-listen-port ($work | path join caddy.log))
+let outcome = (try { run-hurl $port ($work | path join report); "ok" } catch { |e| $e.msg })
 do { ^$caddy stop } | complete | ignore
 
 if $outcome != "ok" {
