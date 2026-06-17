@@ -1,0 +1,33 @@
+{{- define "head"}}
+<head>
+<meta charset="utf-8">
+<title>{{.Args | idx 0}}</title>
+{{- with $hash := .X.StaticFileHash `/assets/style.css`}}
+<link rel="stylesheet" href="/assets/style.css?hash={{$hash}}" integrity="{{$hash}}">
+{{- end}}
+</head>
+{{end}}
+{{- $file := print (.Req.PathValue `slug`) `.md` -}}
+{{- if not (.Posts.Exists $file)}}
+<!DOCTYPE html>
+<html lang="en">
+{{- template "head" withArgs . "Post not found"}}
+<body>
+<h1>Post not found</h1>
+<p><a href="/">Back home</a></p>
+</body>
+</html>
+{{- .Resp.ReturnStatus 404}}
+{{- end}}
+{{- $post := splitFrontMatter (.Posts.Read $file)}}
+<!DOCTYPE html>
+<html lang="en">
+{{- template "head" withArgs . $post.Meta.title}}
+<body>
+<h1>{{$post.Meta.title}}</h1>
+{{- with $post.Meta.date}}
+<p><em>{{.}}</em></p>
+{{- end}}
+{{markdown $post.Body}}
+</body>
+</html>

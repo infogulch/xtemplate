@@ -10,8 +10,21 @@
 <body>
 <h1>My Blog</h1>
 <ul>
-<li><a href="/posts/hello">Hello, world</a></li>
-<li><a href="/posts/caching">Why hashed asset URLs matter</a></li>
+
+{{- $posts := dict }}
+{{- range .Posts.ReadDir `.`}}
+{{- $slug := trimSuffix `.md` .Name}}
+{{- $post := splitFrontMatter ($.Posts.Read .Name)}}
+{{- $id := cat $post.Meta.date "_" .Name}}
+{{- $_ := set $posts $id (dict "Name" .Name "Meta" $post.Meta "Slug" $slug)}}
+{{- end}}
+
+{{- range $id := $posts | keys | sortAlpha}}
+{{- $post := get $posts $id}}
+<li>
+<a href="/posts/{{$post.Slug}}">{{$post.Meta.title}}</a> — {{$post.Meta.summary}}
+</li>
+{{- end}}
 </ul>
 </body>
 </html>
