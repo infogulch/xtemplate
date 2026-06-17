@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
+	"text/template"
 )
 
 type testGreeting struct {
@@ -140,6 +142,56 @@ func TestDotValuePartialCleanup(t *testing.T) {
 	if rec.gotErr == nil {
 		t.Error("expected the construction error to be passed to Cleanup")
 	}
+}
+
+// TestWithArgsOnRealDot exercises withArgs against a dot built by makeDot and
+// executed through text/template, covering both wrapping the whole dot and
+// scoping down to a single promoted field.
+func TestWithArgsOnRealDot(t *testing.T) {
+	d, err := makeDot([]DotConfig{testDotProvider{field: "Greeter"}})
+	if err != nil {
+		t.Fatalf("makeDot: %v", err)
+	}
+	val, err := d.value(context.Background(), httptest.NewRecorder(), httptest.NewRequest("GET", "/", nil))
+	if err != nil {
+		t.Fatalf("dot.value: %v", err)
+	}
+	dot := val.Interface()
+
+	render := func(t *testing.T, text string, data any) (string, error) {
+		t.Helper()
+		tmpl, err := template.New("t").Funcs(xtemplateFuncs).Parse(text)
+		if err != nil {
+			t.Fatalf("parse: %v", err)
+		}
+		var sb strings.Builder
+		err = tmpl.Execute(&sb, data)
+		return sb.String(), err
+	}
+
+	t.Run("wrap whole dot: fields stay promoted, Args added", func(t *testing.T) {
+		got, err := render(t, `{{template "sub" withArgs . "title"}}{{define "sub"}}{{.Args | idx 0}}:{{.Greeter.Greeting}}{{end}}`, dot)
+		if err != nil {
+			t.Fatalf("execute: %v", err)
+		}
+		if want := "title:hi"; got != want {
+			t.Errorf("rendered %q, want %q", got, want)
+		}
+	})
+
+	t.Run("wrap a single field: its members promote, others error", func(t *testing.T) {
+		got, err := render(t, `{{$a := withArgs .Greeter "foo"}}{{$a.Greeting}}:{{$a.Args | idx 0}}`, dot)
+		if err != nil {
+			t.Fatalf("execute: %v", err)
+		}
+		if want := "hi:foo"; got != want {
+			t.Errorf("rendered %q, want %q", got, want)
+		}
+
+		if _, err := render(t, `{{$a := withArgs .Greeter "foo"}}{{$a.Greeter}}`, dot); err == nil {
+			t.Error("expected an error accessing a field not present on the wrapped value")
+		}
+	})
 }
 
 func TestMakeDotNilProvider(t *testing.T) {
