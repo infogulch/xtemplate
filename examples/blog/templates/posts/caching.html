@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Why hashed asset URLs matter</title>
+{{- with $hash := .X.StaticFileHash `/assets/style.css`}}
+<link rel="stylesheet" href="/assets/style.css?hash={{$hash}}" integrity="{{$hash}}">
+{{- end}}
+</head>
+<body>
+<h1>Why hashed asset URLs matter</h1>
+<p>A <code>?hash=</code> query lets the asset be cached for a year, while a
+changed file gets a new URL. The <code>integrity</code> attribute is SRI:
+the browser refuses the file if its bytes don't match the hash.
+<a href="/">Back home</a></p>
+</body>
+</html>

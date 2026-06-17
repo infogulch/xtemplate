@@ -1,0 +1,14 @@
+{{define "GET /view/{name...}"}}
+<!doctype html>
+{{$name := .Req.PathValue "name"}}
+<title>{{$name}}</title>
+<link rel="stylesheet" href="/assets/app.css" />
+<h1>{{$name}}</h1>
+<p><a href="javascript:history.back()">&larr; back</a></p>
+{{if not (.FS.Exists $name)}}
+    <p>File <code>{{$name}}</code> not found.</p>
+    {{.Resp.ReturnStatus 404}}
+{{else}}
+    <pre>{{.FS.Read $name}}</pre>
+{{end}}
+{{end}}

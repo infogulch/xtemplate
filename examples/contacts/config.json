@@ -1,0 +1,10 @@
+{
+  "templates_dir": "templates",
+  "databases": [
+    {
+      "name": "DB",
+      "driver": "sqlite3",
+      "connstr": "file:./contacts.sqlite"
+    }
+  ]
+}

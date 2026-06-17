@@ -1,0 +1,5 @@
+#!/usr/bin/env nu
+#MISE description="Run the embedded example (http://localhost:9005)"
+#MISE depends=["build-example-embedded"]
+use ../lib.nu *
+^($env.DIST_DIR | path join example-embedded) --listen :9005

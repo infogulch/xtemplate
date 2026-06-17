@@ -1,0 +1,18 @@
+#!/usr/bin/env nu
+#MISE description="Build, serve, and integration-test the sse-chat example"
+#MISE depends=["build-cli"]
+use ../lib.nu *
+
+let work = (new-example-dir sse-chat)
+let bin = ($env.DIST_DIR | path join xtemplate)
+let server = (job spawn {
+    cd $work
+    ^$bin --loglevel -4 --config-file config.json --listen :0 out+err> server.log
+})
+let port = (wait-listen-port ($work | path join server.log))
+let outcome = (try { run-example $port $work; "ok" } catch { |e| $e.msg })
+job kill $server
+if $outcome != "ok" {
+    print -e $"test-example-sse-chat failed: ($outcome)"
+    exit 1
+}

@@ -1,0 +1,5 @@
+#!/usr/bin/env nu
+#MISE description="Build the embedded example binary into dist/"
+use ../lib.nu *
+cd $env.ROOT
+^go build -o ($env.DIST_DIR | path join example-embedded) ./examples/embedded

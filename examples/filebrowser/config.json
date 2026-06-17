@@ -1,0 +1,9 @@
+{
+  "templates_dir": "templates",
+  "directories": [
+    {
+      "name": "FS",
+      "path": "files"
+    }
+  ]
+}

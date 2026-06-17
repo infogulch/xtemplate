@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#MISE description="Run all example apps at once; browse them at http://localhost:9000 (pass a port to change the base, e.g. mise run examples 9100)"
+#MISE depends=["build-cli", "build-example-embedded", "build-example-dotprovider"]
+#
+# This task is bash, not nu, on purpose: it runs several servers in the
+# foreground and must stop them all on Ctrl+C. nushell can't run cleanup after a
+# SIGINT (it's killed by the signal first; see nushell #13394/#18090), and its
+# job-spawned servers survive the interrupt and orphan onto their ports. bash
+# traps the signal, kills the children it started, and exits cleanly.
+set -o pipefail
+
+# Optional first argument overrides the base port (the hub's port); each example
+# runs at base + its offset. Defaults to 9000.
+base="${1:-9000}"
+
+root="${MISE_PROJECT_ROOT:-$(git rev-parse --show-toplevel)}"
+dist="$root/dist"
+xt="$dist/xtemplate"
+logs="$dist/runs/examples-logs"
+mkdir -p "$logs"
+
+pids=()
+
+# start <name> <offset> <binary> <use_config>
+start() {
+    local name=$1 port=$((base + $2)) bin=$3 cfg=$4
+    # Run in the example's own dir so template watching/live-reload work, the
+    # way the individual example-<name> tasks do. exec so $! is the server
+    # itself (not the subshell), making the later kill reliable.
+    (
+        cd "$root/examples/$name" || exit 1
+        if [ -n "$cfg" ]; then
+            exec "$bin" --config-file config.json --listen ":$port"
+        else
+            exec "$bin" --listen ":$port"
+        fi
+    ) >"$logs/$name.log" 2>&1 &
+    pids+=($!)
+}
+
+start hub         0 "$xt" 1
+start contacts    1 "$xt" 1
+start sse-chat    2 "$xt" 1
+start blog        3 "$xt" 1
+start filebrowser 4 "$xt" 1
+start embedded    5 "$dist/example-embedded" ""
+start dotprovider 6 "$dist/example-dotprovider" 1
+
+stop() {
+    kill "${pids[@]}" 2>/dev/null
+    wait 2>/dev/null
+    exit 0
+}
+trap stop INT TERM
+
+cat <<EOF
+xtemplate examples are starting:
+  http://localhost:$((base + 0))  hub
+  http://localhost:$((base + 1))  contacts
+  http://localhost:$((base + 2))  sse-chat
+  http://localhost:$((base + 3))  blog
+  http://localhost:$((base + 4))  filebrowser
+  http://localhost:$((base + 5))  embedded
+  http://localhost:$((base + 6))  dotprovider
+
+Browse them all at  ->  http://localhost:$base
+Logs: $logs
+Press Ctrl+C to stop all servers.
+EOF
+
+# Block until interrupted; the trap stops the servers and exits cleanly.
+wait

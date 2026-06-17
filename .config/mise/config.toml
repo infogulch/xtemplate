@@ -18,7 +18,21 @@ depends = ["lint-nu", "lint-go"]
 
 [tasks.test]
 description = "Run all tests and lints"
-depends = ["lint", "gotest", "test-caddy", "test-cli", "test-docker"]
+depends = ["lint", "gotest", "test-caddy", "test-cli", "test-docker", "test-examples"]
+
+# Build, serve, and integration-test every app under examples/. Each
+# test-example-<name> task is a standalone Nushell script under tasks/; they run
+# in parallel on distinct ports (8090-8095). See examples/README.md.
+[tasks.test-examples]
+description = "Integration-test every example app under examples/"
+depends = [
+    "test-example-contacts",
+    "test-example-sse-chat",
+    "test-example-blog",
+    "test-example-filebrowser",
+    "test-example-embedded",
+    "test-example-dotprovider",
+]
 
 # The full pipeline. `depends` run first (in parallel where independent); only
 # if they all succeed do the `depends_post` artifact builds run. This replaces

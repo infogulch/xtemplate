@@ -1,0 +1,9 @@
+<!doctype html>
+<title>xtemplate embedded example</title>
+<link rel="stylesheet" href="/assets/app.css" />
+<h1>Served from an embedded filesystem</h1>
+<p>
+    This page is baked into the binary via <code>//go:embed</code>. There is no
+    templates directory on disk at runtime — it's a single, self-contained
+    binary you can run from anywhere.
+</p>

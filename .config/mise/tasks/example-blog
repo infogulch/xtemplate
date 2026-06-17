@@ -1,0 +1,6 @@
+#!/usr/bin/env nu
+#MISE description="Run the blog example (http://localhost:9003)"
+#MISE depends=["build-cli"]
+use ../lib.nu *
+cd ($env.ROOT | path join examples blog)
+^($env.DIST_DIR | path join xtemplate) --config-file config.json --listen :9003

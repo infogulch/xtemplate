@@ -1,0 +1,6 @@
+#!/usr/bin/env nu
+#MISE description="Run the sse-chat example (http://localhost:9002)"
+#MISE depends=["build-cli"]
+use ../lib.nu *
+cd ($env.ROOT | path join examples sse-chat)
+^($env.DIST_DIR | path join xtemplate) --config-file config.json --listen :9002

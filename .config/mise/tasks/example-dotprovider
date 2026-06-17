@@ -1,0 +1,6 @@
+#!/usr/bin/env nu
+#MISE description="Run the dotprovider example (http://localhost:9006)"
+#MISE depends=["build-example-dotprovider"]
+use ../lib.nu *
+cd ($env.ROOT | path join examples dotprovider)
+^($env.DIST_DIR | path join example-dotprovider) --config-file config.json --listen :9006

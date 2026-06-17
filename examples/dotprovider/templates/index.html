@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+<head>
+<title>Shop</title>
+<link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+<h1>Products</h1>
+<ul>
+    {{range .Shop.Products}}
+    <li>{{.Name}} - {{.Price}}</li>
+    {{end}}
+</ul>
+<h2>Detail lookup: .Shop.Product 2</h2>
+{{with .Shop.Product 2}}
+<p>{{.Name}} costs {{.Price}}</p>
+{{end}}
+</body>
+</html>

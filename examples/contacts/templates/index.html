@@ -1,0 +1,48 @@
+{{define "INIT contacts-setup"}}
+{{$_ := .DB.Exec "CREATE TABLE IF NOT EXISTS contacts (id INTEGER PRIMARY KEY, name TEXT NOT NULL, phone TEXT)"}}
+{{end}}
+
+{{define "POST /contacts"}}
+{{.Req.ParseForm}}
+{{if eq (.Req.FormValue "name") ""}}{{failf "name is required"}}{{end}}
+{{$_ := .DB.Exec "INSERT INTO contacts (name, phone) VALUES (?, ?)" (.Req.FormValue "name") (.Req.FormValue "phone")}}
+{{.Resp.AddHeader "Location" "/"}}
+{{.Resp.ReturnStatus 303}}
+{{end}}
+
+{{define "POST /contacts/{id}/delete"}}
+{{$_ := .DB.Exec "DELETE FROM contacts WHERE id = ?" (.Req.PathValue "id")}}
+{{.Resp.AddHeader "Location" "/"}}
+{{.Resp.ReturnStatus 303}}
+{{end}}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Contacts</title>
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+  <h1>Contacts</h1>
+
+  <form method="post" action="/contacts">
+    <input name="name" placeholder="Name" required>
+    <input name="phone" placeholder="Phone">
+    <button type="submit">Add</button>
+  </form>
+
+  <ul>
+    {{range .DB.QueryRows "SELECT id, name, phone FROM contacts ORDER BY name"}}
+    <li>
+      <strong>{{.name}}</strong> {{.phone}}
+      <form method="post" action="/contacts/{{.id}}/delete" style="display:inline">
+        <button type="submit">Delete</button>
+      </form>
+    </li>
+    {{else}}
+    <li>No contacts yet.</li>
+    {{end}}
+  </ul>
+</body>
+</html>

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>My Blog</title>
+{{- with $hash := .X.StaticFileHash `/assets/style.css`}}
+<link rel="stylesheet" href="/assets/style.css?hash={{$hash}}" integrity="{{$hash}}">
+{{- end}}
+</head>
+<body>
+<h1>My Blog</h1>
+<ul>
+<li><a href="/posts/hello">Hello, world</a></li>
+<li><a href="/posts/caching">Why hashed asset URLs matter</a></li>
+</ul>
+</body>
+</html>

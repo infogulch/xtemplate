@@ -5,7 +5,13 @@ cd $env.ROOT
 
 # There's no shellcheck equivalent for Nushell, but `nu --ide-check` reports
 # parse/compile diagnostics. Treat any Error-severity diagnostic as a failure.
-let files = ([".config/mise/lib.nu"] ++ (glob ".config/mise/tasks/*"))
+# Check lib.nu plus the nu task scripts. Most tasks are nu, but a few (e.g. the
+# `examples` orchestrator) are bash on purpose; feeding those to
+# `nu --ide-check` would report spurious parse errors, so filter the globbed
+# tasks by the nu shebang. lib.nu has no shebang, so include it explicitly.
+let tasks = (glob ".config/mise/tasks/*"
+    | where { |f| (open --raw $f | lines | first | default "") =~ 'env nu' })
+let files = ([".config/mise/lib.nu"] ++ $tasks)
 
 let bad = ($files | where { |f|
     let errors = (^nu --ide-check 1000 $f

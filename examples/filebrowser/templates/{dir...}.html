@@ -1,0 +1,26 @@
+<!doctype html>
+<title>filebrowser</title>
+<link rel="stylesheet" href="/assets/app.css" />
+{{$dir := .Req.PathValue "dir"}}
+{{if not (.FS.ExistsDir $dir)}}
+    <h1>404 Not Found</h1>
+    <p><a href="javascript:history.back()">&larr; back</a></p>
+    {{.Resp.ReturnStatus 404}}
+{{end}}
+{{if and (not (eq $dir "")) (not (hasSuffix "/" $dir))}}
+    {{.Resp.SetHeader "Location" (print "/" $dir "/")}}
+    {{.Resp.ReturnStatus 307}}
+{{end}}
+<h1>Files in {{$dir}}</h1>
+{{if ne $dir "/"}}<p><a href="javascript:history.back()">&larr; back</a></p>{{end}}
+<ul>
+    {{range .FS.ReadDir $dir}}
+    <li>
+        {{if .IsDir}}
+        <a href="/{{.Name}}/">[dir] {{.Name}}/</a>
+        {{else}}
+        <a href="/view/{{$dir}}{{.Name}}">{{.Name}}</a> ({{.Size}} bytes)
+        {{end}}
+    </li>
+    {{end}}
+</ul>

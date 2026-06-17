@@ -98,16 +98,32 @@ export def new-run-dir [target: string]: nothing -> string {
     $dir
 }
 
-# Wait for a server to accept requests on its /ready endpoint. curl retries
-# through the brief startup window, where connection errors are expected;
-# capture curl's output and surface it only if the probe ultimately fails, so
-# those transient retry messages don't clutter the log.
+# Wait for a server to accept requests on /. curl retries through the brief
+# startup window, where connection errors are expected; capture curl's output
+# and surface it only if the probe ultimately fails, so those transient retry
+# messages don't clutter the log.
 export def wait-ready [port: int, retries: int = 10] {
-    let probe = (^curl -fsS --retry $retries --retry-all-errors --retry-connrefused --retry-delay 1 $"http://localhost:($port)/ready" | complete)
+    let probe = (^curl -fsS --retry $retries --retry-all-errors --retry-connrefused --retry-delay 1 $"http://localhost:($port)/" | complete)
     if $probe.exit_code != 0 {
         print -e $probe.stderr
         error make --unspanned { msg: $"readiness probe for port ($port) failed" }
     }
+}
+
+# Wait for a server started on an ephemeral port (`:0`) to log its chosen
+# address, then return the port it bound, so integration tests never collide
+# with whatever else happens to be running on the host. Matches both xtemplate's
+# slog output (`...address=[::]:PORT`) and Caddy's JSON (`"actual_address":
+# "[::]:PORT"`).
+export def wait-listen-port [log: string] {
+    for _ in 1..50 {
+        if ($log | path exists) {
+            let m = (open --raw $log | parse --regex '(?:actual_address":"|address=)[^" \n]*:(?<port>[0-9]+)')
+            if not ($m | is-empty) { return ($m | last | get port | into int) }
+        }
+        sleep 100ms
+    }
+    error make --unspanned { msg: $"server did not report a listen address in ($log)" }
 }
 
 # Run the whole hurl suite against a running server. The .hurl files hardcode
@@ -128,12 +144,17 @@ export def new-example-dir [name: string]: nothing -> string {
     let stamp = (date now | format date '%Y%m%d-%H%M%S')
     let dir = ($runs | path join $"($stamp)-example-($name)")
     ^cp -r ($env.ROOT | path join examples $name) $dir
+    # Trim the working copy to what a test run actually needs (it runs the
+    # prebuilt binary): drop any *.sqlite a dev session left behind so each run
+    # starts from an empty database, and drop Go sources so copies under dist/
+    # don't get picked up by `golangci-lint run ./...`.
+    glob $"($dir)/**/*.sqlite*" | append (glob $"($dir)/**/*.go") | each { |f| rm -f $f }
     ^ln -sfn $dir ($runs | path join $"latest-example-($name)")
     glob $"($runs)/[0-9]*-example-($name)" | sort | reverse | skip 5 | each { |old| rm -rf $old }
     $dir
 }
 
-# Poll an example server's /ready endpoint, then run its hurl suite (the .hurl
+# Poll an example server's endpoint, then run its hurl suite (the .hurl
 # files under <dir>/tests/) against the given port. Example .hurl files hardcode
 # localhost:8080; --connect-to remaps that to the example's actual port, the
 # same convention run-hurl uses for the main suite.
