@@ -14,7 +14,7 @@ import (
 	"github.com/infogulch/watch"
 )
 
-type Args struct {
+type Config struct {
 	xtemplate.Config
 	Watch          []string `json:"watch_dirs" arg:",separate"`
 	WatchTemplates bool     `json:"watch_templates"`
@@ -24,59 +24,40 @@ type Args struct {
 	ConfigFiles    []string `json:"-" arg:"-f,--config-file,separate"`
 }
 
-func (Args) Epilogue() string {
-	return `Examples:
-    Listen on port 80:
-    $ ./xtemplate --listen :80
+var _ Configurable = (*Config)(nil)
 
-    Specify a context directory and reload when it changes:
-    $ ./xtemplate --template-dir public --watch-templates
+func (a *Config) appconfig() *Config { return a }
 
-    Parse template files matching a custom extension and minify them:
-    $ ./xtemplate --template-ext ".go.html" --minify`
+// these allow for build-time overrides with:
+//
+//	-ldflags="-X 'github.com/infogulch/xtemplate/app.defaultWatchTemplates=false'"
+//
+// Used by the default docker build to adjust xtemplate's defaults to better
+// suit to that environment.
+var defaultWatchTemplates = "true"
+var defaultListenAddress = "0.0.0.0:8080"
+
+// SetDefaults sets the default values for this Config.
+func (a *Config) SetDefaults() {
+	a.WatchTemplates = defaultWatchTemplates == "true"
+	a.Listen = defaultListenAddress
+	a.Logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(a.LogLevel)}))
+	a.Config.SetDefaults()
 }
 
-// mergeConfig resolves the final configuration by applying JSON sources named by
-// the already-parsed CLI flags onto a fresh defaults base, then re-applying the
-// CLI args so flags take precedence over JSON. The resulting precedence is
-// CLI flags > JSON (--config-file files, then --config values) > defaults.
-//
-// readFile loads --config-file contents (injectable for testing); it may be nil
-// when there are no config files to read.
-func mergeConfig(argv []string, cli Args, readFile func(string) ([]byte, error)) (Args, error) {
-	jsonConfig := defaultArgs
-	decoded := false
-	for _, name := range cli.ConfigFiles {
-		data, err := readFile(name)
-		if err != nil {
-			return Args{}, fmt.Errorf("failed to read config file %q: %w", name, err)
-		}
-		if err := json.Unmarshal(data, &jsonConfig); err != nil {
-			return Args{}, fmt.Errorf("failed to decode config file %q: %w", name, err)
-		}
-		decoded = true
-	}
-	for _, conf := range cli.Configs {
-		if err := json.Unmarshal([]byte(conf), &jsonConfig); err != nil {
-			return Args{}, fmt.Errorf("failed to decode --config value: %w", err)
-		}
-		decoded = true
-	}
-	if !decoded {
-		return cli, nil
-	}
+// Epilogue is called by arg when the user requests help via the cli. Can be
+// overridden by a Configurable implementation.
+func (Config) Epilogue() string {
+	arg0 := os.Args[0]
+	return fmt.Sprintf(`Examples:
+    Listen on port 80:
+    ❯ %[1]s --listen :80
 
-	// Re-apply the CLI flags over the JSON-derived config. go-arg treats the
-	// nonzero fields already present in jsonConfig as defaults, so JSON values
-	// survive unless a corresponding flag was passed.
-	p, err := arg.NewParser(arg.Config{}, &jsonConfig)
-	if err != nil {
-		return Args{}, err
-	}
-	if err := p.Parse(argv); err != nil {
-		return Args{}, fmt.Errorf("failed to re-apply cli flags over json config: %w", err)
-	}
-	return jsonConfig, nil
+    Specify a template directory and reload when it changes:
+    ❯ %[1]s --template-dir public --watch-templates
+
+    Parse template files matching a custom extension and minify them:
+    ❯ %[1]s --template-ext ".go.html" --minify`, arg0)
 }
 
 // version is stamped at build time for releases via
@@ -85,7 +66,7 @@ func mergeConfig(argv []string, cli Args, readFile func(string) ([]byte, error))
 // the module/VCS info embedded by the Go toolchain.
 var version = ""
 
-func (Args) Version() string {
+func (Config) Version() string {
 	if version != "" {
 		return version
 	}
@@ -118,71 +99,128 @@ func (Args) Version() string {
 	return "development"
 }
 
-var defaultWatchTemplates = "true"
-var defaultListenAddress = "0.0.0.0:8080"
-var defaultArgs = Args{WatchTemplates: defaultWatchTemplates == "true", Listen: defaultListenAddress}
-
 // Main can be called from your func main() if you want your program to act like
 // the default xtemplate cli, or use it as a reference for making your own.
-// Provide configs to override the defaults like:
+// Provide config options to override the defaults like:
 //
 //	app.Main(xtemplate.WithFooConfig())
 func Main(overrides ...xtemplate.Option) {
-	config := defaultArgs
-	var log *slog.Logger
+	config, err := LoadConfig(&Config{}, nil)
+	if err == arg.ErrHelp || err == arg.ErrVersion {
+		os.Exit(0)
+	}
+	if err != nil {
+		config.appconfig().Logger.Error("failed to load configuration", slog.Any("error", err))
+		os.Exit(1)
+	}
+	Serve(config, overrides...)
+}
 
-	// Configuration precedence, highest priority first:
-	//
-	//  1. CLI flags
-	//  2. JSON from --config values and --config-file files (later sources
-	//     override earlier ones; files are applied before inline values)
-	//  3. built-in defaults (defaultArgs + struct `default` tags)
-	//
-	// This is implemented with a two-pass parse: parse the CLI once to discover
-	// which config files/values to load, decode those onto a fresh defaults base,
-	// then re-parse the CLI over the decoded result so flags win over JSON.
+// Configurable is satisfied by *Config and by a pointer to any struct that embeds
+// Config and implements New. Implementers may implement SetDefaults and Epilogue
+// at their discretion, since the embedded Config implements them natively.
+type Configurable interface {
+	appconfig() *Config
+
+	// SetDefaults can be overridden to provide custom default values
+	// configuration defined by the Configurable
+	SetDefaults()
+
+	// Epilogue can be overridden to provide a custom epilogue message for help
+	// output. Consider combining your custom epilogue with the embedded Config's
+	// Epilogue.
+	Epilogue() string
+}
+
+// LoadConfig loads the app configuration, merging sources in priority order:
+//
+//	CLI flags > JSON cli > JSON file > defaults
+//
+// This function will load configuration into any struct implementing the
+// Configurable interface. To get the merged configuration, call this function
+// with a pointer to the config struct. Pass nil `args` to use the default os.Args.
+//
+// Note: to give CLI args precedence over JSON sources, CLI args are parsed twice:
+// first to discover which config files to load, then again at the end to override any
+// values set by json sources.
+func LoadConfig[T Configurable](config T, args []string) (T, error) {
+	config.appconfig().SetDefaults()
+	config.SetDefaults()
+	if args == nil {
+		args = os.Args[1:]
+	}
+
+	// parse CLI args to discover config files/values to load
 	{
-		arg.MustParse(&config)
-		config.SetDefaults()
-
-		level := config.LogLevel
-		log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(level)}))
-
-		merged, err := mergeConfig(os.Args[1:], config, os.ReadFile)
+		p, err := arg.NewParser(arg.Config{}, config)
 		if err != nil {
-			log.Error("failed to load configuration", slog.Any("error", err))
-			os.Exit(1)
+			return config, err
 		}
-		config = merged
+		// call MustParse to handle arg parse errors and version/help flags
+		p.MustParse(args)
+	}
 
-		if config.LogLevel != level {
-			log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(config.LogLevel)}))
+	// parse json file/cli config
+	appconfig := config.appconfig()
+	for _, name := range appconfig.ConfigFiles {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			return config, fmt.Errorf("failed to read config file %q: %w", name, err)
 		}
+		if err := json.Unmarshal(data, config); err != nil {
+			return config, fmt.Errorf("failed to decode config file %q: %w", name, err)
+		}
+	}
+	for _, conf := range appconfig.Configs {
+		if err := json.Unmarshal([]byte(conf), config); err != nil {
+			return config, fmt.Errorf("failed to decode --config value: %w", err)
+		}
+	}
 
-		config.Logger = log
+	// parse CLI args again to preserve the defined config precedence
+	{
+		p, err := arg.NewParser(arg.Config{}, config)
+		if err != nil {
+			return config, err
+		}
+		if err := p.Parse(args); err != nil {
+			return config, fmt.Errorf("failed to parse cli flags: %w", err)
+		}
+	}
 
-		log.Debug("loaded configuration", slog.Any("config", &config))
+	appconfig.Logger.Debug("loaded configuration", slog.Any("config", config))
+	return config, nil
+}
+
+// Serve builds the xtemplate server from config and serves it, owning the
+// reload semantics. If config.Reload is already set it drives reloads (e.g. a
+// remote source set by the caller); otherwise Serve falls back to watching
+// local template directories with fsnotify. This call blocks until the server
+// stops.
+func Serve(configurable Configurable, overrides ...xtemplate.Option) {
+	config := configurable.appconfig()
+
+	if config.Reload == nil && config.WatchTemplates && config.TemplatesFS == nil {
+		config.Watch = append(config.Watch, config.TemplatesDir)
+	}
+
+	if config.Reload == nil && len(config.Watch) != 0 {
+		watchCh := make(chan []xtemplate.Option)
+		_, err := watch.Watch(config.Watch, 200*time.Millisecond, config.Logger.WithGroup("fswatch"), func() bool {
+			watchCh <- nil
+			return true
+		})
+		if err != nil {
+			config.Logger.Info("failed to watch directories", slog.Any("error", err), slog.Any("directories", config.Watch))
+			os.Exit(4)
+		}
+		config.Reload = watchCh
 	}
 
 	server, err := config.Server(overrides...)
 	if err != nil {
-		log.Error("failed to load xtemplate", slog.Any("error", err))
+		config.Logger.Error("failed to start server", slog.Any("error", err))
 		os.Exit(2)
 	}
-
-	if config.WatchTemplates && config.TemplatesFS == nil {
-		config.Watch = append(config.Watch, config.TemplatesDir)
-	}
-	if len(config.Watch) != 0 {
-		_, err := watch.Watch(config.Watch, 200*time.Millisecond, log.WithGroup("fswatch"), func() bool {
-			_ = server.Reload()
-			return true
-		})
-		if err != nil {
-			log.Info("failed to watch directories", slog.Any("error", err), slog.Any("directories", config.Watch))
-			os.Exit(4)
-		}
-	}
-
-	log.Info("server stopped", slog.Any("exit", server.Serve(config.Listen)))
+	config.Logger.Info("server stopped", slog.Any("exit", server.Serve(config.Listen)))
 }
