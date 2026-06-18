@@ -13,7 +13,7 @@ import (
 
 func New() (c *Config) {
 	c = &Config{}
-	c.Defaults()
+	c.SetDefaults()
 	return
 }
 
@@ -68,7 +68,7 @@ type CrossOriginConfig struct {
 }
 
 // FillDefaults sets default values for unset fields
-func (config *Config) Defaults() *Config {
+func (config *Config) SetDefaults() *Config {
 	if config.TemplatesDir == "" {
 		config.TemplatesDir = "templates"
 	}

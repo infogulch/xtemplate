@@ -49,7 +49,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 	log := slog.New(zapslog.NewHandler(ctx.Logger().Core())).WithGroup("xtemplate-caddy")
 
 	m.Logger = log
-	m.Defaults()
+	m.SetDefaults()
 	m.Ctx, m.cancel = context.WithCancel(ctx.Context)
 
 	// Resolve any `xtemplate.funcs.*` modules into template FuncMaps and pass

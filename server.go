@@ -30,7 +30,7 @@ type Server struct {
 
 // Build creates a new Server from an xtemplate.Config.
 func (config Config) Server(cfgs ...Option) (*Server, error) {
-	if _, err := config.Defaults().Options(cfgs...); err != nil {
+	if _, err := config.SetDefaults().Options(cfgs...); err != nil {
 		return nil, err
 	}
 

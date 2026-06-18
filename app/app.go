@@ -143,7 +143,7 @@ func Main(overrides ...xtemplate.Option) {
 	// then re-parse the CLI over the decoded result so flags win over JSON.
 	{
 		arg.MustParse(&config)
-		config.Defaults()
+		config.SetDefaults()
 
 		level := config.LogLevel
 		log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(level)}))

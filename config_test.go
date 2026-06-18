@@ -12,7 +12,7 @@ func TestConfigMinifyDefault(t *testing.T) {
 	// Defaults() must default an unset (nil) Minify to true, so the documented
 	// default holds regardless of construction path (not just via New()).
 	c := &Config{}
-	c.Defaults()
+	c.SetDefaults()
 	if c.Minify == nil || !*c.Minify {
 		t.Error("Defaults() should default an unset Minify to true")
 	}
@@ -22,7 +22,7 @@ func TestConfigMinifyDefault(t *testing.T) {
 	// could never be disabled via the Go API.
 	explicitFalse := false
 	c = &Config{Minify: &explicitFalse}
-	c.Defaults()
+	c.SetDefaults()
 	if c.Minify == nil || *c.Minify {
 		t.Error("Defaults() must not clobber an explicit Minify=false")
 	}

@@ -58,7 +58,7 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 
 	build := &builder{
 		Instance: &Instance{
-			config: *config.Defaults(),
+			config: *config.SetDefaults(),
 			id:     nextInstanceIdentity.Add(1),
 		},
 		InstanceStats: &InstanceStats{},

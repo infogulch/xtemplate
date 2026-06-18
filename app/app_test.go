@@ -18,7 +18,7 @@ func parseCLI(t *testing.T, argv []string) Args {
 	if err := p.Parse(argv); err != nil {
 		t.Fatalf("failed to parse %v: %v", argv, err)
 	}
-	cfg.Defaults()
+	cfg.SetDefaults()
 	return cfg
 }
 
