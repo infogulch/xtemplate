@@ -20,7 +20,7 @@ func New() (c *Config) {
 
 type Config struct {
 	// The path to the templates directory within the filesystem. Default `templates`.
-	TemplatesDir string `json:"templates_dir,omitempty" arg:"-t,--template-dir" default:"templates"`
+	TemplatesDir string `json:"templates_dir,omitempty" arg:"-t,--template-dir,--templates-dir" default:"templates"`
 
 	// The FS to load templates from. Default: a FS made from the current working directory.
 	TemplatesFS afero.Fs `json:"-" arg:"-"`
