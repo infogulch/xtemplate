@@ -189,6 +189,35 @@ func TestServeHTTP_DirProvider(t *testing.T) {
 	}
 }
 
+func TestServer_EmptyFSWithHandler(t *testing.T) {
+	// xtemplate must build from an empty FS (zero routes) so a server can start
+	// before its templates are available, and custom handlers must still serve.
+	hit := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit = true
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	cfg := New()
+	server, err := cfg.Server(
+		WithTemplateFS(afero.NewMemMapFs()),
+		WithHandler("POST /hook", handler),
+	)
+	if err != nil {
+		t.Fatalf("failed to build server from empty FS: %v", err)
+	}
+	defer server.Stop()
+
+	w := httptest.NewRecorder()
+	server.Handler().ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/hook", nil))
+	if !hit {
+		t.Error("custom handler was not invoked")
+	}
+	if w.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusNoContent)
+	}
+}
+
 func TestServer_Lifecycle(t *testing.T) {
 	fs := newMemFS(t, map[string]string{
 		"index.html": "INDEX-MARKER",

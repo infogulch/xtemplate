@@ -114,6 +114,15 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 		return nil, nil, nil, fmt.Errorf("error scanning files: %w", err)
 	}
 
+	for _, route := range build.config.Handlers {
+		pattern, handler := route.Pattern, route.Handler
+		if err := catch(fmt.Sprintf("add custom handler to servemux '%s'", pattern), func() { build.router.Handle(pattern, handler) }); err != nil {
+			return nil, nil, nil, err
+		}
+		build.routes = append(build.routes, InstanceRoute{pattern, handler})
+		build.Routes += 1
+	}
+
 	dcInstance := dotXProvider{build.Instance}
 	dcReq := dotReqProvider{}
 	dcResp := dotRespProvider{}

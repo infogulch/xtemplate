@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
+	"net/http"
 
 	"github.com/spf13/afero"
 )
@@ -53,12 +54,23 @@ type Config struct {
 	// Additional functions to add to the template execution context.
 	FuncMaps []template.FuncMap `json:"-" arg:"-"`
 
+	// Custom HTTP handlers, mounted on the router alongside template and static
+	// file routes. Registered on every instance, so they survive reloads.
+	Handlers []HandlerRoute `json:"-" arg:"-"`
+
 	// The instance context that is threaded through dot providers and can
 	// cancel the server. Defaults to `context.Background()`.
 	Ctx context.Context `json:"-" arg:"-"`
 
 	// The default logger. Defaults to `slog.Default()`.
 	Logger *slog.Logger `json:"-" arg:"-"`
+}
+
+// HandlerRoute pairs a ServeMux pattern with an http.Handler.
+type HandlerRoute struct {
+	// Pattern uses net/http.ServeMux syntax (e.g. "POST /foo/{bar}").
+	Pattern string
+	Handler http.Handler
 }
 
 type CrossOriginConfig struct {
@@ -135,6 +147,18 @@ func WithLogger(logger *slog.Logger) Option {
 func WithFuncMaps(fm ...template.FuncMap) Option {
 	return func(c *Config) error {
 		c.FuncMaps = append(c.FuncMaps, fm...)
+		return nil
+	}
+}
+
+// WithHandler adds a custom HTTP handler at pattern (net/http.ServeMux syntax,
+// e.g. "POST /hook").
+func WithHandler(pattern string, h http.Handler) Option {
+	return func(c *Config) error {
+		if h == nil {
+			return fmt.Errorf("nil handler for pattern %q", pattern)
+		}
+		c.Handlers = append(c.Handlers, HandlerRoute{pattern, h})
 		return nil
 	}
 }
