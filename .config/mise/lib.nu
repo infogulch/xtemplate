@@ -63,12 +63,17 @@ export def xt-image-tags []: nothing -> list<string> {
     }
 }
 
-# Create a working/log directory for one test run, grouped under dist/runs/ and
-# prefixed with a sortable timestamp so runs list in chronological order (newest
-# last). Maintains a `latest-<target>` symlink and prunes all but the newest few
-# runs per target. Returns the new directory path.
+# Create a working/log directory for one test run, grouped under dist/_runs/
+# and prefixed with a sortable timestamp so runs list in chronological order
+# (newest last). Maintains a `latest-<target>` symlink and prunes all but the
+# newest few runs per target. Returns the new directory path.
+#
+# The dir is named with a leading underscore (dist/_runs) so the Go toolchain
+# ignores it: `go test ./...` and `golangci-lint run ./...` skip directories
+# whose names begin with `.` or `_`. Without that, those tree walks race with
+# the concurrent create/delete churn here when run in parallel under `ci`.
 export def new-run-dir [target: string]: nothing -> string {
-    let runs = ($env.DIST_DIR | path join runs)
+    let runs = ($env.DIST_DIR | path join _runs)
     mkdir $runs
 
     let stamp = (date now | format date '%Y%m%d-%H%M%S')
@@ -135,20 +140,20 @@ export def run-hurl [port: int, report: string] {
 }
 
 # Copy an example app's directory (examples/<name>/) into a fresh run dir under
-# dist/runs and return its path, so integration runs get a clean working copy
+# dist/_runs and return its path, so integration runs get a clean working copy
 # (fresh sqlite, etc.) and can run in parallel without stepping on each other.
-# Mirrors new-run-dir. Keeps only the 5 newest runs per example.
+# Mirrors new-run-dir (including the `_runs` name that keeps the Go toolchain
+# out of these dirs). Keeps only the 5 newest runs per example.
 export def new-example-dir [name: string]: nothing -> string {
-    let runs = ($env.DIST_DIR | path join runs)
+    let runs = ($env.DIST_DIR | path join _runs)
     mkdir $runs
     let stamp = (date now | format date '%Y%m%d-%H%M%S')
     let dir = ($runs | path join $"($stamp)-example-($name)")
     ^cp -r ($env.ROOT | path join examples $name) $dir
-    # Trim the working copy to what a test run actually needs (it runs the
-    # prebuilt binary): drop any *.sqlite a dev session left behind so each run
-    # starts from an empty database, and drop Go sources so copies under dist/
-    # don't get picked up by `golangci-lint run ./...`.
-    glob $"($dir)/**/*.sqlite*" | append (glob $"($dir)/**/*.go") | each { |f| rm -f $f }
+    # Drop any *.sqlite a dev session left behind so each run starts from an
+    # empty database. (The copied Go sources can stay: dist/_runs is invisible
+    # to `go test ./...` and `golangci-lint run ./...` thanks to the `_` prefix.)
+    glob $"($dir)/**/*.sqlite*" | each { |f| rm -f $f }
     ^ln -sfn $dir ($runs | path join $"latest-example-($name)")
     glob $"($runs)/[0-9]*-example-($name)" | sort | reverse | skip 5 | each { |old| rm -rf $old }
     $dir

@@ -16,7 +16,7 @@ base="${1:-9000}"
 root="${MISE_PROJECT_ROOT:-$(git rev-parse --show-toplevel)}"
 dist="$root/dist"
 xt="$dist/xtemplate"
-logs="$dist/runs/examples-logs"
+logs="$dist/_runs/examples-logs"
 mkdir -p "$logs"
 
 pids=()

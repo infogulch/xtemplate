@@ -1,4 +1,5 @@
 go.work*
+dist
 Dockerfile
 .dockerignore
 .gitignore
