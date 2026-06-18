@@ -44,6 +44,26 @@ func (config Config) Server(cfgs ...Option) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if config.Reload != nil {
+		go func() {
+			log := config.Logger.WithGroup("reload")
+			for {
+				select {
+				case <-config.Ctx.Done():
+					return
+				case opts, ok := <-config.Reload:
+					if !ok {
+						return
+					}
+					if err := server.Reload(opts...); err != nil {
+						log.Error("reload failed", slog.Any("error", err))
+					}
+				}
+			}
+		}()
+	}
+
 	return server, nil
 }
 

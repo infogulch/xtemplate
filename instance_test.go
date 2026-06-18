@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/afero"
 )
@@ -215,6 +216,42 @@ func TestServer_EmptyFSWithHandler(t *testing.T) {
 	}
 	if w.Code != http.StatusNoContent {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusNoContent)
+	}
+}
+
+func TestServer_ReloadChannel(t *testing.T) {
+	fs1 := newMemFS(t, map[string]string{"index.html": "V1"})
+	fs2 := newMemFS(t, map[string]string{"index.html": "V2"})
+
+	reload := make(chan []Option)
+	cfg := New()
+	cfg.Reload = reload
+	server, err := cfg.Server(WithTemplateFS(fs1))
+	if err != nil {
+		t.Fatalf("failed to build server: %v", err)
+	}
+	defer server.Stop()
+
+	get := func() string {
+		w := httptest.NewRecorder()
+		server.Handler().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+		return w.Body.String()
+	}
+
+	if body := get(); !strings.Contains(body, "V1") {
+		t.Fatalf("before reload body = %q, want it to contain V1", body)
+	}
+
+	// Send options through the channel to swap the templates FS, then wait for
+	// the consumer goroutine to apply the reload by polling for the new content.
+	reload <- []Option{WithTemplateFS(fs2)}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for !strings.Contains(get(), "V2") {
+		if time.Now().After(deadline) {
+			t.Fatalf("after reload body = %q, want it to contain V2", get())
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }
 

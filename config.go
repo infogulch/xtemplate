@@ -64,6 +64,16 @@ type Config struct {
 
 	// The default logger. Defaults to `slog.Default()`.
 	Logger *slog.Logger `json:"-" arg:"-"`
+
+	// Reload, when non-nil, triggers server.Reload(opts...) on each receive.
+	// Send options to mutate the config for that reload (e.g. WithTemplateFS to
+	// swap the templates source). Send nil to reload in place. Close the channel
+	// to stop the consumer. The caller owns the source and any debounce.
+	//
+	// Options apply to a copy of the config per reload, so they are not sticky:
+	// the next reload starts from the original config again. Use a single reload
+	// source per server unless you persist options into the base config yourself.
+	Reload <-chan []Option `json:"-" arg:"-"`
 }
 
 // HandlerRoute pairs a ServeMux pattern with an http.Handler.
