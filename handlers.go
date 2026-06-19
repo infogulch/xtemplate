@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -146,7 +147,32 @@ func staticFileHandler(fs afero.Fs, fileinfo *fileInfo) http.HandlerFunc {
 			// should be `public` ???
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		}
-		http.ServeContent(w, r, encoding.path, encoding.modtime, file.(io.ReadSeeker))
+		// Pass the underlying *os.File to ServeContent when possible so net/http
+		// can serve via sendfile(2). net.sendFile only engages when the reader
+		// implements syscall.Conn; *os.File does, but afero.BasePathFs (xtemplate's
+		// default) wraps it in *afero.BasePathFile, which does not.
+		reader := file.(io.ReadSeeker)
+		if osf, ok := osFile(file); ok {
+			reader = osf
+		}
+		http.ServeContent(w, r, encoding.path, encoding.modtime, reader)
+	}
+}
+
+// osFile unwraps an afero.File down to its underlying *os.File, if any, so that
+// http.ServeContent can use sendfile(2): net.sendFile requires a reader that
+// implements syscall.Conn, which *os.File satisfies but afero wrappers do not.
+// Wrappers like *BasePathFile embed the source File, so unwrap recursively.
+func osFile(f afero.File) (*os.File, bool) {
+	for {
+		switch v := f.(type) {
+		case *os.File:
+			return v, true
+		case *afero.BasePathFile:
+			f = v.File
+		default:
+			return nil, false
+		}
 	}
 }
 

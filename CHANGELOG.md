@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Serve static files via `sendfile(2)` by unwrapping afero files to the underlying `*os.File`; fixes #78
+
 ## [v0.9.0] - 2026-06-19
 
 Reload-driven apps, a cgo-free SQLite/afero stack, and a major test/tooling overhaul.
