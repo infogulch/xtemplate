@@ -1,5 +1,5 @@
-// Default CLI package. To customize, copy this file to a new unique package and
-// import dbs and provide config overrides.
+// Basic xtemplate CLI package. To customize, copy this file to a new unique
+// package to configured your db drivers and provide config overrides.
 package main
 
 import (

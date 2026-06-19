@@ -6,22 +6,18 @@ import (
 	"log/slog"
 	"os"
 	"runtime/debug"
-	"time"
 
 	"github.com/infogulch/xtemplate"
 
 	"github.com/alexflint/go-arg"
-	"github.com/infogulch/watch"
 )
 
 type Config struct {
 	xtemplate.Config
-	Watch          []string `json:"watch_dirs" arg:",separate"`
-	WatchTemplates bool     `json:"watch_templates"`
-	Listen         string   `json:"listen" arg:"-l"`
-	LogLevel       int      `json:"log_level" default:"-2"`
-	Configs        []string `json:"-" arg:"-c,--config,separate"`
-	ConfigFiles    []string `json:"-" arg:"-f,--config-file,separate"`
+	Listen      string   `json:"listen" arg:"-l"`
+	LogLevel    int      `json:"log_level" default:"-2"`
+	Configs     []string `json:"-" arg:"-c,--config,separate"`
+	ConfigFiles []string `json:"-" arg:"-f,--config-file,separate"`
 }
 
 var _ Configurable = (*Config)(nil)
@@ -30,16 +26,14 @@ func (a *Config) appconfig() *Config { return a }
 
 // these allow for build-time overrides with:
 //
-//	-ldflags="-X 'github.com/infogulch/xtemplate/app.defaultWatchTemplates=false'"
+//	-ldflags="-X 'github.com/infogulch/xtemplate/app.defaultListenAddress=false'"
 //
 // Used by the default docker build to adjust xtemplate's defaults to better
 // suit to that environment.
-var defaultWatchTemplates = "true"
 var defaultListenAddress = "0.0.0.0:8080"
 
 // SetDefaults sets the default values for this Config.
 func (a *Config) SetDefaults() {
-	a.WatchTemplates = defaultWatchTemplates == "true"
 	a.Listen = defaultListenAddress
 	a.Logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(a.LogLevel)}))
 	a.Config.SetDefaults()
@@ -106,9 +100,6 @@ func (Config) Version() string {
 //	app.Main(xtemplate.WithFooConfig())
 func Main(overrides ...xtemplate.Option) {
 	config, err := LoadConfig(&Config{}, nil)
-	if err == arg.ErrHelp || err == arg.ErrVersion {
-		os.Exit(0)
-	}
 	if err != nil {
 		config.appconfig().Logger.Error("failed to load configuration", slog.Any("error", err))
 		os.Exit(1)
@@ -192,31 +183,9 @@ func LoadConfig[T Configurable](config T, args []string) (T, error) {
 	return config, nil
 }
 
-// Serve builds the xtemplate server from config and serves it, owning the
-// reload semantics. If config.Reload is already set it drives reloads (e.g. a
-// remote source set by the caller); otherwise Serve falls back to watching
-// local template directories with fsnotify. This call blocks until the server
-// stops.
-func Serve(configurable Configurable, overrides ...xtemplate.Option) {
-	config := configurable.appconfig()
-
-	if config.Reload == nil && config.WatchTemplates && config.TemplatesFS == nil {
-		config.Watch = append(config.Watch, config.TemplatesDir)
-	}
-
-	if config.Reload == nil && len(config.Watch) != 0 {
-		watchCh := make(chan []xtemplate.Option)
-		_, err := watch.Watch(config.Watch, 200*time.Millisecond, config.Logger.WithGroup("fswatch"), func() bool {
-			watchCh <- nil
-			return true
-		})
-		if err != nil {
-			config.Logger.Info("failed to watch directories", slog.Any("error", err), slog.Any("directories", config.Watch))
-			os.Exit(4)
-		}
-		config.Reload = watchCh
-	}
-
+// Serve sets up the xtemplate server from config and serves it.
+// Serve blocks until the server stops.
+func Serve(config *Config, overrides ...xtemplate.Option) {
 	server, err := config.Server(overrides...)
 	if err != nil {
 		config.Logger.Error("failed to start server", slog.Any("error", err))
