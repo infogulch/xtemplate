@@ -74,6 +74,8 @@ func (x *Server) Instance() *Instance {
 }
 
 // Serve opens a net listener on `listen_addr` and serves requests from it.
+// It returns when the listener fails or when Config.Ctx is cancelled, in which
+// case the server is gracefully shut down and Serve returns nil.
 func (x *Server) Serve(listen_addr string) error {
 	ln, err := net.Listen("tcp", listen_addr)
 	if err != nil {
@@ -83,7 +85,16 @@ func (x *Server) Serve(listen_addr string) error {
 	// visible in the logs, including when listen_addr requests an ephemeral
 	// port like ":0".
 	x.config.Logger.Info("starting server", slog.String("address", ln.Addr().String()))
-	return http.Serve(ln, x.Handler())
+
+	srv := &http.Server{Handler: x.Handler()}
+	go func() {
+		<-x.config.Ctx.Done()
+		_ = srv.Shutdown(context.Background())
+	}()
+	if err := srv.Serve(ln); err != http.ErrServerClosed {
+		return err
+	}
+	return nil
 }
 
 // Handler returns a `http.Handler` that always routes new requests to the
