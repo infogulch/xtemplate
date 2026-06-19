@@ -571,6 +571,8 @@ is published as a subpackage in this module at [./caddy](./caddy) which uses
 the public xtemplate Go API and to integrate xtemplate into Caddy as an
 http middleware.
 
+See [CHANGELOG.md](./CHANGELOG.md) for a per-release history of notable changes.
+
 `xtemplate` is licensed under the Apache 2.0 license. See [LICENSE](./LICENSE)
 
 [go-htmx]: https://github.com/infogulch/go-htmx
