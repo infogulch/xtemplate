@@ -10,6 +10,7 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"slices"
@@ -101,8 +102,15 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 
 	if err := afero.Walk(build.config.TemplatesFS, ".", func(path_ string, d fs.FileInfo, err error) error {
 		path_ = strings.ReplaceAll(path_, "\\", "/")
-		if err != nil || d.IsDir() {
+		if err != nil {
 			return err
+		}
+		// Don't walk hidden dirs (e.g. .git) which often hold sensitive or junk files.
+		if d.IsDir() {
+			if name := d.Name(); name != "." && strings.HasPrefix(name, ".") {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		if strings.HasSuffix(path_, build.config.TemplateExtension) {
 			err = build.addTemplateHandler(path_)
