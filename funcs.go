@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"io"
 	"reflect"
 	"strconv"
 	"strings"
@@ -17,23 +18,23 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	gmhtml "github.com/yuin/goldmark/renderer/html"
+	"go.abhg.dev/goldmark/frontmatter"
 )
 
 var xtemplateFuncs template.FuncMap = template.FuncMap{
-	"sanitizeHtml":     FuncSanitizeHtml,
-	"markdown":         FuncMarkdown,
-	"splitFrontMatter": FuncSplitFrontMatter,
-	"return":           FuncReturn,
-	"failf":            FuncFailf,
-	"humanize":         FuncHumanize,
-	"trustHtml":        FuncTrustHtml,
-	"trustAttr":        FuncTrustAttr,
-	"trustJS":          FuncTrustJS,
-	"trustJSStr":       FuncTrustJSStr,
-	"trustSrcSet":      FuncTrustSrcSet,
-	"idx":              FuncIdx,
-	"try":              FuncTry,
-	"withArgs":         FuncWithArgs,
+	"sanitizeHtml": FuncSanitizeHtml,
+	"markdown":     FuncMarkdown,
+	"return":       FuncReturn,
+	"failf":        FuncFailf,
+	"humanize":     FuncHumanize,
+	"trustHtml":    FuncTrustHtml,
+	"trustAttr":    FuncTrustAttr,
+	"trustJS":      FuncTrustJS,
+	"trustJSStr":   FuncTrustJSStr,
+	"trustSrcSet":  FuncTrustSrcSet,
+	"idx":          FuncIdx,
+	"try":          FuncTry,
+	"withArgs":     FuncWithArgs,
 }
 
 // blueMondayPolicies is the map of names of bluemonday policies available to
@@ -69,6 +70,7 @@ var mdOpts = []goldmark.Option{
 	goldmark.WithExtensions(
 		extension.GFM,
 		extension.Footnote,
+		&frontmatter.Extender{},
 		highlighting.NewHighlighting(
 			highlighting.WithFormatOptions(
 				chromahtml.WithClasses(true),
@@ -88,7 +90,7 @@ var markdownConfigs map[string]goldmark.Markdown = map[string]goldmark.Markdown{
 }
 
 // AddMarkdownConfig adds a custom markdown configuration to xtemplate's
-// markdown config map, available to all xtemplate instances.
+// markdown config map, shared by all xtemplate instances.
 func AddMarkdownConfig(name string, md goldmark.Markdown) {
 	if old, ok := markdownConfigs[name]; ok {
 		panic(fmt.Sprintf("markdown policy with name %s already exists: %v", name, old))
@@ -96,46 +98,64 @@ func AddMarkdownConfig(name string, md goldmark.Markdown) {
 	markdownConfigs[name] = md
 }
 
-// markdown renders the given Markdown text as HTML and returns it. This uses
-// the Goldmark library, which is CommonMark compliant. If an alternative
-// markdown policy is not named, it uses the default policy which has these
-// extensions enabled: Github Flavored Markdown, Footnote, and syntax
-// highlighting provided by Chroma.
-func FuncMarkdown(input string, configName ...string) (template.HTML, error) {
+// MarkdownDoc is the result of rendering Markdown: the decoded front matter
+// metadata and the rendered HTML body.
+type MarkdownDoc struct {
+	Meta map[string]any `json:"meta,omitempty"`
+	Body template.HTML  `json:"body,omitempty"`
+}
+
+// markdown parses front matter out of the input and renders the remaining
+// Markdown to HTML in a single pass, returning both .Meta and .Body. input may
+// be a string, []byte, or io.Reader. This uses the Goldmark library, which is
+// CommonMark compliant. If an alternative markdown policy is not named, it uses
+// the default policy which has these extensions enabled: YAML/TOML front matter,
+// Github Flavored Markdown, Footnote, and syntax highlighting provided by Chroma.
+func FuncMarkdown(input any, configName ...string) (MarkdownDoc, error) {
 	config := "default"
 	switch len(configName) {
 	case 0:
 	case 1:
 		config = configName[0]
 	default:
-		return "", fmt.Errorf("too many configName arguments provided: %v", configName)
+		return MarkdownDoc{}, fmt.Errorf("too many configName arguments provided: %v", configName)
 	}
 	md, ok := markdownConfigs[config]
 	if !ok {
-		return "", fmt.Errorf("unknown markdown config name: %s", config)
+		return MarkdownDoc{}, fmt.Errorf("unknown markdown config name: %s", config)
+	}
+
+	var src []byte
+	switch v := input.(type) {
+	case string:
+		src = []byte(v)
+	case []byte:
+		src = v
+	case io.Reader:
+		var err error
+		if src, err = io.ReadAll(v); err != nil {
+			return MarkdownDoc{}, err
+		}
+	default:
+		return MarkdownDoc{}, fmt.Errorf("markdown: unsupported input type %T (want string, []byte, or io.Reader)", input)
 	}
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer bufPool.Put(buf)
 
-	err := md.Convert([]byte(input), buf)
-	if err != nil {
-		return "", err
+	ctx := parser.NewContext()
+	if err := md.Convert(src, buf, parser.WithContext(ctx)); err != nil {
+		return MarkdownDoc{}, err
 	}
 
-	return template.HTML(buf.String()), nil
-}
-
-// splitFrontMatter parses front matter out from the beginning of input,
-// and returns the separated key-value pairs and the body/content. input
-// must be a "stringy" value.
-func FuncSplitFrontMatter(input string) (parsedMarkdownDoc, error) {
-	meta, body, err := extractFrontMatter(input)
-	if err != nil {
-		return parsedMarkdownDoc{}, err
+	doc := MarkdownDoc{Body: template.HTML(buf.String())}
+	if d := frontmatter.Get(ctx); d != nil {
+		if err := d.Decode(&doc.Meta); err != nil {
+			return MarkdownDoc{}, err
+		}
 	}
-	return parsedMarkdownDoc{Meta: meta, Body: body}, nil
+	return doc, nil
 }
 
 // return causes the template to exit early with a success status.

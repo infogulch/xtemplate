@@ -14,7 +14,7 @@
 {{- $posts := dict }}
 {{- range .Posts.ReadDir `.`}}
 {{- $slug := trimSuffix `.md` .Name}}
-{{- $post := splitFrontMatter ($.Posts.Read .Name)}}
+{{- $post := markdown ($.Posts.Read .Name)}}
 {{- $id := cat $post.Meta.date "_" .Name}}
 {{- $_ := set $posts $id (dict "Name" .Name "Meta" $post.Meta "Slug" $slug)}}
 {{- end}}

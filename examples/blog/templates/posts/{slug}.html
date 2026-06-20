@@ -19,7 +19,7 @@
 </html>
 {{- .Resp.ReturnStatus 404}}
 {{- end}}
-{{- $post := splitFrontMatter (.Posts.Read $file)}}
+{{- $post := markdown (.Posts.Read $file)}}
 <!DOCTYPE html>
 <html lang="en">
 {{- template "head" withArgs . $post.Meta.title}}
@@ -28,6 +28,6 @@
 {{- with $post.Meta.date}}
 <p><em>{{.}}</em></p>
 {{- end}}
-{{markdown $post.Body}}
+{{$post.Body}}
 </body>
 </html>

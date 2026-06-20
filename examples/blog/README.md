@@ -26,8 +26,9 @@ its bytes match the hash.
 
 Posts live as Markdown files with YAML front matter in `posts/*.md`, exposed to
 templates through a `Posts` directory provider (see `config.json`). A single
-file-routed template, `templates/posts/{slug}.html`, reads `posts/<slug>.md`,
-uses `splitFrontMatter` to pull out the `title`/`date`, and renders the body
-with `markdown`. The home page lists posts by reading the directory with
+file-routed template, `templates/posts/{slug}.html`, reads `posts/<slug>.md`
+and uses `markdown` to pull out the `title`/`date` front matter (`.Meta`) and
+render the body (`.Body`) in one pass. The home page lists posts by reading the
+directory with
 `.Posts.ReadDir` and each file's front matter. Drop in a new `.md` file and it
 appears automatically.
