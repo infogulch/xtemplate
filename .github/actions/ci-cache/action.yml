@@ -16,7 +16,7 @@ runs:
 
     - name: Restore prebuild cache
       id: cache
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@v5
       with:
         path: |
           ~/.cache/go-build
@@ -31,7 +31,7 @@ runs:
 
     - name: Save prebuild cache
       if: steps.cache.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@v5
       with:
         path: |
           ~/.cache/go-build

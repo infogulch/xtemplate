@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.9.3] - 2026-06-22
+
+- Bump GitHub action versions, fixes release ci workflow
+
 ## [v0.9.2] - 2026-06-22
 
 Improvements to file serving, template scanning, server lifecycle, and markdown parsing.
