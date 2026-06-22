@@ -7,11 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.9.2] - 2026-06-22
+
+Improvements to file serving, template scanning, server lifecycle, and markdown parsing.
+
 - Serve static files via `sendfile(2)` by unwrapping afero files to the underlying `*os.File`; fixes #78
+- Skip hidden directories when scanning templates
+- Cancel `.Serve()` via `Config.Ctx` for clean shutdown
 - Parse front matter with goldmark-frontmatter; fixes #93
   - **Breaking:** `markdown` now parses front matter and renders the body in one pass, accepting `string`/`[]byte`/`io.Reader` and returning `{.Meta, .Body}`; render plain markdown with `(markdown $s).Body`
   - **Breaking:** removed `splitFrontMatter`; use `markdown`'s `.Meta`/`.Body` instead
   - **Breaking:** only YAML (`---`) and TOML (`+++`) front matter are supported now; JSON and the YAML `...` close fence are dropped
+- Cache blog post metadata in an `INIT`-built SQLite table in the blog example
+- Set default HTTP server timeouts
 
 ## [v0.9.0] - 2026-06-19
 
