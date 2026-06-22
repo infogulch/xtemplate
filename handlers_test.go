@@ -1,6 +1,77 @@
 package xtemplate
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"syscall"
+	"testing"
+
+	"github.com/spf13/afero"
+)
+
+// implementsSyscallConn mirrors the exact check in net.sendFile (net/sendfile.go):
+// sendfile(2) is used only when the reader handed to http.ServeContent satisfies
+// syscall.Conn. The cases below pin down the behavior we rely on so this test
+// fails loudly if a future afero/Go version changes it (e.g. if *BasePathFile
+// ever forwards SyscallConn, osFile would no longer be needed).
+func implementsSyscallConn(f afero.File) bool {
+	_, ok := f.(syscall.Conn)
+	return ok
+}
+
+func TestOSFile_SendfilePrecondition(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte("hi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Case 1: the default static-file FS (BasePathFs over OsFs) returns a
+	// *BasePathFile that does NOT implement syscall.Conn, so sendfile(2) would
+	// not be used if it were passed to ServeContent directly.
+	osBacked := afero.NewBasePathFs(afero.NewOsFs(), dir)
+	f, err := osBacked.Open("f.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	if _, ok := f.(*afero.BasePathFile); !ok {
+		t.Fatalf("expected BasePathFs.Open to return *afero.BasePathFile, got %T", f)
+	}
+	if implementsSyscallConn(f) {
+		t.Error("*BasePathFile now implements syscall.Conn; the osFile unwrap may be unnecessary")
+	}
+
+	// Case 2: unwrapping that file yields an *os.File, which DOES implement
+	// syscall.Conn, restoring the sendfile(2) fast path.
+	osf, ok := osFile(f)
+	if !ok {
+		t.Fatal("osFile failed to unwrap *BasePathFile (OsFs) to *os.File")
+	}
+	if _, ok := any(osf).(syscall.Conn); !ok {
+		t.Error("*os.File does not implement syscall.Conn; sendfile(2) would not be used")
+	}
+
+	// Case 3: a BasePathFile backed by MemMapFs (e.g. the git app's FS) has no
+	// *os.File underneath, so it neither implements syscall.Conn nor unwraps.
+	memBacked := afero.NewBasePathFs(afero.NewMemMapFs(), "/")
+	if err := afero.WriteFile(memBacked, "f.txt", []byte("hi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mf, err := memBacked.Open("f.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = mf.Close() }()
+	if _, ok := mf.(*afero.BasePathFile); !ok {
+		t.Fatalf("expected BasePathFs.Open to return *afero.BasePathFile, got %T", mf)
+	}
+	if implementsSyscallConn(mf) {
+		t.Error("MemMapFs-backed *BasePathFile unexpectedly implements syscall.Conn")
+	}
+	if _, ok := osFile(mf); ok {
+		t.Error("osFile unexpectedly unwrapped a MemMapFs-backed file to *os.File")
+	}
+}
 
 // encs builds an encodingInfo slice from coding names, in the given order. The
 // order matters: negotiateEncoding breaks q-value ties toward earlier entries,

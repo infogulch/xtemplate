@@ -1,0 +1,22 @@
+{{- /*
+  Build the post-metadata cache once at startup.
+
+  Any template named "INIT ..." runs once when the xtemplate instance loads,
+  with full access to the dot (.DB, .Posts, ...). Here we read every post's
+  front matter and store it in an in-memory SQLite table so the index can list
+  posts with a single query instead of re-reading and re-parsing every file on
+  each request.
+
+  config.json watches the posts directory ("watch_dirs"), so adding, editing,
+  or deleting a post reloads the instance, which re-runs this initializer and
+  rebuilds the cache. The DELETE keeps the rebuild idempotent.
+*/ -}}
+{{define "INIT cache-posts"}}
+{{- $_ := .DB.Exec `CREATE TABLE IF NOT EXISTS posts (slug TEXT PRIMARY KEY, title TEXT, date TEXT, summary TEXT)`}}
+{{- $_ = .DB.Exec `CREATE INDEX IF NOT EXISTS idx_posts_date ON posts(date)`}}
+{{- $_ = .DB.Exec `DELETE FROM posts`}}
+{{- range .Posts.ReadDir `.`}}
+{{- $post := markdown ($.Posts.Open .Name)}}
+{{- $_ = $.DB.Exec `INSERT INTO posts (slug, title, date, summary) VALUES (?, ?, ?, ?)` (trimSuffix `.md` .Name) $post.Meta.title $post.Meta.date $post.Meta.summary}}
+{{- end}}
+{{end}}

@@ -11,6 +11,57 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
+func TestFuncMarkdown(t *testing.T) {
+	t.Run("yaml front matter splits meta and body", func(t *testing.T) {
+		doc, err := FuncMarkdown("---\ntitle: Hello\n---\nbody **content**")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if doc.Meta["title"] != "Hello" {
+			t.Errorf("Meta[title] = %v, want %q", doc.Meta["title"], "Hello")
+		}
+		if !strings.Contains(string(doc.Body), "<strong>content</strong>") {
+			t.Errorf("Body = %q, want rendered markdown", doc.Body)
+		}
+	})
+
+	t.Run("toml front matter", func(t *testing.T) {
+		doc, err := FuncMarkdown("+++\ntitle = \"Hi\"\n+++\nbody")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if doc.Meta["title"] != "Hi" {
+			t.Errorf("Meta[title] = %v, want %q", doc.Meta["title"], "Hi")
+		}
+	})
+
+	t.Run("no front matter leaves Meta nil", func(t *testing.T) {
+		doc, err := FuncMarkdown("just body")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if doc.Meta != nil {
+			t.Errorf("Meta = %v, want nil", doc.Meta)
+		}
+	})
+
+	t.Run("accepts io.Reader", func(t *testing.T) {
+		doc, err := FuncMarkdown(strings.NewReader("---\ntitle: R\n---\nbody"))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if doc.Meta["title"] != "R" {
+			t.Errorf("Meta[title] = %v, want %q", doc.Meta["title"], "R")
+		}
+	})
+
+	t.Run("unsupported input type errors", func(t *testing.T) {
+		if _, err := FuncMarkdown(42); err == nil {
+			t.Error("expected an error for unsupported input type")
+		}
+	})
+}
+
 func TestFuncHumanize(t *testing.T) {
 	t.Run("size", func(t *testing.T) {
 		got, err := FuncHumanize("size", "2048000")

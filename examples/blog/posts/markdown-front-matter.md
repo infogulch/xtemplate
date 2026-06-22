@@ -17,22 +17,20 @@ summary: How a single template turns a .md file into a finished page.
 Your post body goes here...
 ```
 
-xtemplate ships the two functions that make this work:
-
-- `splitFrontMatter` parses that opening block, returning the metadata as
-  `.Meta` and everything after it as `.Body`. YAML (`---`), TOML (`+++`), and
-  JSON front matter are all understood.
-- `markdown` renders the body to HTML (CommonMark, GitHub-flavored, with syntax
-  highlighting).
+The `markdown` function does it all in one pass: it parses that opening block
+and renders the rest, returning the metadata as `.Meta` and the rendered HTML
+as `.Body`. YAML (`---`) and TOML (`+++`) front matter are understood, and the
+body is rendered as CommonMark, GitHub-flavored, with syntax highlighting. Its
+input can be a string or an `io.Reader`.
 
 The whole blog runs on one template, `posts/{slug}.html`, which reads
-`posts/<slug>.md` through the `Posts` directory provider, splits the front
-matter for the `<title>` and heading, and renders the body:
+`posts/<slug>.md` through the `Posts` directory provider and uses the front
+matter for the `<title>` and heading alongside the rendered body:
 
 ```html
-{{$post := splitFrontMatter (.Posts.Read (print (.Req.PathValue "slug") ".md"))}}
+{{$post := markdown (.Posts.Read (print (.Req.PathValue "slug") ".md"))}}
 <h1>{{$post.Meta.title}}</h1>
-{{markdown $post.Body}}
+{{$post.Body}}
 ```
 
 The home page reuses the same metadata: it lists the directory with

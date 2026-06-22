@@ -219,6 +219,28 @@ func TestServer_EmptyFSWithHandler(t *testing.T) {
 	}
 }
 
+func TestInstance_SkipsHiddenDirs(t *testing.T) {
+	inst := buildInstance(t, map[string]string{
+		"index.html":         "VISIBLE",
+		".git/secret.html":   "SECRET",
+		".git/config.txt":    "junk",
+		".hidden/static.txt": "hidden static",
+		"normaldir/a.html":   "hello",
+	})
+
+	// .html is stripped from route paths and index maps to the dir root.
+	for _, target := range []string{"/", "/normaldir/a"} {
+		if w := doRequest(inst, http.MethodGet, target); w.Code != http.StatusOK {
+			t.Errorf("visible route %s status = %d, want %d", target, w.Code, http.StatusOK)
+		}
+	}
+	for _, target := range []string{"/.git/secret.html", "/.git/config.txt", "/.hidden/static.txt"} {
+		if w := doRequest(inst, http.MethodGet, target); w.Code != http.StatusNotFound {
+			t.Errorf("hidden route %s status = %d, want %d", target, w.Code, http.StatusNotFound)
+		}
+	}
+}
+
 func TestServer_ReloadChannel(t *testing.T) {
 	fs1 := newMemFS(t, map[string]string{"index.html": "V1"})
 	fs2 := newMemFS(t, map[string]string{"index.html": "V2"})
