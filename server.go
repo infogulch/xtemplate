@@ -86,7 +86,13 @@ func (x *Server) Serve(listen_addr string) error {
 	// port like ":0".
 	x.config.Logger.Info("starting server", slog.String("address", ln.Addr().String()))
 
-	srv := &http.Server{Handler: x.Handler()}
+	srv := &http.Server{
+		Handler:           x.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		// ponytail: no WriteTimeout; it would cap streaming/SSE responses. Add a per-handler deadline if slow writers become a problem.
+	}
 	go func() {
 		<-x.config.Ctx.Done()
 		_ = srv.Shutdown(context.Background())
