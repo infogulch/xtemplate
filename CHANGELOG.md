@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+CI Polish
+
+- Bump remaining GitHub action versions, fixes build warnings
+- Upload dist zips via `infogulch/upload-artifacts@v1`
+- Dist zips are versioned with git describe when running ci on a non-tagged commit
+
 ## [v0.9.3] - 2026-06-22
 
 - Bump GitHub action versions, fixes release ci workflow

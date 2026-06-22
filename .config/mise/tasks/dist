@@ -3,7 +3,7 @@
 use ../lib.nu *
 cd $env.ROOT
 
-let ver = (xt-version)
+let ver = (let v = (xt-version); if ($v | is-empty) { ^git -C $env.ROOT describe --tags --match 'v*' | str trim } else { $v })
 # -w omits the DWARF symbol table. On darwin this avoids a slow Mach-O
 # post-edit step that embeds DWARF into the binary (Go issue #12259).
 # Release binaries don't need debug info, so strip it on all platforms.
