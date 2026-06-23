@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"crypto/sha512"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -55,6 +56,13 @@ type encodingInfo struct {
 	encoding, path string
 	size           int64
 	modtime        time.Time
+}
+
+// encodingExts maps a content-encoding name to the file extension used for pre-compressed files.
+var encodingExts = map[string]string{
+	"gzip": ".gz",
+	"zstd": ".zst",
+	"br":   ".br",
 }
 
 var extensionContentTypes = map[string]string{
@@ -154,6 +162,21 @@ func (b *builder) addStaticFileHandler(path_ string) error {
 		b.routes = append(b.routes, InstanceRoute{pattern, handler})
 
 		b.config.Logger.Debug("added static file handler", slog.String("path", identityPath), slog.String("filepath", path_), slog.String("contenttype", file.contentType), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()), slog.String("hash", sri))
+
+		for _, enc := range b.config.Precompress {
+			compressedPath := path_ + encodingExts[enc]
+			if _, statErr := b.config.TemplatesFS.Stat(compressedPath); statErr == nil {
+				b.config.Logger.Debug("skipping precompression, file already exists", slog.String("path", compressedPath))
+				continue
+			}
+			b.config.Logger.Debug("precompressing static file", slog.String("src", path_), slog.String("dst", compressedPath), slog.String("encoding", enc))
+			if err = precompressFile(b.config.TemplatesFS, path_, enc); err != nil {
+				return fmt.Errorf("failed to precompress '%s' as %s: %w", path_, enc, err)
+			}
+			if err = b.addStaticFileHandler(compressedPath); err != nil {
+				return err
+			}
+		}
 	} else {
 		if file.hash != sri {
 			return fmt.Errorf("encoded file contents did not match original file '%s': expected %s, got %s", path_, file.hash, sri)
@@ -259,4 +282,47 @@ func (b *builder) addTemplateHandler(path_ string) error {
 		b.config.Logger.Debug("added template handler", "method", "GET", "pattern", pattern, "template_path", path_)
 	}
 	return nil
+}
+
+// precompressFile compresses the file at srcPath to srcPath + encodingExts[encoding]
+// using the given encoding ("gzip", "zstd", or "br") and encoding to extension mapping.
+func precompressFile(fs afero.Fs, srcPath string, encoding string) (retErr error) {
+	dstPath := srcPath + encodingExts[encoding]
+	if err := fs.MkdirAll(path.Dir(dstPath), 0755); err != nil {
+		return fmt.Errorf("failed to create parent dir for '%s': %w", dstPath, err)
+	}
+	in, err := fs.Open(srcPath)
+	if err != nil {
+		return err
+	}
+	defer func() { retErr = errors.Join(retErr, in.Close()) }()
+
+	out, err := fs.Create(dstPath)
+	if err != nil {
+		return err
+	}
+	defer func() { retErr = errors.Join(retErr, out.Close()) }()
+
+	var w io.WriteCloser
+	switch encoding {
+	case "gzip":
+		w, err = gzip.NewWriterLevel(out, gzip.BestCompression)
+		if err != nil {
+			return err
+		}
+	case "zstd":
+		w, err = zstd.NewWriter(out, zstd.WithEncoderLevel(zstd.SpeedBestCompression))
+		if err != nil {
+			return err
+		}
+	case "br":
+		w = brotli.NewWriterLevel(out, brotli.BestCompression)
+	default:
+		return fmt.Errorf("unsupported precompress encoding: %s", encoding)
+	}
+
+	if _, err := io.Copy(w, in); err != nil {
+		return errors.Join(err, w.Close())
+	}
+	return w.Close()
 }

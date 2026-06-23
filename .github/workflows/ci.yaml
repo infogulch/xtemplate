@@ -57,7 +57,7 @@ jobs:
             dist/**/*.log
             dist/**/report/
 
-      - uses: infogulch/upload-artifacts@v1
+      - uses: infogulch/upload-zip-artifacts@v1
         with:
           path: "dist/*.zip"
 

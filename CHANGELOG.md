@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Pre-compress static files.
+
+- Follow name change of `upload-zip-artifacts` gh action
+- Add Precompress config option to pre-compress static files
+
 ## [v0.9.4] - 2026-06-22
 
 CI Polish
