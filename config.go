@@ -45,6 +45,10 @@ type Config struct {
 	Nats            []DotNatsConfig  `json:"nats" arg:"-"`
 	CustomProviders []DotConfig      `json:"-" arg:"-"`
 
+	// Encodings to pre-compress static files into at load time. Supported values:
+	// "gzip", "zstd", "br". Default empty (no pre-compression).
+	Precompress []string `json:"precompress,omitempty" arg:"--precompress,separate"`
+
 	// Left template action delimiter. Default `{{`.
 	LDelim string `json:"left,omitempty" arg:"--ldelim" default:"{{"`
 

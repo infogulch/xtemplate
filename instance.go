@@ -10,6 +10,7 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -74,6 +75,24 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 
 	if build.config.TemplatesFS == nil {
 		build.config.TemplatesFS = afero.NewBasePathFs(afero.NewOsFs(), build.config.TemplatesDir)
+	}
+
+	if len(build.config.Precompress) > 0 {
+		for _, encoding := range build.config.Precompress {
+			if _, ok := encodingExts[encoding]; !ok {
+				return nil, nil, nil, fmt.Errorf("unsupported encoding: %s", encoding)
+			}
+		}
+		tempdir, err := os.MkdirTemp("", "xtemplate-precompress-*")
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to create temp dir for pre-compressed files: %w", err)
+		}
+		go func() {
+			<-build.config.Ctx.Done()
+			_ = os.RemoveAll(tempdir)
+		}()
+		overlay := afero.NewBasePathFs(afero.NewOsFs(), tempdir)
+		build.config.TemplatesFS = afero.NewCopyOnWriteFs(build.config.TemplatesFS, overlay)
 	}
 
 	{
