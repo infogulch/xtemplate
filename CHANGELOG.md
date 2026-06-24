@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Drop withArgs, use list instead
+
 ## [v0.9.5] - 2026-06-23
 
 Pre-compress static files.

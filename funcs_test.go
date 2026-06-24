@@ -2,10 +2,8 @@ package xtemplate
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
-	"text/template"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -199,57 +197,4 @@ func TestFuncIdx(t *testing.T) {
 	if _, err := FuncIdx(0, 42); err == nil {
 		t.Errorf("FuncIdx(0, 42) expected a non-indexable error, got nil")
 	}
-}
-
-func TestFuncWithArgs(t *testing.T) {
-	type data struct{ Name string }
-
-	t.Run("non-struct errors", func(t *testing.T) {
-		if _, err := FuncWithArgs(42, "a"); err == nil {
-			t.Error("expected an error for non-struct dot")
-		}
-	})
-
-	t.Run("user struct with a Dot field is wrapped, not rewrapped", func(t *testing.T) {
-		// A struct that happens to have a field named "Dot" but no Args field
-		// must not be mistaken for an existing wrapper (which used to panic).
-		type bad struct{ Dot int }
-		got, err := FuncWithArgs(bad{Dot: 5}, "a")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if !isWithArgs(reflect.TypeOf(got)) {
-			t.Errorf("expected %T to be a fresh withArgs wrapper", got)
-		}
-	})
-
-	t.Run("rewrap replaces args without nesting", func(t *testing.T) {
-		w1, err := FuncWithArgs(data{Name: "x"}, "a")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		w2, err := FuncWithArgs(w1, "b")
-		if err != nil {
-			t.Fatalf("unexpected error on rewrap: %v", err)
-		}
-		if got, want := fmt.Sprintf("%T", w1), fmt.Sprintf("%T", w2); got != want {
-			t.Errorf("rewrap changed type: %s vs %s (Dot should stay flat)", got, want)
-		}
-	})
-
-	t.Run("promotes embedded fields and exposes Args in templates", func(t *testing.T) {
-		wrapped, err := FuncWithArgs(data{Name: "world"}, "hello")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		tmpl := template.Must(template.New("t").Funcs(xtemplateFuncs).
-			Parse(`{{.Args | idx 0}} {{.Name}}`))
-		var sb strings.Builder
-		if err := tmpl.Execute(&sb, wrapped); err != nil {
-			t.Fatalf("execute: %v", err)
-		}
-		if got, want := sb.String(), "hello world"; got != want {
-			t.Errorf("rendered %q, want %q", got, want)
-		}
-	})
 }
