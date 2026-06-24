@@ -1,0 +1,5 @@
+{{- define "link"}}
+{{- $href := . | idx 1 }}
+{{- $hash := (. | idx 0).StaticFileHash $href }}
+<link href="{{ $href }}?hash={{ $hash }}" integrity="{{ $hash }}"{{range $pair := slice . 2 | chunk 2}} {{$pair | idx 0 | trustAttr}}="{{$pair | idx 1}}"{{end}}/>
+{{- end}}

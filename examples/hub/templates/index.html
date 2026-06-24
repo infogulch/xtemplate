@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <title>xtemplate examples</title>
-  <link rel="stylesheet" href="/assets/app.css">
+  {{ template "link" list .X "/assets/app.css" "rel" "stylesheet" }}
   <style>
     .cards { list-style: none; padding: 0; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); }
     .cards a { display: block; height: 100%; padding: 1rem 1.25rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card); text-decoration: none; color: inherit; }
@@ -16,37 +16,24 @@
 <body>
   <h1>xtemplate examples</h1>
   <p>Each example runs on its own port. Click one to open it.</p>
-  <ul class="cards" id="cards"></ul>
-  <script>
-    // Each example listens at the hub's port plus its offset. Derive the links
-    // from this page's own port so they're correct no matter what base port the
-    // `examples` task was started with.
-    const examples = [
-      [1, "Contacts", "File routing, custom method routes, and DB CRUD (sqlite)."],
-      [2, "SSE chat", "Live updates streamed with Server-Sent Events and .Flush."],
-      [3, "Blog", "Content-hashed asset URLs and Subresource Integrity."],
-      [4, "File browser", "Listing and reading files via the FS context provider."],
-      [5, "Embedded", "Single-binary deployment with //go:embed."],
-      [6, "Custom DotProvider", "Exposing Go code to templates (the repository pattern)."],
-    ];
-    const base = parseInt(location.port || "9000", 10);
-    const list = document.getElementById("cards");
-    for (const [offset, name, desc] of examples) {
-      const port = base + offset;
-      const li = document.createElement("li");
-      const a = document.createElement("a");
-      a.href = location.protocol + "//" + location.hostname + ":" + port;
-      const tag = document.createElement("span");
-      tag.className = "port";
-      tag.textContent = ":" + port;
-      const h2 = document.createElement("h2");
-      h2.textContent = name;
-      const p = document.createElement("p");
-      p.textContent = desc;
-      a.append(tag, h2, p);
-      li.appendChild(a);
-      list.appendChild(li);
-    }
-  </script>
+  {{- $host := .Req.Host | splitList ":" | first }}
+  {{- $port := .Req.Host | splitList ":" | last | default "80" | atoi }}
+  {{- $examples := list
+      (list "Contacts" "File routing, custom method routes, and DB CRUD (sqlite).")
+      (list "SSE chat" "Live updates streamed with Server-Sent Events and .Flush.")
+      (list "Blog" "Content-hashed asset URLs and Subresource Integrity.")
+      (list "File browser" "Listing and reading files via the FS context provider.")
+      (list "Embedded" "Single-binary deployment with //go:embed.")
+      (list "Custom DotProvider" "Exposing Go code to templates (the repository pattern).")
+  }}
+  <ul class="cards" id="cards">
+    {{- range $i, $example := $examples }}
+    <li class="card"><a href="//{{ $host }}:{{ add $port $i 1 }}/">
+        <span class="port">{{ add $port $i 1 }}</span>
+        <h2>{{ $example | idx 0 }}</h2>
+        <p>{{ $example | idx 1 }}</p></a>
+    </li>
+    {{- end }}
+  </ul>
 </body>
 </html>
