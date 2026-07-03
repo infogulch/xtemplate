@@ -100,6 +100,14 @@ Add an `[Unreleased]` section (matching the v0.9.2 format already in the file) w
 - `**Breaking:**` — Go API: all provider symbols (`WithDB`/`DotDB`/`DotDBConfig`, `WithDir`/`Dir`/`DotDirConfig`, `WithFlags`/`DotFlags`, `WithNats`/`DotNats`/`DotNatsConfig`) move from `package xtemplate` to their respective `providers/<type>` packages; `sql`/`fs` symbols renamed.
 - `**Removed:**` — `DotKV` (dead code; load-bearing for excludability). `DotDirConfig.Type` (speculative, never wired up).
 
+## Implementation log
+
+### Bite 1 — `xtemplate/providers.go` + `xtemplate/providers_test.go` ✓
+
+- Created `xtemplate/providers.go`: package-level `registry` map, `Register(name, ctor)` (panics on duplicate), `resolveProviders([]json.RawMessage)` (peeks `"type"`, looks up ctor, re-decodes; well-known-type hint in error for `sql`/`fs`/`flags`/`nats`).
+- Created `xtemplate/providers_test.go` (`package xtemplate`): test-only `_test` provider registered in `init()`; four tests — round-trip decode, well-known unknown type, generic unknown type, duplicate-registration panic. All pass.
+- No existing files touched.
+
 ## Explicitly skipped (add when needed)
 
 - Backward-compat aliasing of old JSON keys — pre-1.0, clean break.
