@@ -53,6 +53,10 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 				if err := parseCrossOrigin(h, &t.CrossOrigin); err != nil {
 					return nil, err
 				}
+			case "provider":
+				if err := parseProviderBlock(h, t); err != nil {
+					return nil, err
+				}
 			default:
 				return nil, h.Errf("unknown config option")
 			}
