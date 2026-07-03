@@ -136,6 +136,13 @@ Add an `[Unreleased]` section (matching the v0.9.2 format already in the file) w
 - `examples/contacts/config.json`, `examples/blog/config.json`, `examples/filebrowser/config.json`: same shape conversion.
 - Build passes.
 
+### Bite 5 — `test/caddy.json` + `caddy/README.md` + xcaddy build task ✓
+
+- `test/caddy.json`: replaced four typed arrays with a single `"providers"` array; each entry carries a `"type"` discriminator.
+- `caddy/README.md`: updated the NOTE callout to say "dot providers" instead of the four names; added a note that each provider needs a `--with` flag in the xcaddy build; updated the build examples to show per-provider `--with` flags.
+- `.config/mise/lib.nu` (`xt-build-caddy`): added `--with` for all four provider packages with local path mappings alongside the existing caddy/xtemplate entries.
+- Build passes.
+
 ## Explicitly skipped (add when needed)
 
 - Backward-compat aliasing of old JSON keys — pre-1.0, clean break.

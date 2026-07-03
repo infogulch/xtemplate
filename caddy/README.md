@@ -51,10 +51,13 @@ Here are the xtemplate configs available to a Caddyfile:
 
 > [!NOTE]
 >
-> The Caddyfile format does not support configuring the dot context (databases,
-> directories, flags, nats). To access those configuration options you must use
-> Caddy's json configuration. See example xtemplate/caddy configuration at:
+> The Caddyfile format does not support configuring dot providers. To configure
+> providers you must use Caddy's JSON configuration. See example configuration at:
 > [caddy.json](../test/caddy.json)
+>
+> Each provider type must also be linked into the caddy binary with an additional
+> `--with github.com/infogulch/xtemplate/providers/<type>` flag when building
+> with xcaddy (see [Build](#build)).
 
 ```Caddy
 xtemplate {
@@ -99,11 +102,19 @@ To build xtemplate_caddy locally, install [`xcaddy`](xcaddy), then build from
 the directory root. Examples:
 
 ```shell
-# build with CGO in order to use the sqlite3 db driver
-CGO_ENABLED=1 xcaddy build --with github.com/infogulch/xtemplate/caddy
+# build with the sql, fs, and flags providers and CGO for the sqlite3 driver
+CGO_ENABLED=1 xcaddy build \
+    --with github.com/infogulch/xtemplate/caddy \
+    --with github.com/infogulch/xtemplate/providers/sql \
+    --with github.com/infogulch/xtemplate/providers/fs \
+    --with github.com/infogulch/xtemplate/providers/flags
 
-# build enable the sqlite_json build tag to get json funcs
-GOFLAGS='-tags="sqlite_json"' CGO_ENABLED=1 xcaddy build --with github.com/infogulch/xtemplate/caddy
+# also enable the sqlite_json build tag to get JSON functions
+GOFLAGS='-tags="sqlite_json"' CGO_ENABLED=1 xcaddy build \
+    --with github.com/infogulch/xtemplate/caddy \
+    --with github.com/infogulch/xtemplate/providers/sql \
+    --with github.com/infogulch/xtemplate/providers/fs \
+    --with github.com/infogulch/xtemplate/providers/flags
 ```
 
 [xcaddy]: https://github.com/caddyserver/xcaddy

@@ -242,6 +242,10 @@ export def xt-build-caddy [...extra: string] {
     (^xcaddy build
         --with github.com/infogulch/xtemplate/caddy=./caddy
         --with github.com/infogulch/xtemplate=.
+        --with github.com/infogulch/xtemplate/providers/sql=./providers/sql
+        --with github.com/infogulch/xtemplate/providers/fs=./providers/fs
+        --with github.com/infogulch/xtemplate/providers/flags=./providers/flags
+        --with github.com/infogulch/xtemplate/providers/nats=./providers/nats
         --with github.com/ncruces/go-sqlite3/driver
         --output ($env.DIST_DIR | path join caddy)
         ...$extra) e> ($env.DIST_DIR | path join caddy.build.log)
