@@ -158,19 +158,11 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 	var dot []DotConfig
 
 	{
-		for _, d := range build.config.Databases {
-			dot = append(dot, &d)
+		var err error
+		if dot, err = resolveProviders(build.config.ProvidersRaw); err != nil {
+			return nil, nil, nil, err
 		}
-		for _, d := range build.config.Flags {
-			dot = append(dot, &d)
-		}
-		for _, d := range build.config.Directories {
-			dot = append(dot, &d)
-		}
-		for _, d := range build.config.Nats {
-			dot = append(dot, &d)
-		}
-		dot = append(dot, build.config.CustomProviders...)
+		dot = append(dot, build.config.Providers...)
 		seen := map[string]bool{}
 		for _, d := range dot {
 			name := d.FieldName()

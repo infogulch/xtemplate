@@ -18,7 +18,7 @@ func WithDir(name string, fs afero.Fs) Option {
 		if fs == nil {
 			return fmt.Errorf("cannot create DotFSProvider with null FS with name %s", name)
 		}
-		c.Directories = append(c.Directories, DotDirConfig{Name: name, FS: fs})
+		c.Providers = append(c.Providers, &DotDirConfig{Name: name, FS: fs})
 		return nil
 	}
 }

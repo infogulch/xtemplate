@@ -108,6 +108,14 @@ Add an `[Unreleased]` section (matching the v0.9.2 format already in the file) w
 - Created `xtemplate/providers_test.go` (`package xtemplate`): test-only `_test` provider registered in `init()`; four tests — round-trip decode, well-known unknown type, generic unknown type, duplicate-registration panic. All pass.
 - No existing files touched.
 
+### Bite 2 — `xtemplate/config.go` + `xtemplate/instance.go` + four `With*` files + `caddy/module_test.go` ✓
+
+- `config.go`: replaced `Databases`/`Flags`/`Directories`/`Nats` typed slices + `CustomProviders` with `ProvidersRaw []json.RawMessage` (JSON) and `Providers []DotConfig` (Go API); `WithProvider` now appends to `Providers`.
+- `instance.go`: replaced the four typed-slice loops with `resolveProviders(build.config.ProvidersRaw)` + `append(dot, build.config.Providers...)`.
+- `dot_db_config.go`, `dot_fs_config.go`, `dot_flags.go`, `dot_nats_config.go`: each `With*` function now appends a pointer to `c.Providers` instead of the old typed slice. Fixed stale `"DotKVProvider"` error string in `WithFlags` → `"DotFlagsProvider"`. Added `json:"-"` to `DotNatsConfig.Conn`.
+- `caddy/module_test.go`: updated JSON fixture to `"providers"` array with `"type"` discriminators; replaced typed-slice assertions with `len(m.ProvidersRaw) == 3`.
+- Build and targeted tests pass.
+
 ## Explicitly skipped (add when needed)
 
 - Backward-compat aliasing of old JSON keys — pre-1.0, clean break.

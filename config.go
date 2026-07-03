@@ -4,6 +4,7 @@ package xtemplate
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -39,11 +40,8 @@ type Config struct {
 
 	CrossOrigin CrossOriginConfig `json:"crossorigin" arg:"-"`
 
-	Databases       []DotDBConfig    `json:"databases" arg:"-"`
-	Flags           []DotFlagsConfig `json:"flags" arg:"-"`
-	Directories     []DotDirConfig   `json:"directories" arg:"-"`
-	Nats            []DotNatsConfig  `json:"nats" arg:"-"`
-	CustomProviders []DotConfig      `json:"-" arg:"-"`
+	ProvidersRaw []json.RawMessage `json:"providers,omitempty" arg:"-"`
+	Providers    []DotConfig       `json:"-" arg:"-"`
 
 	// Encodings to pre-compress static files into at load time. Supported values:
 	// "gzip", "zstd", "br". Default empty (no pre-compression).
@@ -179,7 +177,7 @@ func WithHandler(pattern string, h http.Handler) Option {
 
 func WithProvider(p DotConfig) Option {
 	return func(c *Config) error {
-		c.CustomProviders = append(c.CustomProviders, p)
+		c.Providers = append(c.Providers, p)
 		return nil
 	}
 }

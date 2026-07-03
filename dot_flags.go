@@ -16,9 +16,9 @@ func (d DotFlags) Value(key string) string {
 func WithFlags(name string, flags map[string]string) Option {
 	return func(c *Config) error {
 		if flags == nil {
-			return fmt.Errorf("cannot create DotKVProvider with null map with name %s", name)
+			return fmt.Errorf("cannot create DotFlagsProvider with null map with name %s", name)
 		}
-		c.Flags = append(c.Flags, DotFlagsConfig{name, flags})
+		c.Providers = append(c.Providers, &DotFlagsConfig{name, flags})
 		return nil
 	}
 }

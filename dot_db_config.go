@@ -12,7 +12,7 @@ func WithDB(name string, db *sql.DB, opt *sql.TxOptions) Option {
 		if db == nil {
 			return fmt.Errorf("cannot create database provider with nil sql.DB. name: %s", name)
 		}
-		c.Databases = append(c.Databases, DotDBConfig{Name: name, DB: db, TxOptions: opt})
+		c.Providers = append(c.Providers, &DotDBConfig{Name: name, DB: db, TxOptions: opt})
 		return nil
 	}
 }

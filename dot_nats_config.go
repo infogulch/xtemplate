@@ -11,7 +11,7 @@ import (
 
 func WithNats(name string, serverOpts *server.Options, connOpts *nats.Options, jsOpts []jetstream.JetStreamOpt) Option {
 	return func(c *Config) error {
-		c.Nats = append(c.Nats, DotNatsConfig{Name: name, NatsConfig: &NatsConfig{serverOpts, connOpts, jsOpts}})
+		c.Providers = append(c.Providers, &DotNatsConfig{Name: name, NatsConfig: &NatsConfig{serverOpts, connOpts, jsOpts}})
 		return nil
 	}
 }
@@ -26,7 +26,7 @@ type DotNatsConfig struct {
 	Name string `json:"name"`
 
 	*NatsConfig `json:"nats_config"`
-	Conn        *nats.Conn
+	Conn        *nats.Conn `json:"-"`
 
 	server *server.Server
 	js     jetstream.JetStream
