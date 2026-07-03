@@ -49,16 +49,6 @@ caddy run --config Caddyfile
 
 Here are the xtemplate configs available to a Caddyfile:
 
-> [!NOTE]
->
-> The Caddyfile format does not support configuring dot providers. To configure
-> providers you must use Caddy's JSON configuration. See example configuration at:
-> [caddy.json](../test/caddy.json)
->
-> Each provider type must also be linked into the caddy binary with an additional
-> `--with github.com/infogulch/xtemplate/providers/<type>` flag when building
-> with xcaddy (see [Build](#build)).
-
 ```Caddy
 xtemplate {
     templates_dir <string>                   # The path to the templates directory. Default: "templates".
@@ -72,7 +62,95 @@ xtemplate {
         trusted_origins <origin...>          # Origins allowed to make unsafe cross-origin requests.
         insecure_bypass_patterns <pattern...> # Request path patterns exempt from cross-origin protection.
     }
+
+    provider <type> <field> {
+        # provider-specific options (see Provider blocks below)
+    }
 }
+```
+
+### Provider blocks
+
+Dot providers are configured with `provider <type> <field> { }` blocks. The
+`<type>` selects the provider kind and `<field>` sets the dot field name
+templates use to access it (e.g. `.DB`, `.FS`).
+
+Caddyfile syntax covers a curated subset of each provider's options. For
+advanced configuration use Caddy's JSON format ([caddy.json](../test/caddy.json)
+has examples); all JSON fields remain available as a full-fidelity escape hatch.
+
+**sql** — connect to a SQL database:
+
+```Caddy
+provider sql DB {
+    driver   <driver>   # e.g. sqlite3, postgres, mysql
+    connstr  <connstr>  # driver-specific connection string
+    max_open_conns <n>  # optional connection pool limit
+}
+```
+
+**fs** — expose a directory as a read/write filesystem:
+
+```Caddy
+provider fs FS {
+    path <dir>  # root directory path
+}
+```
+
+**flags** — static key/value pairs accessible in templates:
+
+```Caddy
+provider flags Flags {
+    env        production
+    version    1.2.3
+}
+```
+
+**nats** — connect to a NATS messaging server:
+
+```Caddy
+provider nats Nats {
+    in_process_server {
+        dont_listen true   # embedded server, no external port
+    }
+    conn_options {
+        url nats://localhost:4222
+    }
+}
+```
+
+JetStream options and advanced `server.Options` fields have no JSON
+representation and must be set via the Go API.
+
+#### Linking providers into the binary
+
+Provider Caddyfile support lives in opt-in subpackages. Add one `--with` flag
+per provider, or use `caddy/standard` to pull in the default set (sql, fs,
+flags) in one flag:
+
+```shell
+# default set (sql + fs + flags) — Caddyfile + JSON
+xcaddy build \
+    --with github.com/infogulch/xtemplate/caddy \
+    --with github.com/infogulch/xtemplate/caddy/standard
+
+# default set + nats
+xcaddy build \
+    --with github.com/infogulch/xtemplate/caddy \
+    --with github.com/infogulch/xtemplate/caddy/standard \
+    --with github.com/infogulch/xtemplate/providers/nats/caddyfile
+
+# individual provider (JSON-only users can also use these)
+xcaddy build \
+    --with github.com/infogulch/xtemplate/caddy \
+    --with github.com/infogulch/xtemplate/providers/sql/caddyfile
+```
+
+A provider type unknown at parse time produces an actionable error:
+
+```
+provider type "sql" is not available in this build;
+add it with --with github.com/infogulch/xtemplate/providers/sql/caddyfile
 ```
 
 > `templates_path` is accepted as a deprecated alias for `templates_dir`.
@@ -102,19 +180,15 @@ To build xtemplate_caddy locally, install [`xcaddy`](xcaddy), then build from
 the directory root. Examples:
 
 ```shell
-# build with the sql, fs, and flags providers and CGO for the sqlite3 driver
+# build with the default set (sql, fs, flags) — Caddyfile + JSON
 CGO_ENABLED=1 xcaddy build \
     --with github.com/infogulch/xtemplate/caddy \
-    --with github.com/infogulch/xtemplate/providers/sql \
-    --with github.com/infogulch/xtemplate/providers/fs \
-    --with github.com/infogulch/xtemplate/providers/flags
+    --with github.com/infogulch/xtemplate/caddy/standard
 
 # also enable the sqlite_json build tag to get JSON functions
 GOFLAGS='-tags="sqlite_json"' CGO_ENABLED=1 xcaddy build \
     --with github.com/infogulch/xtemplate/caddy \
-    --with github.com/infogulch/xtemplate/providers/sql \
-    --with github.com/infogulch/xtemplate/providers/fs \
-    --with github.com/infogulch/xtemplate/providers/flags
+    --with github.com/infogulch/xtemplate/caddy/standard
 ```
 
 [xcaddy]: https://github.com/caddyserver/xcaddy
