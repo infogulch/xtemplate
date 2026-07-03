@@ -37,12 +37,14 @@ func TestResolveProviders_roundtrip(t *testing.T) {
 }
 
 func TestResolveProviders_unknownWellKnown(t *testing.T) {
-	raw := json.RawMessage(`{"type":"sql"}`)
+	// "nats" is not imported by any file in this test binary so it is
+	// guaranteed to be unregistered, exercising the well-known hint path.
+	raw := json.RawMessage(`{"type":"nats"}`)
 	_, err := resolveProviders([]json.RawMessage{raw})
 	if err == nil {
 		t.Fatal("expected error for unregistered well-known type")
 	}
-	want := `add it by importing github.com/infogulch/xtemplate/providers/sql`
+	want := `add it by importing github.com/infogulch/xtemplate/providers/nats`
 	if !strings.Contains(err.Error(), want) {
 		t.Fatalf("error %q does not contain %q", err.Error(), want)
 	}

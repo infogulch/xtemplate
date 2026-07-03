@@ -116,6 +116,19 @@ Add an `[Unreleased]` section (matching the v0.9.2 format already in the file) w
 - `caddy/module_test.go`: updated JSON fixture to `"providers"` array with `"type"` discriminators; replaced typed-slice assertions with `len(m.ProvidersRaw) == 3`.
 - Build and targeted tests pass.
 
+### Bite 3 — Provider moves + test relocation ✓
+
+- **Deleted** `dot_db.go`, `dot_db_config.go`, `dot_fs.go`, `dot_fs_config.go`, `dot_flags.go`, `dot_nats.go`, `dot_nats_config.go`, `dot_kv.go` from the `xtemplate` package.
+- **Created `providers/sql/sql.go`**: `DotSqlConfig`/`DotSql`/`WithSql` (renamed from `DotDBConfig`/`DotDB`/`WithDB`); `init()` registers `"sql"`.
+- **Created `providers/fs/fs.go`**: `DotFsConfig`/`DotFs`/`WithFs` (renamed from `DotDirConfig`/`Dir`/`WithDir`); deleted `DotFsConfig.Type` field; local `bufPool`; `init()` registers `"fs"`.
+- **Created `providers/flags/flags.go`**: `DotFlagsConfig`/`DotFlags`/`WithFlags` (names unchanged); `init()` registers `"flags"`.
+- **Created `providers/nats/nats.go`**: `DotNatsConfig`/`NatsConfig`/`DotNats`/`WithNats` (names unchanged); `json:"-"` on `Conn` retained; `init()` registers `"nats"`.
+- **Test relocation**: `dot_db_test.go` → `providers/sql/sql_test.go` (package `sql_test`); `dot_nats_test.go` → `providers/nats/nats_test.go` (package `nats_test`); `TestFlagsProvider` → `providers/flags/flags_test.go`; `TestDirProvider` → `providers/fs/fs_test.go`. Each provider test package provides its own `buildInstance`/`doRequest` helpers (public API only).
+- **`readme_test.go`**: changed from `package xtemplate` to `package xtemplate_test`; inline helpers added; imports `providers/sql` and `providers/fs`; all `WithDB`/`WithDir` calls replaced with `provsql.WithSql`/`provfs.WithFs`.
+- **`instance_test.go`**: removed `TestServeHTTP_FlagsProvider` and `TestServeHTTP_DirProvider` (moved to provider packages).
+- **`providers_test.go`**: updated `TestResolveProviders_unknownWellKnown` to use `"nats"` (guaranteed unregistered in the xtemplate test binary).
+- All packages build and all tests pass.
+
 ## Explicitly skipped (add when needed)
 
 - Backward-compat aliasing of old JSON keys — pre-1.0, clean break.
