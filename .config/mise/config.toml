@@ -11,6 +11,7 @@ hurl = "latest"
 "aqua:nushell/nushell" = "latest"
 golangci-lint = "latest"
 "go:github.com/caddyserver/xcaddy/cmd/xcaddy" = "latest"
+"github:lightpanda-io/browser" = "nightly"
 
 [tasks.lint]
 description = "Run lint checks"
