@@ -25,6 +25,7 @@ ARG LDFLAGS
 
 COPY app ./app/
 COPY cmd ./cmd/
+COPY providers ./providers/
 COPY *.go ./
 RUN GOOS=linux \
     GOARCH=amd64 \
