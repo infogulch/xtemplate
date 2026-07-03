@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Drop withArgs, use list instead
 - Convert hub examples list from js to a Go template equivalent
+- Add a nushell-based SSE test harness
 
 ## [v0.9.5] - 2026-06-23
 

@@ -170,6 +170,39 @@ export def run-example [port: int, dir: string] {
     ^hurl --continue-on-error --no-output --test --report-html $report --connect-to $"localhost:8080:localhost:($port)" ...(glob $"($dir)/tests/*.hurl")
 }
 
+# Test a page that uses SSE with lightpanda.
+#
+# lightpanda does not implement EventSource, so this injects a fetch-based
+# polyfill (.config/mise/eventsource-polyfill.js) before any page scripts run.
+# The polyfill replaces `new EventSource(url)` with a streaming fetch that fires
+# onmessage for each `data:` line, letting the page update the DOM normally.
+# --wait-selector fires as soon as the first matching element appears, so the
+# stream can still be running in the background when the snapshot is taken.
+#
+# --selector    CSS selector to wait for before capturing the DOM
+# --contains    assert this substring appears in the final HTML (optional)
+# --wait-ms     max milliseconds to wait for --selector (default: 5000)
+export def run-lightpanda-sse [
+    url: string,
+    --selector: string = "body",
+    --contains: string = "",
+    --wait-ms: int = 5000,
+] {
+    let port = ($url | url parse | get port | into int)
+    wait-ready $port 30
+    let polyfill = ($env.ROOT | path join .config mise eventsource-polyfill.js)
+    let html = (^lightpanda fetch
+        --inject-script-file $polyfill
+        --wait-selector $selector
+        --wait-ms ($wait_ms | into string)
+        --dump html
+        $url
+    )
+    if ($contains | is-not-empty) and not ($html | str contains $contains) {
+        error make --unspanned { msg: $"lightpanda-sse: expected '($contains)' in DOM\n($html)" }
+    }
+}
+
 # List external dep packages for the current platform, configured by setting
 # GOOS/GOARCH in the environment. Uses -deps -test ./... to include packages
 # imported by test files in this module, so gotest doesn't need to recompile
