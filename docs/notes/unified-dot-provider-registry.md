@@ -143,6 +143,13 @@ Add an `[Unreleased]` section (matching the v0.9.2 format already in the file) w
 - `.config/mise/lib.nu` (`xt-build-caddy`): added `--with` for all four provider packages with local path mappings alongside the existing caddy/xtemplate entries.
 - Build passes.
 
+### Bite 6 — `README.md` + `CONTEXT.md` + `CHANGELOG.md` ✓
+
+- `README.md`: replaced broken `[DotFS]`/`[DotDB]`/`[DotKV]` optional-field list with `[DotFs]`/`[DotSql]` pointing to their new provider packages; deleted `DotKV` bullet and link definition; updated `DotDB` → `DotSql` in the custom-provider development note.
+- `CONTEXT.md`: added **Provider package name aliasing** entry documenting the aliasing convention (`stdsql`, `natsgo`, etc.).
+- `CHANGELOG.md`: appended three items to `[Unreleased]`: JSON config shape break, Go API symbol moves, and `DotKV`/`DotDirConfig.Type` removals.
+- Build passes.
+
 ## Explicitly skipped (add when needed)
 
 - Backward-compat aliasing of old JSON keys — pre-1.0, clean break.

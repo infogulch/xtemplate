@@ -421,13 +421,11 @@ These fields are always present in relevant template invocations:
 These optional value providers can be configured with any field name, and can be
 configured multiple times with different configurations.
 
-- Read and list files. See [DotFS]
-- Query and execute SQL statements. See [DotDB]
-- Read template-level key-value map. See [DotKV]
+- Read and list files. See [DotFs]
+- Query and execute SQL statements. See [DotSql]
 
-[Dir]: https://pkg.go.dev/github.com/infogulch/xtemplate#Dir
-[DotDB]: https://pkg.go.dev/github.com/infogulch/xtemplate#DotDB
-[DotKV]: https://pkg.go.dev/github.com/infogulch/xtemplate#DotKV
+[DotFs]: https://pkg.go.dev/github.com/infogulch/xtemplate/providers/fs#DotFs
+[DotSql]: https://pkg.go.dev/github.com/infogulch/xtemplate/providers/sql#DotSql
 
 #### ✏️ Custom dot fields
 
@@ -548,7 +546,7 @@ concrete type: it is called once with a mock request at load time to infer the
 field type via reflection.
 
 Optionally implement `xtemplate.CleanupDotProvider` to run per-request cleanup
-(e.g. rolling back a transaction), the way the built-in `DotDB` provider does.
+(e.g. rolling back a transaction), the way the `DotSql` provider does.
 
 See [`examples/dotprovider`](./examples/dotprovider/) for a complete, runnable
 example.

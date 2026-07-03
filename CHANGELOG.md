@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Drop withArgs, use list instead
 - Convert hub examples list from js to a Go template equivalent
+- **Breaking (JSON config):** `"databases"`, `"directories"`, `"flags"`, and `"nats"` top-level keys are replaced by a single `"providers"` array; each entry carries a `"type"` discriminator (`"sql"`, `"fs"`, `"flags"`, `"nats"`). The former `"databases"` type is now `"sql"`.
+- **Breaking (Go API):** All provider symbols move from `package xtemplate` to their respective `providers/<type>` packages: `WithDB`/`DotDB`/`DotDBConfig` → `providers/sql` as `WithSql`/`DotSql`/`DotSqlConfig`; `WithDir`/`Dir`/`DotDirConfig` → `providers/fs` as `WithFs`/`DotFs`/`DotFsConfig`; `WithFlags`/`DotFlags`/`DotFlagsConfig` → `providers/flags` (names unchanged); `WithNats`/`DotNats`/`DotNatsConfig`/`NatsConfig` → `providers/nats` (names unchanged). Caddy binaries must add `--with github.com/infogulch/xtemplate/providers/<type>` for each provider type used.
+- **Removed:** `DotKV` (dead code; its `nats.go/jetstream` import was preventing nats excludability). `DotDirConfig.Type` (speculative `json:"type"` field, never wired up; the `"type"` key is now reserved by the provider registry discriminator).
 
 ## [v0.9.5] - 2026-06-23
 
