@@ -129,6 +129,13 @@ Add an `[Unreleased]` section (matching the v0.9.2 format already in the file) w
 - **`providers_test.go`**: updated `TestResolveProviders_unknownWellKnown` to use `"nats"` (guaranteed unregistered in the xtemplate test binary).
 - All packages build and all tests pass.
 
+### Bite 4 — `cmd/` blank imports + JSON config rewrites ✓
+
+- `cmd/main.go`, `cmd/git/main.go`, `cmd/watchfs/main.go`: added blank imports for all four providers (`providers/flags`, `providers/fs`, `providers/nats`, `providers/sql`) alongside the existing sqlite driver import.
+- `test/config.json`: replaced `"directories"`/`"databases"`/`"flags"`/`"nats"` top-level keys with a `"providers"` array with `"type"` discriminators on each entry.
+- `examples/contacts/config.json`, `examples/blog/config.json`, `examples/filebrowser/config.json`: same shape conversion.
+- Build passes.
+
 ## Explicitly skipped (add when needed)
 
 - Backward-compat aliasing of old JSON keys — pre-1.0, clean break.

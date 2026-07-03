@@ -6,6 +6,11 @@ package main
 import (
 	"github.com/infogulch/xtemplate/app/git"
 
+	_ "github.com/infogulch/xtemplate/providers/flags"
+	_ "github.com/infogulch/xtemplate/providers/fs"
+	_ "github.com/infogulch/xtemplate/providers/nats"
+	_ "github.com/infogulch/xtemplate/providers/sql"
+
 	_ "github.com/ncruces/go-sqlite3/driver"
 )
 
