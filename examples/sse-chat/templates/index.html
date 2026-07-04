@@ -4,13 +4,17 @@
 <h1>Live feed</h1>
 <ul id="feed"></ul>
 <script>
-    new EventSource("/events").onmessage = (e) => {
+    new EventSource("/events?count=3&delay=200").onmessage = (e) => {
         const li = document.createElement("li");
         li.textContent = e.data;
         document.getElementById("feed").appendChild(li);
     };
 </script>
-{{- define "SSE /events"}} {{- $count := .Req.URL.Query.Get `count` | default
-`20` | atoi}} {{- $delay := .Req.URL.Query.Get `delay` | default `1000` | atoi}}
-{{- range $i := .Flush.Repeat $count}} {{- printf "data: message %d\n\n"
-$i}}{{$.Flush.Flush}}{{$.Flush.Sleep $delay}} {{- end}} {{- end}}
+{{- define "SSE /events"}}
+{{- $count := .Req.URL.Query.Get `count` | default `20` | atoi}}
+{{- $delay := .Req.URL.Query.Get `delay` | default `1000` | atoi}}
+{{- range $i := .Flush.Repeat $count}}
+    {{- $.Flush.SendSSE "" (printf "message %d" $i)}}
+    {{- $.Flush.Sleep $delay}}
+{{- end}}
+{{- end}}

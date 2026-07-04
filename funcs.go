@@ -34,7 +34,6 @@ var xtemplateFuncs template.FuncMap = template.FuncMap{
 	"trustSrcSet":  FuncTrustSrcSet,
 	"idx":          FuncIdx,
 	"try":          FuncTry,
-	"withArgs":     FuncWithArgs,
 }
 
 // blueMondayPolicies is the map of names of bluemonday policies available to
@@ -318,61 +317,6 @@ func FuncTry(fn any, args ...any) (*result, error) {
 		Value: value,
 		Error: err,
 	}, nil
-}
-
-// withArgs attaches extra arguments to the dot value so they can be passed to a
-// sub-template, working around Go's restriction that the {{template}} action
-// accepts only a single data argument. It returns a wrapper struct that embeds
-// the original dot (so all of its fields and methods remain accessible) and
-// exposes the extra arguments as a .Args slice. For example:
-//
-//	{{template "head" withArgs . "Post not found"}}
-//
-// and inside the "head" template:
-//
-//	<title>{{.Args | idx 0}}</title>
-//	{{.X.StaticFileHash "/assets/style.css"}}
-//
-// Calling withArgs on an already-wrapped dot replaces .Args rather than nesting,
-// keeping the embedded dot flat. The dot must be a struct.
-func FuncWithArgs(dot any, args ...any) (any, error) {
-	dv := reflect.ValueOf(dot)
-	if dv.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("withArgs: dot is %T, want a struct", dot)
-	}
-	var dat reflect.Type
-	if isWithArgs(dv.Type()) {
-		// Already a withArgs wrapper: reuse its type and unwrap the embedded
-		// dot so repeated calls replace Args instead of nesting Dot.Dot.Dot.
-		dat = dv.Type()
-		dv = dv.FieldByName("Dot")
-	} else {
-		fields := []reflect.StructField{
-			{Name: "Dot", Type: dv.Type(), Anonymous: true},
-			{Name: "Args", Type: reflect.TypeFor[[]any]()},
-		}
-		dat = reflect.StructOf(fields)
-	}
-	dav := reflect.New(dat).Elem()
-	dav.FieldByName("Dot").Set(dv)
-	dav.FieldByName("Args").Set(reflect.ValueOf(args))
-	return dav.Interface(), nil
-}
-
-// isWithArgs reports whether t is a wrapper struct produced by FuncWithArgs,
-// identified by its exact signature: an embedded "Dot" field plus an
-// "Args []any" field. This avoids mistaking an arbitrary user struct that
-// merely happens to have a field named "Dot" for an already-wrapped dot.
-func isWithArgs(t reflect.Type) bool {
-	if t.Kind() != reflect.Struct {
-		return false
-	}
-	dot, ok := t.FieldByName("Dot")
-	if !ok || !dot.Anonymous {
-		return false
-	}
-	args, ok := t.FieldByName("Args")
-	return ok && args.Type == reflect.TypeFor[[]any]()
 }
 
 type result struct {
