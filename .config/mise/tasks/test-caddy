@@ -1,10 +1,12 @@
 #!/usr/bin/env nu
-#MISE description="Build and integration-test the Caddy module"
+#MISE description="Build and integration-test the Caddy module (JSON config + Caddyfile config)"
 #MISE depends=["build-caddy"]
 use ../lib.nu *
 
-let work = (new-run-dir test-caddy)
 let caddy = ($env.DIST_DIR | path join caddy)
+
+# ── Round 1: JSON config ──────────────────────────────────────────────────────
+let work = (new-run-dir test-caddy)
 
 # Bind an ephemeral port so the suite never collides with whatever else is on
 # the host: rewrite the fixed listen address in the copied config to :0, then
@@ -21,6 +23,21 @@ let outcome = (try { run-hurl $port ($work | path join report); "ok" } catch { |
 do { ^$caddy stop } | complete | ignore
 
 if $outcome != "ok" {
-    print -e $"test-caddy failed: ($outcome)"
+    print -e $"test-caddy (JSON) failed: ($outcome)"
+    exit 1
+}
+
+# ── Round 2: Caddyfile config ─────────────────────────────────────────────────
+let work2 = (new-run-dir test-caddy-caddyfile)
+
+# Caddyfile already uses :0; no rewriting needed.
+do { cd $work2; ^$caddy start --config Caddyfile } out+err> ($work2 | path join caddy.log)
+
+let port2 = (wait-listen-port ($work2 | path join caddy.log))
+let outcome2 = (try { run-hurl $port2 ($work2 | path join report); "ok" } catch { |e| $e.msg })
+do { ^$caddy stop } | complete | ignore
+
+if $outcome2 != "ok" {
+    print -e $"test-caddy (Caddyfile) failed: ($outcome2)"
     exit 1
 }

@@ -20,6 +20,16 @@ Replace provider slices with a uniform provider registry:
 - While loading JSON config, the provider is looked up by matching the `"type"` field
   against registered providers and calling the constructor function.
 
+Allow external providers to be configured via Caddyfile:
+
+- Breaking: the default xtemplate caddy module no longer includes the default
+  providers. To include them, compile the
+  `github.com/infogulch/xtemplate/caddy/standard` module.
+- Caddyfile providers register as a `caddy.Module` in the
+  `xtemplate.providers.*` namespace with a type that implements the
+  `xtemplate/caddy.CaddyfileProvider` interface.
+- All core providers can be configured via Caddyfile.
+
 Other changes:
 
 - Removed `DotKV` as dead code. May be re-added in a future release.

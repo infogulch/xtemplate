@@ -85,6 +85,7 @@ export def new-run-dir [target: string]: nothing -> string {
         ($env.TEST_DIR | path join migrations)
         ($env.TEST_DIR | path join caddy.json)
         ($env.TEST_DIR | path join config.json)
+        ($env.TEST_DIR | path join Caddyfile)
         $dir
     ]
 
@@ -240,8 +241,8 @@ export def xt-prebuild-hash []: nothing -> string {
 export def xt-build-caddy [...extra: string] {
     cd $env.ROOT
     (^xcaddy build
-        --with github.com/infogulch/xtemplate/caddy=./caddy
         --with github.com/infogulch/xtemplate=.
+        --with github.com/infogulch/xtemplate/caddy/standard=./caddy/standard
         --with github.com/ncruces/go-sqlite3/driver
         --output ($env.DIST_DIR | path join caddy)
         ...$extra) e> ($env.DIST_DIR | path join caddy.build.log)
