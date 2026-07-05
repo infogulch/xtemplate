@@ -1,4 +1,4 @@
-package fs_test
+package dotfs_test
 
 import (
 	"net/http"
@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/afero"
 
 	"github.com/infogulch/xtemplate"
-	provfs "github.com/infogulch/xtemplate/providers/dotfs"
+	"github.com/infogulch/xtemplate/providers/dotfs"
 )
 
 func newMemFS(t *testing.T, files map[string]string) afero.Fs {
@@ -50,7 +50,7 @@ func TestDirProvider(t *testing.T) {
 		map[string]string{
 			"read.html": `{{.Files.Read "message.txt"}}`,
 		},
-		provfs.WithFs("Files", dataFS),
+		dotfs.WithFs("Files", dataFS),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/read")

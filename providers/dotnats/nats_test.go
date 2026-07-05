@@ -1,4 +1,4 @@
-package nats_test
+package dotnats_test
 
 import (
 	"net/http"
@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/nats-io/nats-server/v2/server"
-	natsgo "github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go"
 	"github.com/spf13/afero"
 
 	"github.com/infogulch/xtemplate"
-	provnats "github.com/infogulch/xtemplate/providers/dotnats"
+	"github.com/infogulch/xtemplate/providers/dotnats"
 )
 
 func buildInstance(t *testing.T, files map[string]string, opts ...xtemplate.Option) *xtemplate.Instance {
@@ -40,7 +40,7 @@ func doRequest(inst *xtemplate.Instance, method, target string) *httptest.Respon
 
 // newInProcessNats starts an in-process (non-listening) NATS server and returns
 // a client connection to it. Both are torn down when the test finishes.
-func newInProcessNats(t *testing.T) *natsgo.Conn {
+func newInProcessNats(t *testing.T) *nats.Conn {
 	t.Helper()
 	srv, err := server.NewServer(&server.Options{DontListen: true})
 	if err != nil {
@@ -50,7 +50,7 @@ func newInProcessNats(t *testing.T) *natsgo.Conn {
 	if !srv.ReadyForConnections(5 * time.Second) {
 		t.Fatal("in-process nats server did not become ready")
 	}
-	nc, err := natsgo.Connect("", natsgo.InProcessServer(srv))
+	nc, err := nats.Connect("", nats.InProcessServer(srv))
 	if err != nil {
 		srv.Shutdown()
 		t.Fatalf("failed to connect to in-process nats server: %v", err)
@@ -65,7 +65,7 @@ func newInProcessNats(t *testing.T) *natsgo.Conn {
 // TestDotNats_Request drives the request-reply path.
 func TestDotNats_Request(t *testing.T) {
 	nc := newInProcessNats(t)
-	if _, err := nc.Subscribe("echo", func(m *natsgo.Msg) {
+	if _, err := nc.Subscribe("echo", func(m *nats.Msg) {
 		_ = m.Respond([]byte("pong"))
 	}); err != nil {
 		t.Fatalf("failed to subscribe responder: %v", err)
@@ -75,7 +75,7 @@ func TestDotNats_Request(t *testing.T) {
 		map[string]string{
 			"req.html": `{{$m := .Nats.Request "echo" "ping"}}{{printf "%s" $m.Data}}`,
 		},
-		xtemplate.WithProvider(&provnats.DotNatsConfig{Name: "Nats", Conn: nc}),
+		xtemplate.WithProvider(&dotnats.DotNatsConfig{Name: "Nats", Conn: nc}),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/req")
@@ -92,7 +92,7 @@ func TestDotNats_Request(t *testing.T) {
 func TestDotNats_Publish(t *testing.T) {
 	nc := newInProcessNats(t)
 	got := make(chan string, 1)
-	if _, err := nc.Subscribe("events", func(m *natsgo.Msg) {
+	if _, err := nc.Subscribe("events", func(m *nats.Msg) {
 		got <- string(m.Data)
 	}); err != nil {
 		t.Fatalf("failed to subscribe: %v", err)
@@ -102,7 +102,7 @@ func TestDotNats_Publish(t *testing.T) {
 		map[string]string{
 			"pub.html": `{{$_ := .Nats.Publish "events" "hello"}}ok`,
 		},
-		xtemplate.WithProvider(&provnats.DotNatsConfig{Name: "Nats", Conn: nc}),
+		xtemplate.WithProvider(&dotnats.DotNatsConfig{Name: "Nats", Conn: nc}),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/pub")

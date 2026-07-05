@@ -1,4 +1,4 @@
-package nats
+package dotnats
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/infogulch/xtemplate"
 	"github.com/nats-io/nats-server/v2/server"
-	natsgo "github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -17,7 +17,7 @@ func init() {
 
 // WithNats creates an [xtemplate.Option] that adds a nats dot provider to the
 // config.
-func WithNats(name string, serverOpts *server.Options, connOpts *natsgo.Options, jsOpts []jetstream.JetStreamOpt) xtemplate.Option {
+func WithNats(name string, serverOpts *server.Options, connOpts *nats.Options, jsOpts []jetstream.JetStreamOpt) xtemplate.Option {
 	return func(c *xtemplate.Config) error {
 		c.Providers = append(c.Providers, &DotNatsConfig{Name: name, NatsConfig: &NatsConfig{serverOpts, connOpts, jsOpts}})
 		return nil
@@ -27,7 +27,7 @@ func WithNats(name string, serverOpts *server.Options, connOpts *natsgo.Options,
 // NatsConfig holds the configuration needed to connect to a NATS server.
 type NatsConfig struct {
 	InProcessServerOptions *server.Options          `json:"in_process_server_options"`
-	ConnOptions            *natsgo.Options          `json:"conn_options"`
+	ConnOptions            *nats.Options            `json:"conn_options"`
 	JetStreamOptions       []jetstream.JetStreamOpt // encode jetstream opts into json?
 }
 
@@ -37,7 +37,7 @@ type DotNatsConfig struct {
 	Name string `json:"name"`
 
 	*NatsConfig `json:"nats_config"`
-	Conn        *natsgo.Conn `json:"-"`
+	Conn        *nats.Conn `json:"-"`
 
 	server *server.Server
 	js     jetstream.JetStream
@@ -63,9 +63,9 @@ func (d *DotNatsConfig) Init(ctx context.Context) error {
 	if d.NatsConfig == nil {
 		return fmt.Errorf("no nats client and no config provided to initialize nats client")
 	}
-	var connOpt natsgo.Options
+	var connOpt nats.Options
 	if d.ConnOptions == nil {
-		connOpt = natsgo.GetDefaultOptions()
+		connOpt = nats.GetDefaultOptions()
 	} else {
 		connOpt = *d.ConnOptions
 	}
@@ -86,7 +86,7 @@ func (d *DotNatsConfig) Init(ctx context.Context) error {
 			}()
 		}
 
-		_ = natsgo.InProcessServer(d.server)(&connOpt)
+		_ = nats.InProcessServer(d.server)(&connOpt)
 	}
 	d.Conn, err = connOpt.Connect()
 	if err != nil {
@@ -104,12 +104,12 @@ func (d *DotNatsConfig) Value(r xtemplate.Request) (any, error) {
 type DotNats struct {
 	ctx context.Context
 
-	*natsgo.Conn
+	*nats.Conn
 	jetstream.JetStream
 }
 
-func (d *DotNats) Subscribe(subject string) (<-chan *natsgo.Msg, error) {
-	ch := make(chan *natsgo.Msg)
+func (d *DotNats) Subscribe(subject string) (<-chan *nats.Msg, error) {
+	ch := make(chan *nats.Msg)
 	sub, err := d.ChanSubscribe(subject, ch)
 	if err != nil {
 		return nil, err
@@ -127,7 +127,7 @@ func (d *DotNats) Publish(subject, message string) error {
 	return d.Conn.Publish(subject, []byte(message))
 }
 
-func (d *DotNats) Request(subject, data string, timeout_ ...time.Duration) (*natsgo.Msg, error) {
+func (d *DotNats) Request(subject, data string, timeout_ ...time.Duration) (*nats.Msg, error) {
 	var timeout time.Duration
 	switch len(timeout_) {
 	case 0:

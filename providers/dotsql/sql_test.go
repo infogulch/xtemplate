@@ -1,4 +1,4 @@
-package sql_test
+package dotsql_test
 
 import (
 	"database/sql"
@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/afero"
 
 	"github.com/infogulch/xtemplate"
-	provsql "github.com/infogulch/xtemplate/providers/dotsql"
+	"github.com/infogulch/xtemplate/providers/dotsql"
 )
 
 // buildInstance builds an Instance from an in-memory template fs and any extra
@@ -78,7 +78,7 @@ func TestDotSql_Query(t *testing.T) {
 		map[string]string{
 			"count.html": `{{.DB.QueryVal "SELECT count(*) FROM users"}}`,
 		},
-		provsql.WithSql("DB", db, nil),
+		dotsql.WithSql("DB", db, nil),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/count")
@@ -97,7 +97,7 @@ func TestDotSql_QueryRowsStream(t *testing.T) {
 		map[string]string{
 			"names.html": `{{range .DB.QueryRows "SELECT name FROM users ORDER BY name"}}{{.name}},{{end}}`,
 		},
-		provsql.WithSql("DB", db, nil),
+		dotsql.WithSql("DB", db, nil),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/names")
@@ -117,7 +117,7 @@ func TestDotSql_QueryRowsIterationError(t *testing.T) {
 		map[string]string{
 			"boom.html": `{{range .DB.QueryRows "SELECT 1 AS n UNION ALL SELECT abs(-9223372036854775808)"}}{{.n}}{{end}}`,
 		},
-		provsql.WithSql("DB", db, nil),
+		dotsql.WithSql("DB", db, nil),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/boom")
@@ -142,7 +142,7 @@ func TestDotSql_QueryRowWrongCount(t *testing.T) {
 				map[string]string{
 					"row.html": `{{$r := .DB.QueryRow "` + tc.query + `"}}{{$r.name}}`,
 				},
-				provsql.WithSql("DB", db, nil),
+				dotsql.WithSql("DB", db, nil),
 			)
 
 			w := doRequest(inst, http.MethodGet, "/row")
@@ -161,7 +161,7 @@ func TestDotSql_AutoCommit(t *testing.T) {
 		map[string]string{
 			"insert.html": `{{$_ := .DB.Exec "INSERT INTO users (name) VALUES ('carol')"}}ok`,
 		},
-		provsql.WithSql("DB", db, nil),
+		dotsql.WithSql("DB", db, nil),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/insert")
@@ -181,7 +181,7 @@ func TestDotSql_RollbackOnError(t *testing.T) {
 		map[string]string{
 			"fail.html": `{{$_ := .DB.Exec "INSERT INTO users (name) VALUES ('dave')"}}{{failf "boom"}}`,
 		},
-		provsql.WithSql("DB", db, nil),
+		dotsql.WithSql("DB", db, nil),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/fail")

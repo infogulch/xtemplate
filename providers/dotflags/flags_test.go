@@ -1,4 +1,4 @@
-package flags_test
+package dotflags_test
 
 import (
 	"net/http"
@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/afero"
 
 	"github.com/infogulch/xtemplate"
-	flags "github.com/infogulch/xtemplate/providers/dotflags"
+	"github.com/infogulch/xtemplate/providers/dotflags"
 )
 
 func buildInstance(t *testing.T, files map[string]string, opts ...xtemplate.Option) *xtemplate.Instance {
@@ -41,7 +41,7 @@ func TestFlagsProvider(t *testing.T) {
 		map[string]string{
 			"greet.html": `{{.Flags.Value "greeting"}}`,
 		},
-		flags.WithFlags("Flags", map[string]string{"greeting": "hi"}),
+		dotflags.WithFlags("Flags", map[string]string{"greeting": "hi"}),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/greet")
