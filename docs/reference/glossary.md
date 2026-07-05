@@ -48,7 +48,7 @@ Domain terms for xtemplate. Behavior and APIs live in the rest of the [docs](../
 
 **Builtin provider**: Supplied by xtemplate: `.X` and `.Req` always; `.Resp` on buffered handlers; `.Flush` on flushing handlers.
 
-**Core provider**: Package under `xtemplate/providers` (`sql`, `fs`, `flags`, `nats`).
+**Core provider**: Package under `xtemplate/providers` (`sql`, `fs`, `flags`, `nats`, `smtp`).
 
 **Standard provider set**: Types included in release binaries (`cmd/*`). For Caddy, blank-import `xtemplate/caddy/standard`.
 

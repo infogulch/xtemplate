@@ -113,6 +113,19 @@ Package: [`providers/dotnats`](https://pkg.go.dev/github.com/infogulch/xtemplate
 
 For raw JSON provider config, nats connection options follow the [`nats.Options`](https://pkg.go.dev/github.com/nats-io/nats.go#Options) field names (e.g. `"Url"` with a capital `U` when setting the server URL). Caddyfile `conn_options { url … }` maps correctly via the Caddyfile adapter.
 
+### Email with `smtp`
+
+Package: [`providers/dotsmtp`](https://pkg.go.dev/github.com/infogulch/xtemplate/providers/dotsmtp). Provider type: `"smtp"`. Synchronous, send-only SMTP delivery. Body rendering stays with [`.X.Template`](#instance-data-in-x); this provider only transports already-rendered strings. There is no built-in queue — compose with `nats`/JetStream if you need durable async delivery.
+
+Typical field name: `.Email`. Config requires `host` and `from` (default sender). Optional connection settings: `port` (default 587), `username` / `password`, `auth` (`plain`, `login`, `cram-md5`, `none`, or empty for auto), `tls` (`starttls` default, `tls`, `none`), `helo`. Safety limits: `max_recipients` (default 50), `max_message_bytes` (default 1 MiB), `send_timeout` (default 30s; JSON is nanoseconds — see [Configuration](configuration.md#provider-types)).
+
+```html
+{{$body := .X.Template "email/welcome.html" .}}
+{{$id := .Email.Send "alice@example.com" "Welcome!" $body}}
+```
+
+`Send(to, subject, body, extra…)` delivers one message and returns the generated Message-ID. `to` is a single address string or a list of address strings (each string is one RFC 5322 address; recipients are not split on commas). Optional final map keys: `cc`, `bcc` (same shape as `to`), `from` (override default sender), `replyTo`, `text` (plaintext alternative). Unknown keys and wrong value types error.
+
 ## Custom providers
 
 Implement `xtemplate.DotConfig` and attach with `WithProvider` (or register a provider type for JSON/Caddyfile). See [How to create a custom dot provider](../how-to/create-a-provider.md) and [`examples/dotprovider`](../../examples/dotprovider/).
