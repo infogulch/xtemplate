@@ -1,34 +1,33 @@
 {
   "templates_dir": "templates",
-  "directories": [
+  "providers": [
     {
+      "type": "fs",
       "name": "FS",
       "path": "data"
     },
     {
+      "type": "fs",
       "name": "FSW",
       "path": "."
-    }
-  ],
-  "databases": [
+    },
     {
+      "type": "sql",
       "name": "DB",
       "driver": "sqlite3",
       "connstr": "file:./test.sqlite"
-    }
-  ],
-  "flags": [
+    },
     {
+      "type": "flags",
       "name": "Flags",
       "values": {
         "a": "1",
         "b": "2",
         "hello": "world"
       }
-    }
-  ],
-  "nats": [
+    },
     {
+      "type": "nats",
       "name": "Nats",
       "nats_config": {
         "in_process_server_options": {

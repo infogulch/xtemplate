@@ -1,8 +1,10 @@
 package xtemplate_caddy
 
 import (
+	"encoding/json"
 	"testing"
 
+	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 )
@@ -121,6 +123,76 @@ func TestParseCaddyfile_Errors(t *testing.T) {
 		"missing trusted_origins":   "xtemplate {\n\tcrossorigin {\n\t\ttrusted_origins\n\t}\n}",
 		"too few delimiters":        "xtemplate {\n\tdelimiters [[\n}",
 		"missing templates_dir arg": "xtemplate {\n\ttemplates_dir\n}",
+	}
+	for name, input := range cases {
+		t.Run(name, func(t *testing.T) {
+			parseErr(t, input)
+		})
+	}
+}
+
+// fakeProvider is a minimal CaddyfileProvider registered for tests.
+type fakeProvider struct{}
+
+func (fakeProvider) CaddyModule() caddy.ModuleInfo {
+	return caddy.ModuleInfo{
+		ID:  "xtemplate.providers.fake",
+		New: func() caddy.Module { return new(fakeProvider) },
+	}
+}
+
+func (fakeProvider) ParseCaddyfile(h httpcaddyfile.Helper) (json.RawMessage, error) {
+	var dsn string
+	for h.NextBlock(1) {
+		switch h.Val() {
+		case "dsn":
+			if !h.AllArgs(&dsn) {
+				return nil, h.ArgErr()
+			}
+		default:
+			return nil, h.Errf("unknown fake option '%s'", h.Val())
+		}
+	}
+	return json.Marshal(struct {
+		DSN string `json:"dsn,omitempty"`
+	}{dsn})
+}
+
+func init() {
+	caddy.RegisterModule(fakeProvider{})
+}
+
+func TestParseCaddyfile_ProviderBlock(t *testing.T) {
+	m := parse(t, "xtemplate {\n\tprovider fake DB {\n\t\tdsn postgres://localhost/mydb\n\t}\n}")
+
+	if len(m.ProvidersRaw) != 1 {
+		t.Fatalf("ProvidersRaw len = %d, want 1", len(m.ProvidersRaw))
+	}
+	var got struct {
+		Type string `json:"type"`
+		Name string `json:"name"`
+		DSN  string `json:"dsn"`
+	}
+	if err := json.Unmarshal(m.ProvidersRaw[0], &got); err != nil {
+		t.Fatalf("unmarshal ProvidersRaw[0]: %v", err)
+	}
+	if got.Type != "fake" {
+		t.Errorf("type = %q, want %q", got.Type, "fake")
+	}
+	if got.Name != "DB" {
+		t.Errorf("name = %q, want %q", got.Name, "DB")
+	}
+	if got.DSN != "postgres://localhost/mydb" {
+		t.Errorf("dsn = %q, want %q", got.DSN, "postgres://localhost/mydb")
+	}
+}
+
+func TestParseCaddyfile_ProviderErrors(t *testing.T) {
+	cases := map[string]string{
+		"missing type and field": "xtemplate {\n\tprovider\n}",
+		"missing field name":     "xtemplate {\n\tprovider fake\n}",
+		"unknown provider type":  "xtemplate {\n\tprovider nope Field {\n\t}\n}",
+		"unknown block key":      "xtemplate {\n\tprovider fake Field {\n\t\tbogus val\n\t}\n}",
 	}
 	for name, input := range cases {
 		t.Run(name, func(t *testing.T) {

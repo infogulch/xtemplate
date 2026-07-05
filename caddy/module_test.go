@@ -33,9 +33,11 @@ func TestModuleUnmarshalJSON(t *testing.T) {
 			"trusted_origins": ["https://a.example"],
 			"insecure_bypass_patterns": ["/hook"]
 		},
-		"databases": [{"name": "DB", "driver": "sqlite3", "connstr": "file:./test.sqlite"}],
-		"directories": [{"name": "FS", "path": "data"}],
-		"flags": [{"name": "Flags", "values": {"a": "1"}}]
+		"providers": [
+			{"type": "sql", "name": "DB", "driver": "sqlite3", "connstr": "file:./test.sqlite"},
+			{"type": "fs", "name": "FS", "path": "data"},
+			{"type": "flags", "name": "Flags", "values": {"a": "1"}}
+		]
 	}`
 
 	var m XTemplateModule
@@ -61,14 +63,8 @@ func TestModuleUnmarshalJSON(t *testing.T) {
 	if got := m.CrossOrigin.InsecureBypassPatterns; !equalStrings(got, []string{"/hook"}) {
 		t.Errorf("InsecureBypassPatterns = %v, want [/hook]", got)
 	}
-	if len(m.Databases) != 1 || m.Databases[0].Name != "DB" || m.Databases[0].Driver != "sqlite3" {
-		t.Errorf("Databases = %+v, want one named DB with driver sqlite3", m.Databases)
-	}
-	if len(m.Directories) != 1 || m.Directories[0].Name != "FS" || m.Directories[0].Path != "data" {
-		t.Errorf("Directories = %+v, want one named FS with path data", m.Directories)
-	}
-	if len(m.Flags) != 1 || m.Flags[0].Name != "Flags" || m.Flags[0].Values["a"] != "1" {
-		t.Errorf("Flags = %+v, want one named Flags with a=1", m.Flags)
+	if len(m.ProvidersRaw) != 3 {
+		t.Errorf("ProvidersRaw len = %d, want 3", len(m.ProvidersRaw))
 	}
 }
 

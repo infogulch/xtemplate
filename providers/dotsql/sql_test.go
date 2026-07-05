@@ -1,13 +1,44 @@
-package xtemplate
+package sql_test
 
 import (
 	"database/sql"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	_ "github.com/ncruces/go-sqlite3/driver"
+	"github.com/spf13/afero"
+
+	"github.com/infogulch/xtemplate"
+	provsql "github.com/infogulch/xtemplate/providers/dotsql"
 )
+
+// buildInstance builds an Instance from an in-memory template fs and any extra
+// options, failing the test if construction fails.
+func buildInstance(t *testing.T, files map[string]string, opts ...xtemplate.Option) *xtemplate.Instance {
+	t.Helper()
+	fs := afero.NewMemMapFs()
+	for name, content := range files {
+		if err := afero.WriteFile(fs, name, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write file %q to mem fs: %v", name, err)
+		}
+	}
+	cfg := xtemplate.New()
+	allOpts := append([]xtemplate.Option{xtemplate.WithTemplateFS(fs)}, opts...)
+	inst, _, _, err := cfg.Instance(allOpts...)
+	if err != nil {
+		t.Fatalf("failed to build instance: %v", err)
+	}
+	return inst
+}
+
+func doRequest(inst *xtemplate.Instance, method, target string) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(method, target, nil)
+	inst.ServeHTTP(w, r)
+	return w
+}
 
 // newTestDB returns an in-memory sqlite DB seeded with a users table containing
 // two rows. MaxOpenConns(1) keeps the single connection (and therefore the
@@ -39,15 +70,15 @@ func countUsers(t *testing.T, db *sql.DB) int {
 	return n
 }
 
-// TestDotDB_Query exercises the read path: a template queries the seeded DB and
+// TestDotSql_Query exercises the read path: a template queries the seeded DB and
 // renders a scalar result.
-func TestDotDB_Query(t *testing.T) {
+func TestDotSql_Query(t *testing.T) {
 	db := newTestDB(t)
 	inst := buildInstance(t,
 		map[string]string{
 			"count.html": `{{.DB.QueryVal "SELECT count(*) FROM users"}}`,
 		},
-		WithDB("DB", db, nil),
+		provsql.WithSql("DB", db, nil),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/count")
@@ -59,14 +90,14 @@ func TestDotDB_Query(t *testing.T) {
 	}
 }
 
-// TestDotDB_QueryRowsStream renders every row yielded by the QueryRows iterator.
-func TestDotDB_QueryRowsStream(t *testing.T) {
+// TestDotSql_QueryRowsStream renders every row yielded by the QueryRows iterator.
+func TestDotSql_QueryRowsStream(t *testing.T) {
 	db := newTestDB(t)
 	inst := buildInstance(t,
 		map[string]string{
 			"names.html": `{{range .DB.QueryRows "SELECT name FROM users ORDER BY name"}}{{.name}},{{end}}`,
 		},
-		WithDB("DB", db, nil),
+		provsql.WithSql("DB", db, nil),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/names")
@@ -78,21 +109,15 @@ func TestDotDB_QueryRowsStream(t *testing.T) {
 	}
 }
 
-// TestDotDB_QueryRowsIterationError verifies that an error encountered partway
-// through iterating the QueryRows result (here a SQLite integer-overflow raised
-// while stepping the second row) aborts template execution cleanly. The
-// iterator can't return the error, so it panics with template.ExecError, which
-// the template engine must recover and turn into a normal execution error
-// rather than letting the panic escape ServeHTTP.
-func TestDotDB_QueryRowsIterationError(t *testing.T) {
+// TestDotSql_QueryRowsIterationError verifies that an error encountered partway
+// through iterating the QueryRows result aborts template execution cleanly.
+func TestDotSql_QueryRowsIterationError(t *testing.T) {
 	db := newTestDB(t)
 	inst := buildInstance(t,
 		map[string]string{
-			// The first row (n=1) is yielded successfully; stepping to the
-			// second row triggers a runtime error in SQLite.
 			"boom.html": `{{range .DB.QueryRows "SELECT 1 AS n UNION ALL SELECT abs(-9223372036854775808)"}}{{.n}}{{end}}`,
 		},
-		WithDB("DB", db, nil),
+		provsql.WithSql("DB", db, nil),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/boom")
@@ -101,10 +126,9 @@ func TestDotDB_QueryRowsIterationError(t *testing.T) {
 	}
 }
 
-// TestDotDB_QueryRowWrongCount verifies QueryRow rejects results that don't
-// contain exactly one row, aborting template execution in both the zero-row and
-// multiple-row cases.
-func TestDotDB_QueryRowWrongCount(t *testing.T) {
+// TestDotSql_QueryRowWrongCount verifies QueryRow rejects results that don't
+// contain exactly one row.
+func TestDotSql_QueryRowWrongCount(t *testing.T) {
 	db := newTestDB(t)
 	for _, tc := range []struct {
 		name  string
@@ -118,7 +142,7 @@ func TestDotDB_QueryRowWrongCount(t *testing.T) {
 				map[string]string{
 					"row.html": `{{$r := .DB.QueryRow "` + tc.query + `"}}{{$r.name}}`,
 				},
-				WithDB("DB", db, nil),
+				provsql.WithSql("DB", db, nil),
 			)
 
 			w := doRequest(inst, http.MethodGet, "/row")
@@ -129,17 +153,15 @@ func TestDotDB_QueryRowWrongCount(t *testing.T) {
 	}
 }
 
-// TestDotDB_AutoCommit verifies the implicit transaction is committed when the
+// TestDotSql_AutoCommit verifies the implicit transaction is committed when the
 // template completes without error, persisting writes.
-func TestDotDB_AutoCommit(t *testing.T) {
+func TestDotSql_AutoCommit(t *testing.T) {
 	db := newTestDB(t)
 	inst := buildInstance(t,
 		map[string]string{
-			// $_ swallows the (sql.Result, error) return; a non-nil error would
-			// abort the template.
 			"insert.html": `{{$_ := .DB.Exec "INSERT INTO users (name) VALUES ('carol')"}}ok`,
 		},
-		WithDB("DB", db, nil),
+		provsql.WithSql("DB", db, nil),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/insert")
@@ -151,15 +173,15 @@ func TestDotDB_AutoCommit(t *testing.T) {
 	}
 }
 
-// TestDotDB_RollbackOnError verifies the implicit transaction is rolled back
-// when the template fails after a write, leaving the DB unchanged.
-func TestDotDB_RollbackOnError(t *testing.T) {
+// TestDotSql_RollbackOnError verifies the implicit transaction is rolled back
+// when the template fails after a write.
+func TestDotSql_RollbackOnError(t *testing.T) {
 	db := newTestDB(t)
 	inst := buildInstance(t,
 		map[string]string{
 			"fail.html": `{{$_ := .DB.Exec "INSERT INTO users (name) VALUES ('dave')"}}{{failf "boom"}}`,
 		},
-		WithDB("DB", db, nil),
+		provsql.WithSql("DB", db, nil),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/fail")
