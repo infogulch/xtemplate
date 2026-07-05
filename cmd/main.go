@@ -5,6 +5,11 @@ package main
 import (
 	"github.com/infogulch/xtemplate/app"
 
+	_ "github.com/infogulch/xtemplate/providers/dotflags"
+	_ "github.com/infogulch/xtemplate/providers/dotfs"
+	_ "github.com/infogulch/xtemplate/providers/dotnats"
+	_ "github.com/infogulch/xtemplate/providers/dotsql"
+
 	_ "github.com/ncruces/go-sqlite3/driver"
 )
 

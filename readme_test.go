@@ -1,4 +1,4 @@
-package xtemplate
+package xtemplate_test
 
 // These tests extract the runnable template examples from README.md so that the
 // documentation stays honest: each feature test below executes a snippet that is
@@ -28,9 +28,14 @@ import (
 	"time"
 
 	_ "github.com/ncruces/go-sqlite3/driver"
+	"github.com/spf13/afero"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
+
+	"github.com/infogulch/xtemplate"
+	provfs "github.com/infogulch/xtemplate/providers/dotfs"
+	provsql "github.com/infogulch/xtemplate/providers/dotsql"
 )
 
 // The following consts are the README's ```html template examples, copied
@@ -85,6 +90,36 @@ var readmeExamples = map[string]string{
 
 // newContactsDB returns an in-memory sqlite DB seeded with the `contacts` table
 // used by the README's custom-route examples.
+func newMemFS(t *testing.T, files map[string]string) afero.Fs {
+	t.Helper()
+	fs := afero.NewMemMapFs()
+	for name, content := range files {
+		if err := afero.WriteFile(fs, name, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write file %q to mem fs: %v", name, err)
+		}
+	}
+	return fs
+}
+
+func buildInstance(t *testing.T, files map[string]string, opts ...xtemplate.Option) *xtemplate.Instance {
+	t.Helper()
+	fs := newMemFS(t, files)
+	cfg := xtemplate.New()
+	allOpts := append([]xtemplate.Option{xtemplate.WithTemplateFS(fs)}, opts...)
+	inst, _, _, err := cfg.Instance(allOpts...)
+	if err != nil {
+		t.Fatalf("failed to build instance: %v", err)
+	}
+	return inst
+}
+
+func doRequest(inst *xtemplate.Instance, method, target string) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(method, target, nil)
+	inst.ServeHTTP(w, r)
+	return w
+}
+
 func newContactsDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("sqlite3", ":memory:")
@@ -118,7 +153,7 @@ func TestREADME_CustomRoute_GetContact(t *testing.T) {
 	db := newContactsDB(t)
 	inst := buildInstance(t,
 		map[string]string{"contacts.html": customRoutesExample},
-		WithDB("DB", db, nil),
+		provsql.WithSql("DB", db, nil),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/contact/1")
@@ -140,7 +175,7 @@ func TestREADME_CustomRoute_DeleteContact(t *testing.T) {
 	db := newContactsDB(t)
 	inst := buildInstance(t,
 		map[string]string{"contacts.html": customRoutesExample},
-		WithDB("DB", db, nil),
+		provsql.WithSql("DB", db, nil),
 	)
 
 	w := doRequest(inst, http.MethodDelete, "/contact/1")
@@ -157,7 +192,7 @@ func TestREADME_DBQueryRange(t *testing.T) {
 	db := newContactsDB(t)
 	inst := buildInstance(t,
 		map[string]string{"list.html": dbQueryExample},
-		WithDB("DB", db, nil),
+		provsql.WithSql("DB", db, nil),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/list")
@@ -181,7 +216,7 @@ func TestREADME_FSList(t *testing.T) {
 	})
 	inst := buildInstance(t,
 		map[string]string{"files.html": fsListExample},
-		WithDir("FS", dataFS),
+		provfs.WithFs("FS", dataFS),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/files")
@@ -225,7 +260,7 @@ func TestREADME_LiveReloadSSE(t *testing.T) {
 		// The define lives inside a regular page (per the README), so the file
 		// path must not itself collide with the SSE route's GET /reload.
 		map[string]string{"index.html": liveReloadExample},
-		func(c *Config) error { c.Ctx = ctx; return nil },
+		func(c *xtemplate.Config) error { c.Ctx = ctx; return nil },
 	)
 
 	w := httptest.NewRecorder()

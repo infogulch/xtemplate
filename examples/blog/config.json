@@ -1,14 +1,14 @@
 {
   "templates_dir": "templates",
   "watch_dirs": ["posts"],
-  "directories": [
+  "providers": [
     {
+      "type": "fs",
       "name": "Posts",
       "path": "posts"
-    }
-  ],
-  "databases": [
+    },
     {
+      "type": "sql",
       "name": "DB",
       "driver": "sqlite3",
       "connstr": ":memory:",

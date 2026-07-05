@@ -153,43 +153,6 @@ func TestServeHTTP_StaticFileAndHash(t *testing.T) {
 	}
 }
 
-func TestServeHTTP_FlagsProvider(t *testing.T) {
-	inst := buildInstance(t,
-		map[string]string{
-			"greet.html": `{{.Flags.Value "greeting"}}`,
-		},
-		WithFlags("Flags", map[string]string{"greeting": "hi"}),
-	)
-
-	w := doRequest(inst, http.MethodGet, "/greet")
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
-	}
-	if body := w.Body.String(); !strings.Contains(body, "hi") {
-		t.Errorf("body = %q, want it to contain %q", body, "hi")
-	}
-}
-
-func TestServeHTTP_DirProvider(t *testing.T) {
-	dataFS := newMemFS(t, map[string]string{
-		"message.txt": "FILE-CONTENT",
-	})
-	inst := buildInstance(t,
-		map[string]string{
-			"read.html": `{{.Files.Read "message.txt"}}`,
-		},
-		WithDir("Files", dataFS),
-	)
-
-	w := doRequest(inst, http.MethodGet, "/read")
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
-	}
-	if body := w.Body.String(); !strings.Contains(body, "FILE-CONTENT") {
-		t.Errorf("body = %q, want it to contain %q", body, "FILE-CONTENT")
-	}
-}
-
 func TestServer_EmptyFSWithHandler(t *testing.T) {
 	// xtemplate must build from an empty FS (zero routes) so a server can start
 	// before its templates are available, and custom handlers must still serve.

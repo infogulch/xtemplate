@@ -1,7 +1,8 @@
 {
   "templates_dir": "templates",
-  "directories": [
+  "providers": [
     {
+      "type": "fs",
       "name": "FS",
       "path": "files"
     }
