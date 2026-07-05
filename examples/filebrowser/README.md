@@ -1,6 +1,6 @@
 # filebrowser example
 
-Lists a directory and shows file contents using the `.FS` context provider
+Lists a directory and shows file contents using the `.FS` dot provider
 (`.FS.ReadDir`, `.FS.Read`, `.FS.Exists`).
 
 ```sh

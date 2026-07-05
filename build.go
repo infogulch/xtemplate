@@ -37,7 +37,7 @@ type InstanceStats struct {
 	Routes                        int
 	TemplateFiles                 int
 	TemplateDefinitions           int
-	TemplateInitializers          int
+	InitializationTemplates       int
 	StaticFiles                   int
 	StaticFilesAlternateEncodings int
 }

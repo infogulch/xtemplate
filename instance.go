@@ -207,11 +207,11 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 				}
 				err = tmpl.Execute(buf, *val)
 				if err = cleanup(val, err); err != nil {
-					return nil, nil, nil, fmt.Errorf("template initializer '%s' failed: %w", tmpl.Name(), err)
+					return nil, nil, nil, fmt.Errorf("initialization template '%s' failed: %w", tmpl.Name(), err)
 				}
 				// TODO: output buffer somewhere?
-				build.config.Logger.Debug("executed initializer", slog.String("template_name", tmpl.Name()), slog.Int("rendered_len", buf.Len()))
-				build.TemplateInitializers += 1
+				build.config.Logger.Debug("executed initialization template", slog.String("template_name", tmpl.Name()), slog.Int("rendered_len", buf.Len()))
+				build.InitializationTemplates += 1
 			}
 		}
 	}
@@ -222,7 +222,7 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 			slog.Int("routes", build.Routes),
 			slog.Int("templateFiles", build.TemplateFiles),
 			slog.Int("templateDefinitions", build.TemplateDefinitions),
-			slog.Int("templateInitializers", build.TemplateInitializers),
+			slog.Int("initializationTemplates", build.InitializationTemplates),
 			slog.Int("staticFiles", build.StaticFiles),
 			slog.Int("staticFilesAlternateEncodings", build.StaticFilesAlternateEncodings),
 		))

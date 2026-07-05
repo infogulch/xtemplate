@@ -187,7 +187,7 @@ func TestREADME_CustomRoute_DeleteContact(t *testing.T) {
 	}
 }
 
-// README "Database context provider": range over .DB.QueryRows results.
+// README "SQL dot provider": range over .DB.QueryRows results.
 func TestREADME_DBQueryRange(t *testing.T) {
 	db := newContactsDB(t)
 	inst := buildInstance(t,
@@ -207,7 +207,7 @@ func TestREADME_DBQueryRange(t *testing.T) {
 	}
 }
 
-// README "Filesystem context provider": list files with .FS.ReadDir and read
+// README "Filesystem dot provider": list files with .FS.ReadDir and read
 // each entry's name via the fs.FileInfo .Name method.
 func TestREADME_FSList(t *testing.T) {
 	dataFS := newMemFS(t, map[string]string{

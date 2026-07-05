@@ -1,8 +1,8 @@
-// Custom DotProvider example: the "repository pattern". A custom provider
+// Custom dot provider example: the "repository pattern". A custom provider
 // exposes hardcoded in-memory data to templates as {{.Shop}}, which can range
 // over products and look one up by id.
 //
-// To write a DotProvider: implement xtemplate.DotConfig (FieldName, Init,
+// To write a dot provider: implement xtemplate.DotConfig (FieldName, Init,
 // Value), then register the instance with xtemplate.WithProvider passed to
 // app.Main. FieldName is the dot field name; Value returns the value assigned
 // to that field for each request.

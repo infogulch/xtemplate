@@ -27,9 +27,9 @@ the listed URL.
 | [`contacts`](./contacts/) | File-based routing + custom method routes + `.DB` (sqlite CRUD) | `mise run example-contacts` | 9001 | <http://localhost:9001/> |
 | [`sse-chat`](./sse-chat/) | Server-Sent Events with `.Flush` (live updates) | `mise run example-sse-chat` | 9002 | <http://localhost:9002/> |
 | [`blog`](./blog/) | Optimal asset serving: content-hash cache-busting + Subresource Integrity (`.X.StaticFileHash`) | `mise run example-blog` | 9003 | <http://localhost:9003/> |
-| [`filebrowser`](./filebrowser/) | Filesystem context provider (`.FS.ReadDir` / read files) | `mise run example-filebrowser` | 9004 | <http://localhost:9004/> |
+| [`filebrowser`](./filebrowser/) | Filesystem dot provider (`.FS.ReadDir` / read files) | `mise run example-filebrowser` | 9004 | <http://localhost:9004/> |
 | [`embedded`](./embedded/) | Single-binary deployment with `//go:embed` (custom build) | `mise run example-embedded` | 9005 | <http://localhost:9005/> |
-| [`dotprovider`](./dotprovider/) | Custom `DotProvider` exposing Go code to templates (custom build) | `mise run example-dotprovider` | 9006 | <http://localhost:9006/> |
+| [`dotprovider`](./dotprovider/) | Custom dot provider exposing Go code to templates (custom build) | `mise run example-dotprovider` | 9006 | <http://localhost:9006/> |
 
 ## How these are wired
 

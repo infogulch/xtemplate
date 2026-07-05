@@ -57,6 +57,7 @@ integrity.
 > that immediately starts executing a template reference in response. No slow
 > cascading disk accesses or parsing overhead before you even begin crafting the
 > response.
+
 </details>
 
 <details><summary><strong>🔄 Live reload</strong></summary>
@@ -76,7 +77,7 @@ integrity.
 > <script>new EventSource("/reload").onmessage = () => location.reload()</script>
 > <!-- Maybe not a great idea for production, but you do you. -->
 > ```
->
+
 </details>
 
 <details open><summary><strong>🗃️ Simple file-based routing</strong></summary>
@@ -94,7 +95,7 @@ integrity.
 > └── shared
 >     └── .head.html      (not routed because it starts with '.')
 > ```
->
+
 </details>
 
 <details><summary><strong>🔱 Add custom routes to handle any method and path pattern</strong></summary>
@@ -142,7 +143,7 @@ integrity.
 >   </body>
 > </html>
 > ```
->
+
 </details>
 
 <details><summary><strong>🛡️ XSS safe by default</strong></summary>
@@ -164,15 +165,17 @@ integrity.
 > action you can define by writing a Go API**, like the common "repository"
 > design pattern for example.
 >
-> Modify `Config` to add built-in or custom `ContextProvider` implementations,
-> and they will be made available in the dot context.
+> Add core or custom dot providers to `Config.Providers` (or via
+> `WithProvider`); each implements the `DotConfig` interface and contributes a
+> field to the dot context.
 >
-> Some built-in context providers are listed next:
+> Some core dot providers are listed next:
+
 </details>
 
-<details><summary><strong>💽 Database context provider: Execute queries</strong></summary>
+<details><summary><strong>💽 SQL dot provider: Execute queries</strong></summary>
 
-> Add the built-in Database Context Provider to run queries using the configured
+> Add the SQL dot provider to run queries using the configured
 > Go driver and connection string for your database. (Supports the `sqlite3`
 > driver by default, compile with your desired driver to use it.)
 >
@@ -183,12 +186,12 @@ integrity.
 >   {{end}}
 > </ul>
 > ```
->
+
 </details>
 
-<details><summary><strong>🗄️ Filesystem context provider: List and read local files</strong></summary>
+<details><summary><strong>🗄️ Filesystem dot provider: List and read local files</strong></summary>
 
-> Add the built-in Filesystem Context Provider to List and read
+> Add the filesystem dot provider to list and read
 > files from the configured directory.
 >
 > ```html
@@ -199,18 +202,18 @@ integrity.
 > {{end}}
 > </ol>
 > ```
->
+
 </details>
 
-<details><summary><strong>💬 NATS context provider: Send and receive messages</strong></summary>
+<details><summary><strong>💬 NATS dot provider: Send and receive messages</strong></summary>
 
-> Add and configure the NATS Context Provider to send messages, use the
+> Add and configure the NATS dot provider to send messages, use the
 > Request-Response pattern, and even send live updates to a client.
 >
 > ```html
 > <example></example>
 > ```
->
+
 </details>
 
 <details open><summary><strong>📤 Optimal asset serving</strong></summary>
@@ -237,7 +240,7 @@ integrity.
 > <link rel="stylesheet" href="/reset.css?hash={{$hash}}" integrity="{{$hash}}">
 > {{- end}}
 > ```
->
+
 </details>
 
 <details><summary><strong>📬 Live updates with Server Sent Events (SSE)</strong></summary>
@@ -246,12 +249,14 @@ integrity.
 > SSE requests will be handled by invoking the template. Individual messages can
 > be sent by using `.Flush`, and the template can be paused to wait on messages
 > sent over Go channels or can block on server shutdown.
+
 </details>
 
 <details><summary><strong>🐜 Small footprint</strong></summary>
 
 > Compiles to a ~30MB binary. Easily add your own custom functions and choice of
 > database driver on top.
+
 </details>
 
 <details open><summary><strong>🏃‍♂️‍➡️ Single binary deployments</strong></summary>
@@ -263,7 +268,7 @@ integrity.
 > //go:embed all:templates
 > var Files embed.FS
 > ```
->
+
 </details>
 
 ## 📦 How to run
@@ -430,7 +435,7 @@ configured multiple times with different configurations.
 #### ✏️ Custom dot fields
 
 You can create custom dot fields that expose arbitrary Go functionality to your
-templates. See [👩‍⚕️ Writing a custom `DotProvider`](#-writing-a-custom-dotprovider).
+templates. See [👩‍⚕️ Writing a custom dot provider](#-writing-a-custom-dot-provider).
 
 ### 📐 Functions
 
@@ -471,8 +476,8 @@ xtemplate is split into the following packages:
 - `github.com/infogulch/xtemplate` is a library that exports the `Instance`
   struct which can load template files and implements `http.Handler` that
   routes requests to templates and serves static files, the `Server` struct
-  which can atomically reload an `Instance` on demand, and a number of built-in
-  providers.
+  struct which can atomically reload an `Instance` on demand, and the builtin
+  dot providers (`X`, `Req`, `Resp`, `Flush`).
 - `./app` is a library that contains an exported `Main` function which
   configures and starts xtemplate with CLI args and accepts config override
   parameters. This `Main` fucntion can be used as a reference for using the
@@ -519,7 +524,7 @@ scripts with `nu --ide-check`, `lint-go` runs golangci-lint), `go test`
 (`gotest`), the three integration targets, and then the release `dist` and
 Docker image builds.
 
-### 👩‍⚕️ Writing a custom `DotProvider`
+### 👩‍⚕️ Writing a custom dot provider
 
 Implement the `xtemplate.DotConfig` interface on your type:
 
