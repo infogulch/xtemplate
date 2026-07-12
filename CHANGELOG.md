@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.0] - 2026-07-12
+
+Uniform provider registry and Caddyfile provider dispatch.
+
 Replace provider slices with a uniform provider registry:
 
 - Breaking: JSON/struct provider configs `"databases"`, `"directories"`,
@@ -33,6 +37,15 @@ Allow external providers to be configured via Caddyfile:
 Other changes:
 
 - Removed `DotKV` as dead code. May be re-added in a future release.
+- Make `Server` implement `http.Handler` directly
+- Fix `CrossOrigin.Disabled` leaving `Instance.handler` nil
+- Rebuild app logger after `LoadConfig` so `--loglevel` applies
+- Add Caddyfile `precompress` directive
+- Link pure-Go sqlite3 driver in `caddy/standard`
+- Fix unknown provider import path hint
+- Clarify `Config.Handlers` as peer ServeMux routes
+- Clean up package names
+- Add bounded context glossary, ADRs, and Diátaxis user documentation
 
 ## [v0.9.6] - 2026-07-03
 
