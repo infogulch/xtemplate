@@ -179,6 +179,10 @@ func LoadConfig[T Configurable](config T, args []string) (T, error) {
 		}
 	}
 
+	// Rebuild the logger after flags/JSON so --loglevel / log_level apply.
+	// SetDefaults may have created a Logger at the zero LogLevel.
+	appconfig.Logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(appconfig.LogLevel)}))
+
 	appconfig.Logger.Debug("loaded configuration", slog.Any("config", config))
 	return config, nil
 }
