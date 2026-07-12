@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Hello from xtemplate</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin: 2rem; }
+        .info { background: #f0f0f0; padding: 1rem; border-radius: 6px; }
+    </style>
+</head>
+<body>
+    <h1>Hello from xtemplate!</h1>
+
+    <div class="info">
+        <p><strong>Path:</strong> {{.Req.URL.Path}}</p>
+        <p><strong>Method:</strong> {{.Req.Method}}</p>
+        <p><strong>Remote address:</strong> {{.Req.RemoteAddr}}</p>
+    </div>
+
+    <p>Try editing this file and refreshing the browser -- the server will pick up your changes automatically.</p>
+</body>
+</html>

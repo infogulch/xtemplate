@@ -1,5 +1,5 @@
 # NATS endpoints that return a normal, terminating response. The SSE stream at
-# GET /nats/messages is intentionally excluded — see nats.hurl.disabled.
+# GET /nats/messages is intentionally excluded - see nats.hurl.disabled.
 
 # the chat page renders
 GET http://localhost:8080/nats/

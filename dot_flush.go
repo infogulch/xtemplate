@@ -87,7 +87,7 @@ func (f *DotFlush) SendSSE(args ...string) error {
 	return nil
 }
 
-// Flush flushes any content waiting to written to the client.
+// Flush flushes any content waiting to be written to the client.
 func (f *DotFlush) Flush() string {
 	f.flusher.Flush()
 	return ""
@@ -121,20 +121,22 @@ func (f *DotFlush) Repeat(max_ ...int) <-chan int {
 	return c
 }
 
-// Sleep sleeps for ms millisecionds.
+// Sleep sleeps for ms milliseconds. Template execution is aborted if the
+// request is canceled or the server receives a stop signal.
 func (f *DotFlush) Sleep(ms int) (string, error) {
 	select {
 	case <-time.After(time.Duration(ms) * time.Millisecond):
+		return "", nil
 	case <-f.requestCtx.Done():
 		return "", ReturnError{}
 	case <-f.serverCtx.Done():
 		return "", ReturnError{}
 	}
-	return "", nil
 }
 
-// WaitForServerStop blocks execution until the request is canceled by the
-// client or until the server closes.
+// WaitForServerStop blocks template execution until the server receives a stop
+// signal, then continues to allow sending a final response before the request
+// is closed. Template execution is aborted if the client cancels the request.
 func (f *DotFlush) WaitForServerStop() (string, error) {
 	select {
 	case <-f.requestCtx.Done():

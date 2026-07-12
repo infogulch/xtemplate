@@ -10,7 +10,7 @@ import (
 // CaddyfileProvider is implemented by Caddy modules in the
 // "xtemplate.providers.*" namespace that want to expose Caddyfile block syntax.
 // ParseCaddyfile must return a JSON object containing only the provider's
-// type-specific fields. The "type" and "name" keys are reserved — the dispatch
+// type-specific fields. The "type" and "name" keys are reserved - the dispatch
 // injects them; returning either is a contract violation surfaced at parse time.
 type CaddyfileProvider interface {
 	ParseCaddyfile(h httpcaddyfile.Helper) (json.RawMessage, error)

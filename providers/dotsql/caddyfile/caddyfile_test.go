@@ -22,7 +22,7 @@ func parse(t *testing.T, body string) (json.RawMessage, error) {
 	h.Next()       // "outer" depth 0
 	h.NextBlock(0) // → "provider" depth 1
 	h.NextArg()    // "sql"
-	h.NextArg()    // "DB" — cursor now matches real call site
+	h.NextArg()    // "DB" - cursor now matches real call site
 	mi, err := caddy.GetModule("xtemplate.providers.sql")
 	if err != nil {
 		t.Fatalf("GetModule: %v", err)

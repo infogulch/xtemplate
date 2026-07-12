@@ -30,7 +30,7 @@ var _ xtc.CaddyfileProvider = (*natsCaddyfile)(nil)
 
 func (natsCaddyfile) ParseCaddyfile(h httpcaddyfile.Helper) (json.RawMessage, error) {
 	// Local structs mirror only the curated JSON subset of NatsConfig /
-	// server.Options / natsgo.Options — no import of those packages needed.
+	// server.Options / natsgo.Options - no import of those packages needed.
 	type inProcessServer struct {
 		DontListen bool `json:"dont_listen,omitempty"`
 	}
