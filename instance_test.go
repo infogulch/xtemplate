@@ -173,7 +173,7 @@ func TestServer_EmptyFSWithHandler(t *testing.T) {
 	defer server.Stop()
 
 	w := httptest.NewRecorder()
-	server.Handler().ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/hook", nil))
+	server.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/hook", nil))
 	if !hit {
 		t.Error("custom handler was not invoked")
 	}
@@ -219,7 +219,7 @@ func TestServer_ReloadChannel(t *testing.T) {
 
 	get := func() string {
 		w := httptest.NewRecorder()
-		server.Handler().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+		server.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
 		return w.Body.String()
 	}
 
@@ -258,7 +258,7 @@ func TestServer_Lifecycle(t *testing.T) {
 	// Requests routed through the handler reach the current instance.
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	server.Handler().ServeHTTP(w, r)
+	server.ServeHTTP(w, r)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}
@@ -302,7 +302,7 @@ func TestServer_HandlerAfterStop(t *testing.T) {
 			t.Fatalf("handler panicked after Stop: %v", p)
 		}
 	}()
-	server.Handler().ServeHTTP(w, r)
+	server.ServeHTTP(w, r)
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusServiceUnavailable)
 	}

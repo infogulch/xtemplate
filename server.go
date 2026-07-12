@@ -12,12 +12,12 @@ import (
 
 // Server is a configured, *reloadable*, xtemplate request handler ready to
 // execute templates and serve static files in response to http requests. It
-// manages an [Instance] and allows you to reload template files with the same
-// config by calling `server.Reload()`. If successful, Reload atomically swaps
-// the old Instance with the new Instance so subsequent requests are handled by
-// the new instance, and any outstanding requests still being served by the old
-// Instance can continue to completion. The old instance's Config.Ctx is also
-// cancelled.
+// implements [http.Handler] by always routing to the current [Instance].
+//
+// Call [Server.Reload] to rebuild from the same config (or with options). If
+// successful, Reload atomically swaps the old Instance for the new one so
+// subsequent requests use the new instance; outstanding requests on the old
+// Instance can finish. The old instance's Config.Ctx is cancelled.
 //
 // The only way to create a valid *Server is to call [Config.Server].
 type Server struct {
@@ -27,6 +27,8 @@ type Server struct {
 	mutex  sync.Mutex
 	config Config
 }
+
+var _ http.Handler = (*Server)(nil)
 
 // Build creates a new Server from an xtemplate.Config.
 func (config Config) Server(cfgs ...Option) (*Server, error) {
@@ -87,7 +89,7 @@ func (x *Server) Serve(listen_addr string) error {
 	x.config.Logger.Info("starting server", slog.String("address", ln.Addr().String()))
 
 	srv := &http.Server{
-		Handler:           x.Handler(),
+		Handler:           x,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       120 * time.Second,
@@ -103,17 +105,15 @@ func (x *Server) Serve(listen_addr string) error {
 	return nil
 }
 
-// Handler returns a `http.Handler` that always routes new requests to the
-// current Instance.
-func (x *Server) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		instance := x.Instance()
-		if instance == nil {
-			http.Error(w, "server stopped", http.StatusServiceUnavailable)
-			return
-		}
-		instance.ServeHTTP(w, r)
-	})
+// ServeHTTP routes the request to the current [Instance], or responds 503 if
+// the server has been stopped.
+func (x *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	instance := x.Instance()
+	if instance == nil {
+		http.Error(w, "server stopped", http.StatusServiceUnavailable)
+		return
+	}
+	instance.ServeHTTP(w, r)
 }
 
 // Reload creates a new Instance from the config and swaps it with the

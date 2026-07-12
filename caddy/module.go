@@ -74,7 +74,7 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 		m.cancel()
 		return err
 	}
-	m.handler = server.Handler()
+	m.handler = server
 
 	if m.WatchTemplatePath {
 		halt, err := watch.Watch([]string{m.TemplatesDir}, 200*time.Millisecond, log.WithGroup("fswatch"), func() bool {
