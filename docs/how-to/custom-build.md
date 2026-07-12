@@ -82,7 +82,7 @@ func main() {
 }
 ```
 
-To add **new CLI flags or JSON keys** (not just `With*` overrides), embed `app.Config` in your own struct and call `app.LoadConfig`, matching the pattern used by watchfs and git. See [CLI reference — Extending the app config](../reference/cli.md#extending-the-app-config).
+To add **new CLI flags or JSON keys** (not just `With*` overrides), embed `app.Config` in your own struct and call `app.LoadConfig`, matching the pattern used by watchfs and git. See [CLI reference - Extending the app config](../reference/cli.md#extending-the-app-config).
 
 ## Embed templates (single binary)
 

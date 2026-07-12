@@ -20,7 +20,7 @@ Templates are the central primitive and drive the request–response lifecycle. 
 
 The dot context is the sole channel through which templates reach request data, response control, and backing data sources. It is a struct assembled per request from builtin providers (`.X`, `.Req`, and `.Resp` or `.Flush` by handler kind) plus any configured core or custom dot providers. This is what makes templates expressive enough to act as handlers directly.
 
-See [Dot context](../reference/dot-context.md), [ADR 0005 — Buffered vs flushing handlers](../adr/0005-buffered-vs-flushing-handlers.md), and [ADR 0006 — Reflection-assembled dot context](../adr/0006-reflection-assembled-dot-context.md).
+See [Dot context](../reference/dot-context.md), [ADR 0005 - Buffered vs flushing handlers](../adr/0005-buffered-vs-flushing-handlers.md), and [ADR 0006 - Reflection-assembled dot context](../adr/0006-reflection-assembled-dot-context.md).
 
 ### Safe escaping by default
 
@@ -32,7 +32,7 @@ xtemplate is a complete server, so static files get the same care as templates.
 
 They are served from the filesystem with OS-specific optimizations when available (e.g. `sendfile(2)`), minimizing CPU usage so single-origin deployments can use xtemplate as a lightweight CDN stand-in.
 
-Static files are read and hashed when the instance is built, which powers content-addressed URLs and content negotiation. See [Instance loading — static files](../reference/instance-loading.md#static-files).
+Static files are read and hashed when the instance is built, which powers content-addressed URLs and content negotiation. See [Instance loading - static files](../reference/instance-loading.md#static-files).
 
 ## Embeddable library
 
@@ -48,7 +48,7 @@ That keeps reloads simple: a running instance is never mutated. The same pattern
 - git CLI (fetch and reload on remote updates)
 - Caddy module (live reconfiguration / optional template watch)
 
-See [Deployment modes](../reference/deployment-modes.md) and [ADR 0004 — Reload swaps a new immutable instance](../adr/0004-reload-swaps-a-new-immutable-instance.md).
+See [Deployment modes](../reference/deployment-modes.md) and [ADR 0004 - Reload swaps a new immutable instance](../adr/0004-reload-swaps-a-new-immutable-instance.md).
 
 ---
 

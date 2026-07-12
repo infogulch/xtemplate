@@ -8,9 +8,9 @@ A complete runnable example: [`examples/dotprovider`](../../examples/dotprovider
 
 Every path implements the same `DotConfig` interface. Pick by how the provider is configured:
 
-- **Custom provider** — construct it in Go and pass `WithProvider` (or put it on `Config.Providers`). Best for app-specific code next to `main`. Not selectable from JSON or Caddyfile.
-- **Provider package** — self-register a type from `init()` so JSON can decode `"type"`. Required when the binary must resolve providers from config (CLI or Caddy JSON).
-- **Caddyfile provider** — a Caddy module under `xtemplate.providers.*` that parses `provider <type> <field> { }` into JSON.
+- **Custom provider** - construct it in Go and pass `WithProvider` (or put it on `Config.Providers`). Best for app-specific code next to `main`. Not selectable from JSON or Caddyfile.
+- **Provider package** - self-register a type from `init()` so JSON can decode `"type"`. Required when the binary must resolve providers from config (CLI or Caddy JSON).
+- **Caddyfile provider** - a Caddy module under `xtemplate.providers.*` that parses `provider <type> <field> { }` into JSON.
 
 ## 1. Implement DotConfig
 
@@ -73,7 +73,7 @@ package shop
 import "github.com/infogulch/xtemplate"
 
 func init() {
-	// "shop" is the provider type — JSON discriminator and Caddyfile token.
+	// "shop" is the provider type - JSON discriminator and Caddyfile token.
 	xtemplate.Register("shop", func() xtemplate.DotConfig {
 		return &ShopConfig{}
 	})
@@ -167,10 +167,10 @@ See [`examples/dotprovider`](../../examples/dotprovider/) for the full program a
 
 ## Related
 
-- [Glossary — Providers](../reference/glossary.md#providers)
+- [Glossary - Providers](../reference/glossary.md#providers)
 - [Dot context](../reference/dot-context.md)
 - [Configuration](../reference/configuration.md)
-- [Custom build](custom-build.md) — blank-import provider packages into a binary
-- [ADR 0001 — Global init registry](../adr/0001-global-init-registry-for-dot-providers.md)
-- [ADR 0003 — Caddyfile provider dispatch](../adr/0003-caddyfile-provider-dispatch-via-caddy-module-registry.md)
-- [ADR 0006 — Reflection-assembled dot context](../adr/0006-reflection-assembled-dot-context.md)
+- [Custom build](custom-build.md) - blank-import provider packages into a binary
+- [ADR 0001 - Global init registry](../adr/0001-global-init-registry-for-dot-providers.md)
+- [ADR 0003 - Caddyfile provider dispatch](../adr/0003-caddyfile-provider-dispatch-via-caddy-module-registry.md)
+- [ADR 0006 - Reflection-assembled dot context](../adr/0006-reflection-assembled-dot-context.md)

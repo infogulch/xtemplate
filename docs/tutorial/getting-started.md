@@ -47,7 +47,7 @@ Create `templates/index.html`:
         <p><strong>Remote address:</strong> {{.Req.RemoteAddr}}</p>
     </div>
 
-    <p>Try editing this file and refreshing the browser — the server will pick
+    <p>Try editing this file and refreshing the browser - the server will pick
     up your changes automatically.</p>
 </body>
 </html>
@@ -73,7 +73,7 @@ watchfs --listen :8080
 ./xtemplate --listen :8080
 ```
 
-Open http://localhost:8080 — you should see your page. The file `templates/index.html` handles `GET /`.
+Open http://localhost:8080 - you should see your page. The file `templates/index.html` handles `GET /`.
 
 ## 3. Experience live reload
 
@@ -109,7 +109,7 @@ Create `templates/hello.html`:
 {{- end}}
 ```
 
-Save and visit http://localhost:8080/hello. Submit the form: the path template handles `GET /hello`; the define template `{{define "POST /hello"}}` handles `POST` — no separate Go handler.
+Save and visit http://localhost:8080/hello. Submit the form: the path template handles `GET /hello`; the define template `{{define "POST /hello"}}` handles `POST` - no separate Go handler.
 
 User input is HTML-escaped by default.
 

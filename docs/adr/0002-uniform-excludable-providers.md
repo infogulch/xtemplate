@@ -4,7 +4,7 @@ status: accepted
 
 # Every dot provider is an excludable package
 
-Core providers live under `providers/` (`dotsql`, `dotfs`, `dotflags`, `dotnats`) and link only when imported. The `xtemplate` package holds no provider types or their heavy deps. “Core” means shipped by this repo, not special runtime status — same shape as any provider package.
+Core providers live under `providers/` (`dotsql`, `dotfs`, `dotflags`, `dotnats`) and link only when imported. The `xtemplate` package holds no provider types or their heavy deps. “Core” means shipped by this repo, not special runtime status - same shape as any provider package.
 
 ## Considered options
 

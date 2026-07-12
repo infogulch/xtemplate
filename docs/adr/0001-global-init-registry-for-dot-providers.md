@@ -12,5 +12,5 @@ Provider packages self-register a provider type string → constructor in a pack
 
 ## Consequences
 
-- `"type"` is reserved on provider config JSON; don’t put a user field there (Caddyfile path errors; registry decode overwrites — see ADR-0003).
+- `"type"` is reserved on provider config JSON; don’t put a user field there (Caddyfile path errors; registry decode overwrites - see ADR-0003).
 - Unknown type / bad settings fail at instance build (`resolveProviders`), not at earlier CLI/JSON parse alone.

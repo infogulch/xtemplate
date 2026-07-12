@@ -40,14 +40,14 @@ Deal with the first-class citizens of the web: paths, requests, HTML responses, 
 
 ## Highlights
 
-- **File-based routing** — `admin/settings.html` serves `GET /admin/settings`; `index.html` serves the directory. [Template semantics](docs/reference/template-semantics.md)
-- **Any method and pattern** — `{{define "DELETE /contact/{id}"}}` is a route. [Instance loading](docs/reference/instance-loading.md)
-- **Loads once, reloads live** — parse at startup; swap an immutable instance on change. [Design](docs/explanation/design.md)
-- **Dot context** — `.Req`, `.Resp`, `.DB`, `.FS`, … per request. [Dot context](docs/reference/dot-context.md)
-- **Safe by default** — `html/template` escaping; optional sanitize / trust helpers. [Functions](docs/reference/functions.md)
-- **Optimal static files** — hashes, SRI, precompressed encodings, long cache. [Instance loading](docs/reference/instance-loading.md#static-files)
-- **SSE** — `{{define "SSE /path"}}` for live updates. [Dot context → Flush](docs/reference/dot-context.md#streaming-control-in-flush)
-- **Embeddable** — CLI, Docker, Caddy plugin, or `http.Handler` library. [Deployment modes](docs/reference/deployment-modes.md)
+- **File-based routing** - `admin/settings.html` serves `GET /admin/settings`; `index.html` serves the directory. [Template semantics](docs/reference/template-semantics.md)
+- **Any method and pattern** - `{{define "DELETE /contact/{id}"}}` is a route. [Instance loading](docs/reference/instance-loading.md)
+- **Loads once, reloads live** - parse at startup; swap an immutable instance on change. [Design](docs/explanation/design.md)
+- **Dot context** - `.Req`, `.Resp`, `.DB`, `.FS`, … per request. [Dot context](docs/reference/dot-context.md)
+- **Safe by default** - `html/template` escaping; optional sanitize / trust helpers. [Functions](docs/reference/functions.md)
+- **Optimal static files** - hashes, SRI, precompressed encodings, long cache. [Instance loading](docs/reference/instance-loading.md#static-files)
+- **SSE** - `{{define "SSE /path"}}` for live updates. [Dot context → Flush](docs/reference/dot-context.md#streaming-control-in-flush)
+- **Embeddable** - CLI, Docker, Caddy plugin, or `http.Handler` library. [Deployment modes](docs/reference/deployment-modes.md)
 
 Some more patterns:
 
@@ -103,9 +103,9 @@ All documentation (tutorial, how-tos, reference, design): **[docs/](docs/)**.
 
 ## Users
 
-- [PixyBlue/lazy-lob-web](https://github.com/PixyBlue/lazy-lob-web) — fullstack web lob framework
-- [infogulch/xrss](https://github.com/infogulch/xrss) — RSS reader with htmx
-- [infogulch/todos](https://github.com/infogulch/todos) — TodoMVC demo
+- [PixyBlue/lazy-lob-web](https://github.com/PixyBlue/lazy-lob-web) - fullstack web lob framework
+- [infogulch/xrss](https://github.com/infogulch/xrss) - RSS reader with htmx
+- [infogulch/todos](https://github.com/infogulch/todos) - TodoMVC demo
 
 ## Contributing
 

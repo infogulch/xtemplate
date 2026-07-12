@@ -106,4 +106,4 @@ Handlers treat the internal sentinel as normal completion (not a failure). Use `
 ## Related
 
 - [Instance loading](instance-loading.md)
-- [Glossary](glossary.md) — path template, define template, early return
+- [Glossary](glossary.md) - path template, define template, early return

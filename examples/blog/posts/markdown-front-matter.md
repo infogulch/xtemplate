@@ -4,7 +4,7 @@ date: "2024-02-03"
 summary: How a single template turns a .md file into a finished page.
 ---
 
-A post is just a Markdown file that starts with a fenced block of metadata —
+A post is just a Markdown file that starts with a fenced block of metadata -
 its *front matter*:
 
 ```md

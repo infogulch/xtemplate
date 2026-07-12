@@ -24,7 +24,7 @@ go build -o xtemplate ./cmd/watchfs
 
 ## Extending the app config
 
-The published CLIs are not three separate flag parsers. They share [`app.LoadConfig`](../../app/app.go), which loads **any** struct that implements `app.Configurable` — typically by **embedding** `app.Config` and adding fields.
+The published CLIs are not three separate flag parsers. They share [`app.LoadConfig`](../../app/app.go), which loads **any** struct that implements `app.Configurable` - typically by **embedding** `app.Config` and adding fields.
 
 `app.Config` itself embeds `xtemplate.Config` and adds listen, log level, and the `-c` / `-f` config sources:
 
@@ -41,7 +41,7 @@ type Config struct {
 A variant adds options by embedding that type and tagging new fields for both JSON and [go-arg](https://github.com/alexflint/go-arg). watchfs adds extra watch dirs:
 
 ```go
-// app/watchfs — simplified
+// app/watchfs - simplified
 type Config struct {
 	app.Config
 	Watch []string `json:"watch_dirs" arg:",separate"`

@@ -50,6 +50,6 @@ Each example has:
 
 ## Tasks
 
-- `mise run example-<name>` — run the example as a foreground dev server.
-- `mise run test-example-<name>` — build, serve on its port, run its hurl suite, tear down.
-- `mise run test-examples` — run every example's integration test (included in `mise run test` / `mise run ci`).
+- `mise run example-<name>` - run the example as a foreground dev server.
+- `mise run test-example-<name>` - build, serve on its port, run its hurl suite, tear down.
+- `mise run test-examples` - run every example's integration test (included in `mise run test` / `mise run ci`).

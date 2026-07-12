@@ -58,7 +58,7 @@ Common methods: `AddHeader`, `SetHeader`, `DelHeader`, `SetStatus`, `ReturnStatu
 
 ### Streaming control in `.Flush`
 
-Available on flushing handlers — routes defined with the `SSE` method prefix. Use for Server-Sent Events and other incremental responses. Common methods: `SendSSE`, `Flush`, `Repeat`, `Sleep` (returns early if the request or server is cancelled), `WaitForServerStop`. Full API: [DotFlush](https://pkg.go.dev/github.com/infogulch/xtemplate#DotFlush); example: [`sse-chat`](../../examples/sse-chat/).
+Available on flushing handlers - routes defined with the `SSE` method prefix. Use for Server-Sent Events and other incremental responses. Common methods: `SendSSE`, `Flush`, `Repeat`, `Sleep` (returns early if the request or server is cancelled), `WaitForServerStop`. Full API: [DotFlush](https://pkg.go.dev/github.com/infogulch/xtemplate#DotFlush); example: [`sse-chat`](../../examples/sse-chat/).
 
 ```html
 {{- define "SSE /reload"}}{{.Flush.WaitForServerStop}}data: reload{{printf "\n\n"}}{{end}}

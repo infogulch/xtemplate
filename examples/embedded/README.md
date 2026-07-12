@@ -1,6 +1,6 @@
 # Embedded example
 
-Templates compiled into the binary with `//go:embed` — a single, self-contained
+Templates compiled into the binary with `//go:embed` - a single, self-contained
 binary with no templates directory at runtime. You can run it from anywhere.
 
 ```

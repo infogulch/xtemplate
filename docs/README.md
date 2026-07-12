@@ -6,18 +6,18 @@ See [glossary](reference/glossary.md) for terminology used throughout.
 
 ### Tutorials
 
-- [Getting started](tutorial/getting-started.md) — build your first xtemplate app
+- [Getting started](tutorial/getting-started.md) - build your first xtemplate app
 
 ### How-to guides
 
-- [Custom build](how-to/custom-build.md) — drivers, embed, FuncMaps, providers
+- [Custom build](how-to/custom-build.md) - drivers, embed, FuncMaps, providers
 - [Create a custom dot provider](how-to/create-a-provider.md)
 - [Add authentication with caddy-security](how-to/auth-caddy-security.md)
 
 ### Reference
 
-- [Glossary](reference/glossary.md) — bounded context / terminology
-- [Deployment modes](reference/deployment-modes.md) — Docker, CLI (plain/watchfs/git), Caddy, library
+- [Glossary](reference/glossary.md) - bounded context / terminology
+- [Deployment modes](reference/deployment-modes.md) - Docker, CLI (plain/watchfs/git), Caddy, library
 - [CLI reference](reference/cli.md)
 - [Configuration](reference/configuration.md)
 - [Instance loading](reference/instance-loading.md)

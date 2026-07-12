@@ -94,7 +94,7 @@ A `{{define}}` whose name matches `METHOD path` registers that route:
 ```html
 {{define "GET /contact/{id}"}}
   {{$c := .DB.QueryRow `SELECT name, phone FROM contacts WHERE id=?` (.Req.PathValue "id")}}
-  <div>{{$c.name}} — {{$c.phone}}</div>
+  <div>{{$c.name}} - {{$c.phone}}</div>
 {{end}}
 
 {{define "DELETE /contact/{id}"}}
@@ -113,6 +113,6 @@ Define names that are not routes (e.g. `navbar`) are ordinary templates invocabl
 
 ## Related
 
-- [Template semantics](template-semantics.md) — execution and invocation
-- [Dot context](dot-context.md) — per-request `.`
-- [Design](../explanation/design.md) — why this model
+- [Template semantics](template-semantics.md) - execution and invocation
+- [Dot context](dot-context.md) - per-request `.`
+- [Design](../explanation/design.md) - why this model

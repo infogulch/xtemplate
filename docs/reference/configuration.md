@@ -11,7 +11,7 @@ When using `app.Main` / `watchfs.Main` (or any `app.LoadConfig` caller), later s
 3. `--config` / `-c` inline JSON fragments (in order)
 4. CLI flags (highest)
 
-How variants add their own fields to that load path: [CLI reference — Extending the app config](cli.md#extending-the-app-config).
+How variants add their own fields to that load path: [CLI reference - Extending the app config](cli.md#extending-the-app-config).
 
 ## Core fields
 

@@ -7,8 +7,8 @@ flowchart TD
     Docker["Docker image\npackages a CLI binary"]
     CLI["CLI apps\nplain · watchfs · git"]
     Caddy["Caddy module\nstandard or lean providers\noptional template watch"]
-    Server["Go library — Server\nhttp.Handler with live Reload()"]
-    Instance["Go library — Instance\nimmutable http.Handler"]
+    Server["Go library - Server\nhttp.Handler with live Reload()"]
+    Instance["Go library - Instance\nimmutable http.Handler"]
 
     Docker -->|packages| CLI
     CLI -->|built on| Server
@@ -277,4 +277,4 @@ CLI-shaped programs that parse flags and JSON:
 | [`watchfs.Main`](https://pkg.go.dev/github.com/infogulch/xtemplate/app/watchfs) | watchfs CLI |
 | [`git.Main`](https://pkg.go.dev/github.com/infogulch/xtemplate/app/git) | git CLI |
 
-Pass `xtemplate.Option` overrides into any of them — see [Custom build](../how-to/custom-build.md) and the [`examples/`](../../examples/) tree.
+Pass `xtemplate.Option` overrides into any of them - see [Custom build](../how-to/custom-build.md) and the [`examples/`](../../examples/) tree.

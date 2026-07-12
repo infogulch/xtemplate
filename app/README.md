@@ -4,7 +4,7 @@ CLI application layer: parse flags and JSON, construct an `xtemplate.Server`, an
 
 | Package | Role |
 |---|---|
-| `app` | plain CLI — load config, serve once (`app.Main`) |
+| `app` | plain CLI - load config, serve once (`app.Main`) |
 | `app/watchfs` | same + reload when the template root (and `--watch` dirs) change |
 | `app/git` | load/reload templates from a Git remote |
 
@@ -37,7 +37,7 @@ To add **new flags or JSON keys**, embed `app.Config` and use `app.LoadConfig` (
 
 ## Docs
 
-- [CLI reference](../docs/reference/cli.md) — flags, extending the app config
-- [Configuration](../docs/reference/configuration.md) — field catalog, JSON, Caddyfile
-- [Deployment modes](../docs/reference/deployment-modes.md) — install, variants, Docker
-- [Custom build](../docs/how-to/custom-build.md) — drivers, embed, providers
+- [CLI reference](../docs/reference/cli.md) - flags, extending the app config
+- [Configuration](../docs/reference/configuration.md) - field catalog, JSON, Caddyfile
+- [Deployment modes](../docs/reference/deployment-modes.md) - install, variants, Docker
+- [Custom build](../docs/how-to/custom-build.md) - drivers, embed, providers
