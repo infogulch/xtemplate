@@ -227,7 +227,9 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 			slog.Int("staticFilesAlternateEncodings", build.StaticFilesAlternateEncodings),
 		))
 
-	if !config.CrossOrigin.Disabled {
+	if config.CrossOrigin.Disabled {
+		build.handler = build.router
+	} else {
 		handler := http.NewCrossOriginProtection()
 		for _, origin := range config.CrossOrigin.TrustedOrigins {
 			_ = handler.AddTrustedOrigin(origin)
