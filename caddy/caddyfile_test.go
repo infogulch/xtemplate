@@ -60,6 +60,7 @@ func TestParseCaddyfile_AllOptions(t *testing.T) {
 		template_extension .gohtml
 		delimiters [[ ]]
 		minify false
+		precompress gzip br
 		watch_template_path false
 	}`)
 
@@ -75,8 +76,22 @@ func TestParseCaddyfile_AllOptions(t *testing.T) {
 	if m.Minify == nil || *m.Minify {
 		t.Errorf("Minify = %v, want non-nil false", m.Minify)
 	}
+	if !equalStrings(m.Precompress, []string{"gzip", "br"}) {
+		t.Errorf("Precompress = %v, want [gzip br]", m.Precompress)
+	}
 	if m.WatchTemplatePath {
 		t.Error("WatchTemplatePath = true, want false")
+	}
+}
+
+func TestParseCaddyfile_Precompress(t *testing.T) {
+	m := parse(t, `xtemplate {
+		precompress gzip
+		precompress zstd br
+	}`)
+	want := []string{"gzip", "zstd", "br"}
+	if !equalStrings(m.Precompress, want) {
+		t.Errorf("Precompress = %v, want %v", m.Precompress, want)
 	}
 }
 
@@ -118,6 +133,8 @@ func TestParseCaddyfile_Errors(t *testing.T) {
 		"unknown directive":         "xtemplate {\n\tbogus\n}",
 		"non-bool minify":           "xtemplate {\n\tminify notabool\n}",
 		"non-bool watch":            "xtemplate {\n\twatch_template_path maybe\n}",
+		"precompress no args":       "xtemplate {\n\tprecompress\n}",
+		"precompress bad encoding":  "xtemplate {\n\tprecompress lzma\n}",
 		"unknown crossorigin opt":   "xtemplate {\n\tcrossorigin {\n\t\tbogus true\n\t}\n}",
 		"non-bool crossorigin":      "xtemplate {\n\tcrossorigin {\n\t\tdisabled notabool\n\t}\n}",
 		"missing trusted_origins":   "xtemplate {\n\tcrossorigin {\n\t\ttrusted_origins\n\t}\n}",

@@ -43,6 +43,19 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 					return nil, err
 				}
 				t.Minify = &b
+			case "precompress":
+				args := h.RemainingArgs()
+				if len(args) == 0 {
+					return nil, h.ArgErr()
+				}
+				for _, enc := range args {
+					switch enc {
+					case "gzip", "zstd", "br":
+						t.Precompress = append(t.Precompress, enc)
+					default:
+						return nil, h.Errf("unknown precompress encoding %q; want gzip, zstd, or br", enc)
+					}
+				}
 			case "watch_template_path":
 				b, err := parseBoolArg(h)
 				if err != nil {
