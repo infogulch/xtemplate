@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+{{- $name := .Req.FormValue "name" | default "World"}}
+<head><title>Hello {{$name}}!</title></head>
+<body>
+    <h1>Hello {{$name}}!</h1>
+    <p>This handler uses the form field <code>name</code> to greet the user.</p>
+    <form method="POST" action="/hello">
+        <input type="text" name="name" placeholder="Enter your name">
+        <button type="submit">Submit</button>
+    </form>
+    <p><a href="/">Back home</a></p>
+</body>
+</html>
+
+<!-- define a POST handler for this route. it just renders the content of the GET /hello route -->
+{{- define "POST /hello"}}
+{{- template "/hello.html" .}}
+{{- end}}

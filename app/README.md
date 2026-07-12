@@ -1,64 +1,48 @@
-# xtemplate `cmd`
+# xtemplate `app`
 
-The `cmd` package is xtemplate's Command Line Interface (CLI) application.
+CLI application layer: parse flags and JSON, construct an `xtemplate.Server`,
+and serve. The core library stays free of CLI concerns.
 
-If you want to customize the xtemplate build with a specific database driver,
-custom template funcs, or to have more control over application startup copy
-[main.go](main.go) to a new package and provide override funcs to call to
-`xtemplate.Main()`.
+| Package | Role |
+|---|---|
+| `app` | plain CLI — load config, serve once (`app.Main`) |
+| `app/watchfs` | same + reload when the template root (and `--watch` dirs) change |
+| `app/git` | load/reload templates from a Git remote |
 
-### Build
+Thin `main` packages under [`cmd/`](../cmd/), [`cmd/watchfs/`](../cmd/watchfs/),
+and [`cmd/git/`](../cmd/git/) blank-import providers/drivers and call the matching
+`Main`.
 
-```sh
-# build from ./cmd
-go build -o xtemplate
+## Customize a binary
 
-# build from repo root
-go build -o xtemplate ./cmd
+Copy a `cmd/*` entry into your own module when you need different drivers,
+FuncMaps, providers, or defaults. Pass `xtemplate.Option`s into `Main`:
 
-# build with sqlite3 driver and json extensions
-GOFLAGS='-tags="sqlite_json"' CGO_ENABLED=1 go build -o xtemplate ./cmd
+```go
+package main
+
+import (
+	"github.com/infogulch/xtemplate"
+	"github.com/infogulch/xtemplate/app/watchfs"
+
+	_ "github.com/infogulch/xtemplate/providers/dotsql"
+	_ "github.com/jackc/pgx/v5/stdlib" // driver name "pgx"
+)
+
+func main() {
+	watchfs.Main(
+		// xtemplate.WithProvider(...),
+		// xtemplate.WithFuncMaps(...),
+	)
+}
 ```
 
-### Usage
+To add **new flags or JSON keys**, embed `app.Config` and use `app.LoadConfig`
+(same pattern as watchfs/git). See the docs links below.
 
-```shell
-$ ./xtemplate -help
-xtemplate is a hypertext preprocessor and html templating http server
+## Docs
 
-Usage: ./xtemplate [options]
-
-Options:
-  -listen string              Listen address (default "0.0.0.0:8080")
-
-  -template-path string       Directory where templates are loaded from (default "templates")
-  -watch-template bool        Watch the template directory and reload if changed (default true)
-  -template-extension string  File extension to look for to identify templates (default ".html")
-  -minify bool                Preprocess the template files to minimize their size at load time (default false)
-  -ldelim string              Left template delimiter (default "{{")
-  -rdelim string              Right template delimiter (default "}}")
-
-  -context-path string        Directory that template definitions are given direct access to. No access is given if empty (default "")
-  -watch-context bool         Watch the context directory and reload if changed (default false)
-
-  -db-driver string           Name of the database driver registered as a Go 'sql.Driver'. Not available if empty. (default "")
-  -db-connstr string          Database connection string
-
-  -c string                   Config values, in the form 'x=y'. Can be used multiple times
-
-  -log int                    Log level. Log statements below this value are omitted from log output, DEBUG=-4, INFO=0, WARN=4, ERROR=8 (Default: 0)
-  -help                       Display help
-
-Examples:
-    Listen on port 80:
-    $ ./xtemplate -listen :80
-
-    Specify a context directory and reload when it changes:
-    $ ./xtemplate -context-path context/ -watch-context
-
-    Parse template files matching a custom extension and minify them:
-    $ ./xtemplate -template-extension ".go.html" -minify
-
-    Open the specified db and makes it available to template files as '.DB':
-    $ ./xtemplate -db-driver sqlite3 -db-connstr 'file:rss.sqlite?_journal=WAL'
-```
+- [CLI reference](../docs/reference/cli.md) — flags, extending the app config
+- [Configuration](../docs/reference/configuration.md) — field catalog, JSON, Caddyfile
+- [Deployment modes](../docs/reference/deployment-modes.md) — install, variants, Docker
+- [Custom build](../docs/how-to/custom-build.md) — drivers, embed, providers

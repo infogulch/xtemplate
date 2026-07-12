@@ -13,11 +13,11 @@ server by:
 [xtemplate]: https://github.com/infogulch/xtemplate
 [caddy]: https://caddyserver.com/
 [extending-caddy]: https://caddyserver.com/docs/extending-caddy
-[http.handlers.xtemplate]: https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate%2Fcaddy
+[http.handlers.xtemplate]: https://caddyserver.com/download?package=github.com%2Finfogulch%2Fxtemplate%2Fcaddy%2Fstandard
 
 ## Quickstart
 
-First, [Download Caddy Server with `http.handlers.xtemplate` module][http.handlers.xtemplate], or [build it yourself](#build).
+First, [Download Caddy with `http.handlers.xtemplate` (standard: providers + sqlite3)][http.handlers.xtemplate], or [build it yourself](#build).
 
 Write your caddy config and use the xtemplate http handler in a route block. See
 [Config](#config) for a listing of xtemplate configs. The simplest Caddy config
@@ -59,6 +59,7 @@ xtemplate {
     template_extension <string>              # File extension to search for to find template files. Default ".html".
     minify <bool>                            # Minify html templates at load time. Default: true.
     delimiters <Left:string> <Right:string>  # The template action delimiters, default "{{" and "}}".
+    precompress <enc...>                     # Generate static encodings at load: gzip, zstd, br (repeatable).
 
     crossorigin {
         disabled <bool>                      # Disable Go 1.25 cross-origin (CSRF) protection. Default: false.
@@ -82,11 +83,12 @@ Caddyfile syntax covers a curated subset of each provider's options. For
 advanced configuration use Caddy's JSON format ([caddy.json](../test/caddy.json)
 has examples); all JSON fields remain available as a full-fidelity escape hatch.
 
-**sql** — connect to a SQL database:
+**sql** — connect to a SQL database (`caddy/standard` links pure-Go `sqlite3`;
+other drivers need a blank import in a custom build):
 
 ```Caddy
 provider sql DB {
-    driver   <driver>   # e.g. sqlite3, postgres, mysql
+    driver   <driver>   # e.g. sqlite3, pgx, mysql
     connstr  <connstr>  # driver-specific connection string
     max_open_conns <n>  # optional connection pool limit
 }
@@ -129,25 +131,26 @@ representation and must be set via the Go API.
 
 Provider Caddyfile support lives in opt-in subpackages. Use `caddy/standard` to
 pull in the default set (sql, fs, flags, nats) in one flag, or add one `--with`
-flag per provider to build a leaner subset:
+flag per provider to build a leaner subset.
 
 ```shell
-# default set (sql + fs + flags + nats)
+# default set (sql + fs + flags + nats Caddyfile + pure-Go sqlite3 driver)
 xcaddy build --with github.com/infogulch/xtemplate/caddy/standard
 
-# leaner subset: pick desired providers individually
+# leaner subset: pick desired providers (and a SQL driver) individually
 xcaddy build \
     --with github.com/infogulch/xtemplate/caddy \
-    --with github.com/infogulch/xtemplate/providers/sql/caddyfile \
-    --with github.com/infogulch/xtemplate/providers/fs/caddyfile \
-    --with github.com/infogulch/xtemplate/providers/flags/caddyfile
+    --with github.com/infogulch/xtemplate/providers/dotsql/caddyfile \
+    --with github.com/infogulch/xtemplate/providers/dotfs/caddyfile \
+    --with github.com/infogulch/xtemplate/providers/dotflags/caddyfile \
+    --with github.com/ncruces/go-sqlite3/driver
 ```
 
 A provider type unknown at parse time produces an actionable error:
 
 ```
 provider type "sql" is not available in this build;
-add it with --with github.com/infogulch/xtemplate/providers/sql/caddyfile
+add it with --with github.com/infogulch/xtemplate/providers/dotsql/caddyfile
 ```
 
 > `templates_path` is accepted as a deprecated alias for `templates_dir`.
@@ -173,19 +176,15 @@ functions it returns into the template execution context.
 
 ### `xcaddy` CLI
 
-To build xtemplate_caddy locally, install [`xcaddy`](xcaddy), then build from
-the directory root. Examples:
+To build with xtemplate locally, install [`xcaddy`](xcaddy), then:
 
 ```shell
-# build with the default set (sql, fs, flags, nats) — Caddyfile + JSON
-CGO_ENABLED=1 xcaddy build \
-    --with github.com/infogulch/xtemplate/caddy/standard
-
-# also enable the sqlite_json build tag to get JSON functions
-GOFLAGS='-tags="sqlite_json"' CGO_ENABLED=1 xcaddy build \
-    --with github.com/infogulch/xtemplate/caddy \
-    --with github.com/infogulch/xtemplate/caddy/standard
+# default provider set + pure-Go sqlite3 driver
+xcaddy build --with github.com/infogulch/xtemplate/caddy/standard
 ```
+
+No CGO is required for that combination. CGO (and driver-specific build tags)
+only matter if you choose a CGO-based SQL driver or other CGO modules.
 
 [xcaddy]: https://github.com/caddyserver/xcaddy
 
@@ -205,12 +204,14 @@ Create a go module `go mod init <modname>` with a `main.go` like this:
 package main
 
 import (
-    caddycmd "github.com/caddyserver/caddy/v2/cmd"
+	caddycmd "github.com/caddyserver/caddy/v2/cmd"
 
-    _ "github.com/infogulch/xtemplate/caddy"
+	_ "github.com/infogulch/xtemplate/caddy/standard"
+	// caddy/standard already links sqlite3; other drivers:
+	// _ "github.com/jackc/pgx/v5/stdlib"
 
-    // Add other caddy modules:
-    // _ "github.com/greenpau/caddy-security"
+	// Other Caddy modules, e.g.:
+	// _ "github.com/greenpau/caddy-security"
 )
 
 func main() {
