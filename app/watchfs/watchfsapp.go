@@ -3,6 +3,7 @@
 package watchfs
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -18,6 +19,13 @@ type Config struct {
 	// Watch lists extra directories to watch for changes, in addition to the
 	// templates directory.
 	Watch []string `json:"watch_dirs" arg:",separate"`
+}
+
+func (c *Config) Epilogue() string {
+	return c.Config.Epilogue() + fmt.Sprintf(`
+
+    Watch extra directories and reduce log verbosity:
+    ❯ %[1]s --watch data --loglevel -4`, os.Args[0])
 }
 
 var _ app.Configurable = (*Config)(nil)

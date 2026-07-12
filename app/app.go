@@ -42,16 +42,15 @@ func (a *Config) SetDefaults() {
 // Epilogue is called by arg when the user requests help via the cli. Can be
 // overridden by a Configurable implementation.
 func (Config) Epilogue() string {
-	arg0 := os.Args[0]
 	return fmt.Sprintf(`Examples:
     Listen on port 80:
     ❯ %[1]s --listen :80
 
-    Specify a template directory and reload when it changes:
-    ❯ %[1]s --template-dir public --watch-templates
+    Specify a template directory:
+    ❯ %[1]s --templates-dir public
 
-    Parse template files matching a custom extension and minify them:
-    ❯ %[1]s --template-ext ".go.html" --minify`, arg0)
+    Parse template files matching a custom extension; disable minify:
+    ❯ %[1]s --template-ext ".go.html" --minify=false`, os.Args[0])
 }
 
 // version is stamped at build time for releases via
