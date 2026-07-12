@@ -18,21 +18,17 @@ Domain terms for xtemplate. Behavior and APIs live in the rest of the [docs](../
 
 **Path template**: Named by its path under the template root (default extension `.html`). Implies a `GET` route with the extension stripped.
 
-**Define template**: Named by `{{define "..."}}`. A name that is a method + path pattern is a route; otherwise it is a reusable template.
-_Avoid_: partial, sub-template, template block
+**Define template**: Named by `{{define "..."}}`. A name that is a method + path pattern is a route; otherwise it is a reusable template. _Avoid_: partial, sub-template, template block
 
-**Static file**: Non-template file under the template root, served as-is (identity plus optional precompressed siblings sharing a content checksum).
-_Avoid_: asset, resource
+**Static file**: Non-template file under the template root, served as-is (identity plus optional precompressed siblings sharing a content checksum). _Avoid_: asset, resource
 
-**Initialization template**: A defined template whose name starts with `INIT `; run once at instance build, not as a route. Output discarded; error aborts the build.
-_Avoid_: template initializer, INIT template
+**Initialization template**: A defined template whose name starts with `INIT `; run once at instance build, not as a route. Output discarded; error aborts the build. _Avoid_: template initializer, INIT template
 
 **Dot context** (dot): Per-request value of `.`, assembled from dot providers. Sole channel for request data, response control, and data sources.
 
 **Template function**: Stateless FuncMap entry (`{{myFunc x}}`). Defaults: Go builtins, Sprig, xtemplate additions. Not request-scoped (contrast: providers).
 
-**Early return**: Deliberate successful halt mid-template (`return`, `.Resp.ReturnStatus`, some `.Flush` helpers). Not an error.
-_Avoid_: abort, halt, ReturnError (as the user-facing name)
+**Early return**: Deliberate successful halt mid-template (`return`, `.Resp.ReturnStatus`, some `.Flush` helpers). Not an error. _Avoid_: abort, halt, ReturnError (as the user-facing name)
 
 ## Routing
 

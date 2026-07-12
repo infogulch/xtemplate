@@ -1,7 +1,6 @@
 # CLI reference
 
-Flag inventory for the standalone binaries, and how the `app` package lets you
-extend that surface.
+Flag inventory for the standalone binaries, and how the `app` package lets you extend that surface.
 
 Related:
 
@@ -25,12 +24,9 @@ go build -o xtemplate ./cmd/watchfs
 
 ## Extending the app config
 
-The published CLIs are not three separate flag parsers. They share
-[`app.LoadConfig`](../../app/app.go), which loads **any** struct that implements
-`app.Configurable` — typically by **embedding** `app.Config` and adding fields.
+The published CLIs are not three separate flag parsers. They share [`app.LoadConfig`](../../app/app.go), which loads **any** struct that implements `app.Configurable` — typically by **embedding** `app.Config` and adding fields.
 
-`app.Config` itself embeds `xtemplate.Config` and adds listen, log level, and the
-`-c` / `-f` config sources:
+`app.Config` itself embeds `xtemplate.Config` and adds listen, log level, and the `-c` / `-f` config sources:
 
 ```go
 type Config struct {
@@ -42,9 +38,7 @@ type Config struct {
 }
 ```
 
-A variant adds options by embedding that type and tagging new fields for both
-JSON and [go-arg](https://github.com/alexflint/go-arg). watchfs adds extra watch
-dirs:
+A variant adds options by embedding that type and tagging new fields for both JSON and [go-arg](https://github.com/alexflint/go-arg). watchfs adds extra watch dirs:
 
 ```go
 // app/watchfs — simplified
@@ -62,10 +56,7 @@ func Main(options ...xtemplate.Option) {
 }
 ```
 
-git does the same with `--git-repo`, `--git-ref`, and `--git-interval` (see
-[`app/git`](../../app/git/gitapp.go)). Override `SetDefaults` on your outer
-struct when new fields need defaults; call the embedded `Config.SetDefaults()`
-so listen/logger still initialize.
+git does the same with `--git-repo`, `--git-ref`, and `--git-interval` (see [`app/git`](../../app/git/gitapp.go)). Override `SetDefaults` on your outer struct when new fields need defaults; call the embedded `Config.SetDefaults()` so listen/logger still initialize.
 
 Because `LoadConfig` parses and unmarshals into **your** struct value:
 
@@ -73,23 +64,15 @@ Because `LoadConfig` parses and unmarshals into **your** struct value:
 - Existing xtemplate and app fields keep working without redeclaring them.
 - Help (`Epilogue`) and `Version` can be overridden the same way when needed.
 
-For a one-off binary that only needs extra providers or FuncMaps, prefer
-`watchfs.Main(xtemplate.With…)` or `app.Main(…)` from
-[Custom build](../how-to/custom-build.md). Embed a new `Configurable` when you
-need **new flags or JSON keys** of your own (another reload policy, a required
-remote, etc.).
+For a one-off binary that only needs extra providers or FuncMaps, prefer `watchfs.Main(xtemplate.With…)` or `app.Main(…)` from [Custom build](../how-to/custom-build.md). Embed a new `Configurable` when you need **new flags or JSON keys** of your own (another reload policy, a required remote, etc.).
 
 ### Config source precedence
 
-Whatever the outer struct is, `LoadConfig` fills it in this order (later wins):
-defaults → `-f` files in order → `-c` fragments in order → CLI flags. Flags are
-parsed twice so they still override JSON after files load. Details live in
-`app.LoadConfig`.
+Whatever the outer struct is, `LoadConfig` fills it in this order (later wins): defaults → `-f` files in order → `-c` fragments in order → CLI flags. Flags are parsed twice so they still override JSON after files load. Details live in `app.LoadConfig`.
 
 ## Flags
 
-Flags map onto the embedded config fields above (plus variant-only fields).
-Verified against the current `watchfs` / `cmd` help output:
+Flags map onto the embedded config fields above (plus variant-only fields). Verified against the current `watchfs` / `cmd` help output:
 
 | Flag | Default | Meaning |
 |---|---|---|

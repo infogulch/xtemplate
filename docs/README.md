@@ -1,7 +1,6 @@
 # xtemplate documentation
 
-xtemplate is a web server that turns a directory of Go templates into a web
-application.
+xtemplate is a web server that turns a directory of Go templates into a web application.
 
 See [glossary](reference/glossary.md) for terminology used throughout.
 
@@ -37,8 +36,7 @@ See [glossary](reference/glossary.md) for terminology used throughout.
 
 ### Architecture decision records
 
-Architecturally relevant decisions with rationale and consequences. See
-[ADR](https://adr.github.io/).
+Architecturally relevant decisions with rationale and consequences. See [ADR](https://adr.github.io/).
 
 1. [Global init registry for dot providers](adr/0001-global-init-registry-for-dot-providers.md)
 2. [Uniform excludable providers](adr/0002-uniform-excludable-providers.md)

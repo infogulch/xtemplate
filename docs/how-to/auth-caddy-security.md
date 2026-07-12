@@ -1,18 +1,14 @@
 # Add authentication with caddy-security
 
-xtemplate does not implement login itself. Run it as a Caddy handler and put an
-auth module in front of the routes that must be protected. A common choice is
-[AuthCrunch caddy-security](https://authcrunch.com/) (`github.com/greenpau/caddy-security`).
+xtemplate does not implement login itself. Run it as a Caddy handler and put an auth module in front of the routes that must be protected. A common choice is [AuthCrunch caddy-security](https://authcrunch.com/) (`github.com/greenpau/caddy-security`).
 
 ## Pattern
 
 1. Build Caddy with both `xtemplate` (standard or lean) and `caddy-security`.
 2. Configure an authentication portal / authorizer in the Caddyfile.
-3. Wrap only the routes that need auth; leave public static files and login
-   endpoints outside the authorizer.
+3. Wrap only the routes that need auth; leave public static files and login endpoints outside the authorizer.
 
-Conceptual Caddyfile shape (consult caddy-security docs for exact directives
-relevant to your version):
+Conceptual Caddyfile shape (consult caddy-security docs for exact directives relevant to your version):
 
 ```Caddyfile
 {
@@ -48,14 +44,12 @@ xcaddy build \
 
 ## What templates see
 
-After a successful authorize step, identity often appears in headers or
-Caddy placeholders. Forward what you need into templates via:
+After a successful authorize step, identity often appears in headers or Caddy placeholders. Forward what you need into templates via:
 
 - request headers (read with `.Req.Header.Get`), or
 - a small [custom provider](create-a-provider.md) that parses the auth context
 
-Keep secrets and token validation in Caddy (or your IdP); templates should only
-consume already-verified identity claims.
+Keep secrets and token validation in Caddy (or your IdP); templates should only consume already-verified identity claims.
 
 ## Related
 

@@ -1,8 +1,6 @@
 # Deployment modes
 
-xtemplate can plug into a stack at several layers. Higher modes package the ones
-below them; pick the layer that matches how much of the stack you want owned for
-you.
+xtemplate can plug into a stack at several layers. Higher modes package the ones below them; pick the layer that matches how much of the stack you want owned for you.
 
 ```mermaid
 flowchart TD
@@ -32,12 +30,9 @@ flowchart TD
 
 ## Docker
 
-Published images are `infogulch/xtemplate` on [Docker Hub](https://hub.docker.com/r/infogulch/xtemplate).
-Tags: version tags (e.g. `v0.9.6`) and `latest` on release.
+Published images are `infogulch/xtemplate` on [Docker Hub](https://hub.docker.com/r/infogulch/xtemplate). Tags: version tags (e.g. `v0.9.6`) and `latest` on release.
 
-The image runs the plain CLI binary (no filesystem watch), listens on port 80 by
-default, and expects a templates directory at `/app/templates` (the process
-working directory is `/app`).
+The image runs the plain CLI binary (no filesystem watch), listens on port 80 by default, and expects a templates directory at `/app/templates` (the process working directory is `/app`).
 
 ```shell
 # Serve ./templates from the host on http://localhost:8080
@@ -68,9 +63,7 @@ See also [CLI reference](cli.md) and [Configuration](configuration.md).
 
 ## CLI apps
 
-There are three thin `main` packages. They share most flags, JSON config, and
-providers; they differ only in where templates come from and how reloads are
-triggered. All sit on `xtemplate.Server`.
+There are three thin `main` packages. They share most flags, JSON config, and providers; they differ only in where templates come from and how reloads are triggered. All sit on `xtemplate.Server`.
 
 | Variant | Package | Entry | Template source | Reload |
 |---|---|---|---|---|
@@ -101,11 +94,9 @@ go build -o xtemplate ./cmd           # plain (no reload)
 go build -o xtemplate-git ./cmd/git   # git-backed
 ```
 
-For a containerized plain CLI, see [Docker](#docker). Custom drivers, embed, or
-providers: [Custom build](../how-to/custom-build.md).
+For a containerized plain CLI, see [Docker](#docker). Custom drivers, embed, or providers: [Custom build](../how-to/custom-build.md).
 
-Shared flags and extending the CLI: [CLI reference](cli.md). Field catalog and
-JSON: [Configuration](configuration.md).
+Shared flags and extending the CLI: [CLI reference](cli.md). Field catalog and JSON: [Configuration](configuration.md).
 
 ### Plain (`cmd`)
 
@@ -119,12 +110,9 @@ Used by the Docker image. Prefer watchfs for day-to-day editing.
 
 ### watchfs (`cmd/watchfs`)
 
-Default developer CLI and the binary shipped in GitHub release archives (as
-`xtemplate`). Always watches the templates directory and reloads the server when
-files change. A failed load keeps the previous instance and logs the error.
+Default developer CLI and the binary shipped in GitHub release archives (as `xtemplate`). Always watches the templates directory and reloads the server when files change. A failed load keeps the previous instance and logs the error.
 
-`go install` produces a binary named `watchfs`; local and release builds usually
-rename it to `xtemplate` with `-o`.
+`go install` produces a binary named `watchfs`; local and release builds usually rename it to `xtemplate` with `-o`.
 
 ```shell
 ./xtemplate --listen :8080
@@ -134,10 +122,7 @@ rename it to `xtemplate` with `-o`.
 
 ### git (`cmd/git`)
 
-Serve templates from a Git repository. The process shells out to the system
-`git` binary (no go-git dependency): it `ls-remote`s on an interval, shallow-clones
-when the ref moves, and reloads via `WithTemplateFS`. The server starts with an
-empty FS and begins serving real routes after the first successful clone.
+Serve templates from a Git repository. The process shells out to the system `git` binary (no go-git dependency): it `ls-remote`s on an interval, shallow-clones when the ref moves, and reloads via `WithTemplateFS`. The server starts with an empty FS and begins serving real routes after the first successful clone.
 
 Requires `--git-repo` (or `git_repo` in JSON).
 
@@ -168,19 +153,13 @@ go build -o xtemplate-git ./cmd/git
 }
 ```
 
-Needs `git` on `PATH`. Failures to fetch or clone are logged and retried; the
-last good instance keeps serving. Recent clones are retained briefly so in-flight
-requests can finish after a swap.
+Needs `git` on `PATH`. Failures to fetch or clone are logged and retried; the last good instance keeps serving. Recent clones are retained briefly so in-flight requests can finish after a swap.
 
-Library entry:
-[`git.Main`](https://pkg.go.dev/github.com/infogulch/xtemplate/app/git).
+Library entry: [`git.Main`](https://pkg.go.dev/github.com/infogulch/xtemplate/app/git).
 
 ## Caddy module
 
-The `xtemplate/caddy` plugin integrates xtemplate into
-[Caddy](https://caddyserver.com) as HTTP middleware (`http.handlers.xtemplate`),
-so you can layer automatic HTTPS, auth, reverse proxy, and the rest of the Caddy
-ecosystem around your templates.
+The `xtemplate/caddy` plugin integrates xtemplate into [Caddy](https://caddyserver.com) as HTTP middleware (`http.handlers.xtemplate`), so you can layer automatic HTTPS, auth, reverse proxy, and the rest of the Caddy ecosystem around your templates.
 
 ### Build variants
 
@@ -240,29 +219,21 @@ route {
 }
 ```
 
-`watch_template_path` (default `true`) is the Caddy analogue of the watchfs CLI.
-Set it `false` for production trees that will not be edited in place (deploy by
-replacing the tree and reloading Caddy, or rebuild). There is no built-in Caddy
-git poller; use the git CLI app, an external sync into `templates_dir`, or your
-own reload trigger.
+`watch_template_path` (default `true`) is the Caddy analogue of the watchfs CLI. Set it `false` for production trees that will not be edited in place (deploy by replacing the tree and reloading Caddy, or rebuild). There is no built-in Caddy git poller; use the git CLI app, an external sync into `templates_dir`, or your own reload trigger.
 
-See [`caddy/README.md`](../../caddy/README.md) for the full Caddyfile surface and
-[Configuration](configuration.md) for JSON.
+See [`caddy/README.md`](../../caddy/README.md) for the full Caddyfile surface and [Configuration](configuration.md) for JSON.
 
 ## Go library
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/infogulch/xtemplate.svg)](https://pkg.go.dev/github.com/infogulch/xtemplate)
 
-Public API starts with [`xtemplate.Config`](https://pkg.go.dev/github.com/infogulch/xtemplate#Config).
-From a config you build either an Instance or a Server.
+Public API starts with [`xtemplate.Config`](https://pkg.go.dev/github.com/infogulch/xtemplate#Config). From a config you build either an Instance or a Server.
 
 ### Instance
 
-An `Instance` is an immutable `http.Handler`: templates and static files are
-loaded once, routes are fixed, and the handler never mutates after build.
+An `Instance` is an immutable `http.Handler`: templates and static files are loaded once, routes are fixed, and the handler never mutates after build.
 
-Use an Instance when you do not need reload, or when you want to mount individual
-routes into your own mux.
+Use an Instance when you do not need reload, or when you want to mount individual routes into your own mux.
 
 ```go
 cfg := xtemplate.New()
@@ -279,17 +250,11 @@ http.ListenAndServe(":8080", inst)
 
 ### Server
 
-A `Server` implements `http.Handler` and holds the current Instance, replacing
-it atomically via `Reload()`. In-flight requests finish on the old instance; new
-requests use the new one.
+A `Server` implements `http.Handler` and holds the current Instance, replacing it atomically via `Reload()`. In-flight requests finish on the old instance; new requests use the new one.
 
-`Reload(opts...)` options apply only to that rebuild (a copy of the base
-config). They are **not sticky**: the next reload starts from the original
-config again unless you change the base config. Channel-driven reloads (e.g.
-git’s `WithTemplateFS`) must resend any options every time.
+`Reload(opts...)` options apply only to that rebuild (a copy of the base config). They are **not sticky**: the next reload starts from the original config again unless you change the base config. Channel-driven reloads (e.g. git’s `WithTemplateFS`) must resend any options every time.
 
-Use a Server for live reload (filesystem watch, git poll, Caddy reconfig, or
-your own signal).
+Use a Server for live reload (filesystem watch, git poll, Caddy reconfig, or your own signal).
 
 ```go
 cfg := xtemplate.New()
@@ -312,6 +277,4 @@ CLI-shaped programs that parse flags and JSON:
 | [`watchfs.Main`](https://pkg.go.dev/github.com/infogulch/xtemplate/app/watchfs) | watchfs CLI |
 | [`git.Main`](https://pkg.go.dev/github.com/infogulch/xtemplate/app/git) | git CLI |
 
-Pass `xtemplate.Option` overrides into any of them — see
-[Custom build](../how-to/custom-build.md) and the [`examples/`](../../examples/)
-tree.
+Pass `xtemplate.Option` overrides into any of them — see [Custom build](../how-to/custom-build.md) and the [`examples/`](../../examples/) tree.

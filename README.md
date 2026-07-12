@@ -2,9 +2,7 @@
 
 **Hypermedia web apps from a directory of Go templates.**
 
-xtemplate is a Go server that treats templates as handlers: file-based routing,
-a request-scoped dot context, and first-class static files; no separate
-application layer.
+xtemplate is a Go server that treats templates as handlers: file-based routing, a request-scoped dot context, and first-class static files; no separate application layer.
 
 ```html
 <!-- contacts.html  →  GET /contacts (SQL provider configured as .DB) -->
@@ -34,13 +32,11 @@ application layer.
 {{end}}
 ```
 
-No route table, no handler functions. One file for the index. One file for the
-form and the update. Path parameters, form values, and SQL all hang off the [dot context](docs/reference/dot-context.md).
+No route table, no handler functions. One file for the index. One file for the form and the update. Path parameters, form values, and SQL all hang off the [dot context](docs/reference/dot-context.md).
 
 ## Philosophy
 
-Deal with the first-class citizens of the web: paths, requests, HTML responses,
-and backing data. Templates are expressive enough to be the app. More details in [Design](docs/explanation/design.md).
+Deal with the first-class citizens of the web: paths, requests, HTML responses, and backing data. Templates are expressive enough to be the app. More details in [Design](docs/explanation/design.md).
 
 ## Highlights
 
@@ -113,13 +109,10 @@ All documentation (tutorial, how-tos, reference, design): **[docs/](docs/)**.
 
 ## Contributing
 
-Development setup, repo map, and tests: [CONTRIBUTING.md](CONTRIBUTING.md)
-(same as [docs/contributing.md](docs/contributing.md)).
+Development setup, repo map, and tests: [CONTRIBUTING.md](CONTRIBUTING.md) (same as [docs/contributing.md](docs/contributing.md)).
 
 ## History and license
 
-Evolved from [go-htmx](https://github.com/infogulch/go-htmx) and a Caddy-centric
-prototype into a standalone library with an optional Caddy module. Narrative:
-[Project history](docs/explanation/history.md). Releases: [CHANGELOG.md](CHANGELOG.md).
+Evolved from [go-htmx](https://github.com/infogulch/go-htmx) and a Caddy-centric prototype into a standalone library with an optional Caddy module. Narrative: [Project history](docs/explanation/history.md). Releases: [CHANGELOG.md](CHANGELOG.md).
 
 Licensed under the Apache 2.0 license. See [LICENSE](./LICENSE).

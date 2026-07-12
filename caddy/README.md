@@ -1,14 +1,9 @@
 # xtemplate/caddy
 
-xtemplate/caddy adapts [xtemplate][xtemplate] for use in the [Caddy][caddy] web
-server by:
+xtemplate/caddy adapts [xtemplate][xtemplate] for use in the [Caddy][caddy] web server by:
 
-1. Registering as a [Caddy module][extending-caddy] named
-   [`http.handlers.xtemplate`][http.handlers.xtemplate] which exposes a
-   `caddyhttp.MiddlewareHandler` that can serve as a route handler using the
-   `xtemplate` handler middleware definition.
-3. Adapting Caddyfile configuration to easily configure xtemplate through
-   Caddy's configuration system.
+1. Registering as a [Caddy module][extending-caddy] named [`http.handlers.xtemplate`][http.handlers.xtemplate] which exposes a `caddyhttp.MiddlewareHandler` that can serve as a route handler using the `xtemplate` handler middleware definition.
+2. Adapting Caddyfile configuration to easily configure xtemplate through Caddy's configuration system.
 
 [xtemplate]: https://github.com/infogulch/xtemplate
 [caddy]: https://caddyserver.com/
@@ -19,9 +14,7 @@ server by:
 
 First, [Download Caddy with `http.handlers.xtemplate` (standard: providers + sqlite3)][http.handlers.xtemplate], or [build it yourself](#build).
 
-Write your caddy config and use the xtemplate http handler in a route block. See
-[Config](#config) for a listing of xtemplate configs. The simplest Caddy config
-is:
+Write your caddy config and use the xtemplate http handler in a route block. See [Config](#config) for a listing of xtemplate configs. The simplest Caddy config is:
 
 ```Caddy
 :8080
@@ -31,10 +24,7 @@ route {
 }
 ```
 
-Place `.html` files in the directory specified by the `templates_dir`
-option in your caddy config (default "templates"). The config above would load
-templates from the `./templates` directory, relative to the current working
-directory.
+Place `.html` files in the directory specified by the `templates_dir` option in your caddy config (default "templates"). The config above would load templates from the `./templates` directory, relative to the current working directory.
 
 Run caddy with your config:
 
@@ -43,10 +33,7 @@ caddy run --config Caddyfile
 ```
 
 > [!TIP]
-> Caddy is a very capable http server, check out the [Caddy
-  docs](https://caddyserver.com/docs) for features you
-> may want to layer on top. Examples: set up an auth proxy, caching, rate
-> limiting, automatic https, etc
+> Caddy is a very capable http server, check out the [Caddy docs](https://caddyserver.com/docs) for features you may want to layer on top. Examples: set up an auth proxy, caching, rate limiting, automatic https, etc.
 
 ## Config
 
@@ -75,16 +62,11 @@ xtemplate {
 
 ### Provider blocks
 
-Dot providers are configured with `provider <type> <field> { }` blocks. The
-`<type>` selects the provider kind and `<field>` sets the dot field name
-templates use to access it (e.g. `.DB`, `.FS`).
+Dot providers are configured with `provider <type> <field> { }` blocks. The `<type>` selects the provider kind and `<field>` sets the dot field name templates use to access it (e.g. `.DB`, `.FS`).
 
-Caddyfile syntax covers a curated subset of each provider's options. For
-advanced configuration use Caddy's JSON format ([caddy.json](../test/caddy.json)
-has examples); all JSON fields remain available as a full-fidelity escape hatch.
+Caddyfile syntax covers a curated subset of each provider's options. For advanced configuration use Caddy's JSON format ([caddy.json](../test/caddy.json) has examples); all JSON fields remain available as a full-fidelity escape hatch.
 
-**sql** — connect to a SQL database (`caddy/standard` links pure-Go `sqlite3`;
-other drivers need a blank import in a custom build):
+**sql**: connect to a SQL database (`caddy/standard` links pure-Go `sqlite3`; other drivers need a blank import in a custom build):
 
 ```Caddy
 provider sql DB {
@@ -94,7 +76,7 @@ provider sql DB {
 }
 ```
 
-**fs** — expose a directory as a read/write filesystem:
+**fs**: expose a directory as a read/write filesystem:
 
 ```Caddy
 provider fs FS {
@@ -102,7 +84,7 @@ provider fs FS {
 }
 ```
 
-**flags** — static key/value pairs accessible in templates:
+**flags**: static key/value pairs accessible in templates:
 
 ```Caddy
 provider flags Flags {
@@ -111,7 +93,7 @@ provider flags Flags {
 }
 ```
 
-**nats** — connect to a NATS messaging server:
+**nats**: connect to a NATS messaging server:
 
 ```Caddy
 provider nats Nats {
@@ -124,14 +106,11 @@ provider nats Nats {
 }
 ```
 
-JetStream options and advanced `server.Options` fields have no JSON
-representation and must be set via the Go API.
+JetStream options and advanced `server.Options` fields have no JSON representation and must be set via the Go API.
 
 #### Linking providers into the binary
 
-Provider Caddyfile support lives in opt-in subpackages. Use `caddy/standard` to
-pull in the default set (sql, fs, flags, nats) in one flag, or add one `--with`
-flag per provider to build a leaner subset.
+Provider Caddyfile support lives in opt-in subpackages. Use `caddy/standard` to pull in the default set (sql, fs, flags, nats) in one flag, or add one `--with` flag per provider to build a leaner subset.
 
 ```shell
 # default set (sql + fs + flags + nats Caddyfile + pure-Go sqlite3 driver)
@@ -157,10 +136,7 @@ add it with --with github.com/infogulch/xtemplate/providers/dotsql/caddyfile
 
 ### Custom template functions
 
-You can add custom template functions by writing a Caddy module in the
-`xtemplate.funcs` namespace that implements the `FuncsProvider` interface
-(`Funcs() template.FuncMap`), then referencing it by name with the
-`funcs_modules` option in Caddy's json configuration:
+You can add custom template functions by writing a Caddy module in the `xtemplate.funcs` namespace that implements the `FuncsProvider` interface (`Funcs() template.FuncMap`), then referencing it by name with the `funcs_modules` option in Caddy's json configuration:
 
 ```json
 {
@@ -169,8 +145,7 @@ You can add custom template functions by writing a Caddy module in the
 }
 ```
 
-This loads the module registered as `xtemplate.funcs.myfuncs` and merges the
-functions it returns into the template execution context.
+This loads the module registered as `xtemplate.funcs.myfuncs` and merges the functions it returns into the template execution context.
 
 ## Build
 
@@ -183,8 +158,7 @@ To build with xtemplate locally, install [`xcaddy`](xcaddy), then:
 xcaddy build --with github.com/infogulch/xtemplate/caddy/standard
 ```
 
-No CGO is required for that combination. CGO (and driver-specific build tags)
-only matter if you choose a CGO-based SQL driver or other CGO modules.
+No CGO is required for that combination. CGO (and driver-specific build tags) only matter if you choose a CGO-based SQL driver or other CGO modules.
 
 [xcaddy]: https://github.com/caddyserver/xcaddy
 

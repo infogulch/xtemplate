@@ -1,15 +1,10 @@
 # Configuration
 
-xtemplate configuration appears in three shapes that describe the same ideas:
-CLI flags, JSON (file or inline), and Caddyfile (plus Caddy JSON).
-Library users set [`xtemplate.Config`](https://pkg.go.dev/github.com/infogulch/xtemplate#Config)
-in Go or pass [`Option`](https://pkg.go.dev/github.com/infogulch/xtemplate#Option)
-funcs.
+xtemplate configuration appears in three shapes that describe the same ideas: CLI flags, JSON (file or inline), and Caddyfile (plus Caddy JSON). Library users set [`xtemplate.Config`](https://pkg.go.dev/github.com/infogulch/xtemplate#Config) in Go or pass [`Option`](https://pkg.go.dev/github.com/infogulch/xtemplate#Option) funcs.
 
 ## Precedence (CLI app)
 
-When using `app.Main` / `watchfs.Main` (or any `app.LoadConfig` caller), later
-sources win:
+When using `app.Main` / `watchfs.Main` (or any `app.LoadConfig` caller), later sources win:
 
 1. Built-in defaults (lowest)
 2. `--config-file` / `-f` files (in order)
@@ -39,9 +34,7 @@ App-only (not on `xtemplate.Config` itself):
 | `log_level` | `--loglevel` | `-2` | slog level |
 | `watch_dirs` | `--watch` | `[]` | Extra watch paths (watchfs) |
 
-Go-only options (not in JSON): `TemplatesFS`, `FuncMaps`, `Handlers`, `Ctx`,
-`Logger`, `Reload`, and providers attached via `WithProvider` without going
-through the type registry.
+Go-only options (not in JSON): `TemplatesFS`, `FuncMaps`, `Handlers`, `Ctx`, `Logger`, `Reload`, and providers attached via `WithProvider` without going through the type registry.
 
 ## CLI
 
@@ -53,16 +46,11 @@ Flag list, extending the app config, and shell examples: [CLI reference](cli.md)
 
 ## JSON
 
-Top-level object unmarshals into the app config (which embeds
-`xtemplate.Config`). Prefer a config file when provider blocks or shared deploy
-settings would make CLI flags unwieldy. Runnable examples live under
-[`examples/*/config.json`](../../examples/). Load order of `-f` / `-c` / flags:
-[Precedence](#precedence-cli-app).
+Top-level object unmarshals into the app config (which embeds `xtemplate.Config`). Prefer a config file when provider blocks or shared deploy settings would make CLI flags unwieldy. Runnable examples live under [`examples/*/config.json`](../../examples/). Load order of `-f` / `-c` / flags: [Precedence](#precedence-cli-app).
 
 ### Shape
 
-Providers are a list of objects with a `type` discriminator and a `name` (dot
-field name).
+Providers are a list of objects with a `type` discriminator and a `name` (dot field name).
 
 ```json
 {
@@ -118,11 +106,9 @@ field name).
 | `flags` | `providers/dotflags` | `name`, `values` (string map) |
 | `nats` | `providers/dotnats` | `name`, `nats_config`, … |
 
-Unknown `type` values error at load with a hint to import the registering
-package. The standard CLI blank-imports all four core providers.
+Unknown `type` values error at load with a hint to import the registering package. The standard CLI blank-imports all four core providers.
 
-Multiple providers of the same type are allowed if their `name` fields differ.
-For example, two SQL databases as separate dot fields:
+Multiple providers of the same type are allowed if their `name` fields differ. For example, two SQL databases as separate dot fields:
 
 ```json
 "providers": [
@@ -131,9 +117,7 @@ For example, two SQL databases as separate dot fields:
 ]
 ```
 
-Templates then use `{{.DB.QueryRows ...}}` and `{{.Analytics.QueryRows ...}}`.
-The `driver` name must be registered in the binary via a blank import; stock
-builds include only `sqlite3`. See [Custom build](../how-to/custom-build.md).
+Templates then use `{{.DB.QueryRows ...}}` and `{{.Analytics.QueryRows ...}}`. The `driver` name must be registered in the binary via a blank import; stock builds include only `sqlite3`. See [Custom build](../how-to/custom-build.md).
 
 ## Caddyfile
 
@@ -178,6 +162,4 @@ srv, err := cfg.Server()
 // inst, _, _, err := cfg.Instance()
 ```
 
-`app.Main(overrides...)` / `watchfs.Main(overrides...)` apply the same options
-after loading CLI/JSON, which is how [custom builds](../how-to/custom-build.md)
-inject providers and embedded FS.
+`app.Main(overrides...)` / `watchfs.Main(overrides...)` apply the same options after loading CLI/JSON, which is how [custom builds](../how-to/custom-build.md) inject providers and embedded FS.

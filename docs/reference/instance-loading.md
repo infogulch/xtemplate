@@ -1,49 +1,27 @@
 # Instance loading
 
-How an instance is built from a template root: walking files, parsing templates,
-hashing static files, and registering routes. An instance is immutable after
-load; a reload builds a new instance and swaps it in. 
+How an instance is built from a template root: walking files, parsing templates, hashing static files, and registering routes. An instance is immutable after load; a reload builds a new instance and swaps it in.
 
 ## Walking the root directory
 
-While an instance is loading, xtemplate walks `Config.TemplatesFS`. If unset, an
-FS is built from `Config.TemplatesDir` path relative to the process working
-directory, defaulting to `templates`.
+While an instance is loading, xtemplate walks `Config.TemplatesFS`. If unset, an FS is built from `Config.TemplatesDir` path relative to the process working directory, defaulting to `templates`.
 
-- Files matching `Config.TemplateExtension` (default `.html`) are parsed into
-  the instance's template namespace: each becomes a path template (and may
-  define additional define templates).
-- All other files are static files (served as-is), except compressed siblings of
-  static files (`.gz`, `.zst`, `.br`) which become alternate encodings of the
-  identity file.
-- Hidden **directories** (names starting with `.`, e.g. `.git`) are skipped when
-  walking, so their contents are not loaded.
-- Hidden **file basenames** (e.g. `.env`, `.htaccess`) under a normal directory
-  are still loaded: non-templates become static routes; path templates are
-  parsed into the global namespace (so you can
-  `{{template "/shared/.head.html" .}}`) but are not given a file-based GET
-  route.
+- Files matching `Config.TemplateExtension` (default `.html`) are parsed into the instance's template namespace: each becomes a path template (and may define additional define templates).
+- All other files are static files (served as-is), except compressed siblings of static files (`.gz`, `.zst`, `.br`) which become alternate encodings of the identity file.
+- Hidden **directories** (names starting with `.`, e.g. `.git`) are skipped when walking, so their contents are not loaded.
+- Hidden **file basenames** (e.g. `.env`, `.htaccess`) under a normal directory are still loaded: non-templates become static routes; path templates are parsed into the global namespace (so you can `{{template "/shared/.head.html" .}}`) but are not given a file-based GET route.
 
 ## Path templates (from disk)
 
-Each matching file under the template root is read once, optionally minified,
-and parsed into the instance’s global template namespace.
+Each matching file under the template root is read once, optionally minified, and parsed into the instance’s global template namespace.
 
 ### Minification
 
-When `minify` is true (the default), HTML sources for path templates are
-minified at load time with [tdewolff/minify](https://github.com/tdewolff/minify)
-before parse. This is a build-time transform of the template source, not a
-per-response filter.
+When `minify` is true (the default), HTML sources for path templates are minified at load time with [tdewolff/minify](https://github.com/tdewolff/minify) before parse. This is a build-time transform of the template source, not a per-response filter.
 
 ### Initialization templates
 
-Any template whose name begins with `INIT ` (note the trailing space) is an
-initialization template. After the instance is fully built each initialization
-template is executed once with a synthetic request and the **buffered** dot
-context (`.Resp` is available; `.Flush` is not). Its output is discarded. An
-error fails the load (or reload), so the previous instance stays live if this
-was a reload.
+Any template whose name begins with `INIT ` (note the trailing space) is an initialization template. After the instance is fully built each initialization template is executed once with a synthetic request and the **buffered** dot context (`.Resp` is available; `.Flush` is not). Its output is discarded. An error fails the load (or reload), so the previous instance stays live if this was a reload.
 
 Typical use: seed schema.
 
@@ -56,21 +34,13 @@ Typical use: seed schema.
 
 ## Static files
 
-Static files are read at startup to calculate their content checksums, which are
-cached in memory so templates can emit content-addressed, SRI-enabled URLs from
-a single lookup (`.X.StaticFileHash`).
+Static files are read at startup to calculate their content checksums, which are cached in memory so templates can emit content-addressed, SRI-enabled URLs from a single lookup (`.X.StaticFileHash`).
 
-Serving uses the real filesystem when available (including `sendfile`-style
-optimizations via the Go standard library). Clients can negotiate compressed
-encodings when alternate files exist.
+Serving uses the real filesystem when available (including `sendfile`-style optimizations via the Go standard library). Clients can negotiate compressed encodings when alternate files exist.
 
 ### Precompressed static files
 
-If siblings of a static file exist with extensions `.gz`, `.zst`, or `.br`, they
-are treated as pre-compressed encodings of the identity file. At load time
-xtemplate decompresses them and checks that the content hash matches the
-identity; a mismatch is a load error. At request time, content negotiation
-selects an encoding the client accepts.
+If siblings of a static file exist with extensions `.gz`, `.zst`, or `.br`, they are treated as pre-compressed encodings of the identity file. At load time xtemplate decompresses them and checks that the content hash matches the identity; a mismatch is a load error. At request time, content negotiation selects an encoding the client accepts.
 
 Example layout:
 
@@ -82,10 +52,7 @@ templates/assets/reset.css.br
 
 ### Precompression during initialization
 
-`Config.Precompress` (CLI: `--precompress`, repeatable) can generate compressed
-variants at load time for encodings `gzip`, `zstd`, and `br`. Existing
-precompressed siblings are left alone. Useful when you do not want to commit
-compressed static files to the repo.
+`Config.Precompress` (CLI: `--precompress`, repeatable) can generate compressed variants at load time for encodings `gzip`, `zstd`, and `br`. Existing precompressed siblings are left alone. Useful when you do not want to commit compressed static files to the repo.
 
 ## Routing
 
@@ -96,8 +63,7 @@ Routes are registered on an `http.ServeMux` using Go 1.22+ patterns.
 For a path template (the whole file is the template named by its path):
 
 1. Extension is stripped (`TemplateExtension`).
-2. Files named `index` or `index{$}` handle the directory (canonical trailing
-   slash URL).
+2. Files named `index` or `index{$}` handle the directory (canonical trailing slash URL).
 3. Hidden basenames (leading `.`) get no route.
 4. Pattern is `GET` + cleaned path.
 
@@ -114,8 +80,7 @@ File path:              ServeMux pattern:
     └── .head.html      (loaded, not routed)
 ```
 
-Path placeholders in file names become ServeMux wildcards and are available as
-`.Req.PathValue`.
+Path placeholders in file names become ServeMux wildcards and are available as `.Req.PathValue`.
 
 ### Define-based routing
 
@@ -142,11 +107,9 @@ A `{{define}}` whose name matches `METHOD path` registers that route:
 {{end}}
 ```
 
-These named defines are used for routing, but they are also available for
-ordinary template invocation.
+These named defines are used for routing, but they are also available for ordinary template invocation.
 
-Define names that are not routes (e.g. `navbar`) are ordinary templates
-invocable with `{{template "navbar" .}}`.
+Define names that are not routes (e.g. `navbar`) are ordinary templates invocable with `{{template "navbar" .}}`.
 
 ## Related
 

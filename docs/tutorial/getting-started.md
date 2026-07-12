@@ -1,11 +1,8 @@
 # Getting started
 
-Welcome! In this short tutorial you will create a minimal dynamic website with
-xtemplate and have it running in a few minutes.
+Welcome! In this short tutorial you will create a minimal dynamic website with xtemplate and have it running in a few minutes.
 
-xtemplate turns a directory of Go `html/template` files into a complete web
-server. File paths become routes, templates become handlers, and you stay close
-to HTTP and hypermedia.
+xtemplate turns a directory of Go `html/template` files into a complete web server. File paths become routes, templates become handlers, and you stay close to HTTP and hypermedia.
 
 By the end you will have:
 
@@ -18,8 +15,7 @@ By the end you will have:
 
 You need one of:
 
-- A pre-built `xtemplate` binary from the
-  [releases page](https://github.com/infogulch/xtemplate/releases)
+- A pre-built `xtemplate` binary from the [releases page](https://github.com/infogulch/xtemplate/releases)
 - Go 1.25+ (to build from source)
 
 ## 1. Create your project
@@ -77,8 +73,7 @@ watchfs --listen :8080
 ./xtemplate --listen :8080
 ```
 
-Open http://localhost:8080 — you should see your page. The file
-`templates/index.html` handles `GET /`.
+Open http://localhost:8080 — you should see your page. The file `templates/index.html` handles `GET /`.
 
 ## 3. Experience live reload
 
@@ -87,9 +82,7 @@ Open http://localhost:8080 — you should see your page. The file
 3. Save the file.
 4. Refresh the browser.
 
-The change appears without restarting. The watchfs build watches the template
-root and reloads the instance automatically. A failed load keeps the previous
-instance serving and logs the error.
+The change appears without restarting. The watchfs build watches the template root and reloads the instance automatically. A failed load keeps the previous instance serving and logs the error.
 
 ## 4. Add a define-based route
 
@@ -116,9 +109,7 @@ Create `templates/hello.html`:
 {{- end}}
 ```
 
-Save and visit http://localhost:8080/hello. Submit the form: the path template
-handles `GET /hello`; the define template `{{define "POST /hello"}}` handles
-`POST` — no separate Go handler.
+Save and visit http://localhost:8080/hello. Submit the form: the path template handles `GET /hello`; the define template `{{define "POST /hello"}}` handles `POST` — no separate Go handler.
 
 User input is HTML-escaped by default.
 
@@ -131,9 +122,7 @@ Add to `index.html`:
 <p>User agent: {{.Req.UserAgent}}</p>
 ```
 
-Save and refresh. Request data is on `.Req` (builtin provider); response
-control is on `.Resp` for buffered handlers. More:
-[Dot context](../reference/dot-context.md).
+Save and refresh. Request data is on `.Req` (builtin provider); response control is on `.Resp` for buffered handlers. More: [Dot context](../reference/dot-context.md).
 
 ## 6. What's next?
 
@@ -163,5 +152,4 @@ Design
 
 ---
 
-Feedback welcome: open an issue or PR on the
-[xtemplate repository](https://github.com/infogulch/xtemplate).
+Feedback welcome: open an issue or PR on the [xtemplate repository](https://github.com/infogulch/xtemplate).

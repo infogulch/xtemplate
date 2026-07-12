@@ -1,14 +1,10 @@
 # Template functions
 
-Template functions are callable from any template as `{{name args…}}`. They come
-from FuncMaps fixed when the instance is built. They do not see the current
-request; request-scoped behavior belongs on the [dot context](dot-context.md)
-via dot fields.
+Template functions are callable from any template as `{{name args…}}`. They come from FuncMaps fixed when the instance is built. They do not see the current request; request-scoped behavior belongs on the [dot context](dot-context.md) via dot fields.
 
 Add FuncMaps with `Config.FuncMaps` or `xtemplate.WithFuncMaps(...)`.
 
-Three sets are present by default: xtemplate, Sprig, and Go’s built-ins
-(stdlib).
+Three sets are present by default: xtemplate, Sprig, and Go’s built-ins (stdlib).
 
 ## xtemplate functions
 
@@ -23,12 +19,7 @@ Three sets are present by default: xtemplate, Sprig, and Go’s built-ins
 | `trustHtml` / `trustAttr` / `trustJS` / `trustJSStr` / `trustSrcSet` | Mark a string as trusted for a given context (escapes disabled) |
 | `idx` | Index into a slice/array/string with index first (pipeline-friendly) |
 
-Godoc entry points (same package):
-[`FuncMarkdown`](https://pkg.go.dev/github.com/infogulch/xtemplate#FuncMarkdown),
-[`FuncSanitizeHtml`](https://pkg.go.dev/github.com/infogulch/xtemplate#FuncSanitizeHtml),
-[`FuncHumanize`](https://pkg.go.dev/github.com/infogulch/xtemplate#FuncHumanize),
-[`FuncTry`](https://pkg.go.dev/github.com/infogulch/xtemplate#FuncTry),
-and siblings named `Func…`.
+Godoc entry points (same package): [`FuncMarkdown`](https://pkg.go.dev/github.com/infogulch/xtemplate#FuncMarkdown), [`FuncSanitizeHtml`](https://pkg.go.dev/github.com/infogulch/xtemplate#FuncSanitizeHtml), [`FuncHumanize`](https://pkg.go.dev/github.com/infogulch/xtemplate#FuncHumanize), [`FuncTry`](https://pkg.go.dev/github.com/infogulch/xtemplate#FuncTry), and siblings named `Func…`.
 
 ### Examples
 
@@ -52,14 +43,11 @@ and siblings named `Func…`.
 {{if eq (.Req.FormValue "name") ""}}{{failf "name is required"}}{{end}}
 ```
 
-Register extra BlueMonday policies or Goldmark configs globally with
-`AddBlueMondayPolicy` and `AddMarkdownConfig` if needed (see godoc).
+Register extra BlueMonday policies or Goldmark configs globally with `AddBlueMondayPolicy` and `AddMarkdownConfig` if needed (see godoc).
 
 ## Sprig functions
 
-[Sprig](https://masterminds.github.io/sprig/) supplies string, math, date, list,
-dict, encoding, and path helpers. Examples: `upper`, `default`, `dict`, `list`,
-`date`, `toJson`. Full catalog: [Sprig Function Documentation](https://masterminds.github.io/sprig/).
+[Sprig](https://masterminds.github.io/sprig/) supplies string, math, date, list, dict, encoding, and path helpers. Examples: `upper`, `default`, `dict`, `list`, `date`, `toJson`. Full catalog: [Sprig Function Documentation](https://masterminds.github.io/sprig/).
 
 ```html
 {{.Req.FormValue "name" | default "World" | upper}}
@@ -67,9 +55,7 @@ dict, encoding, and path helpers. Examples: `upper`, `default`, `dict`, `list`,
 
 ## Go built-in functions
 
-Go's template builtins: `and`, `or`, `not`, `eq`, `lt`, `index`, `printf`,
-`len`, `slice`, `urlquery`, and the rest. See
-[text/template - Functions](https://pkg.go.dev/text/template#hdr-Functions).
+Go's template builtins: `and`, `or`, `not`, `eq`, `lt`, `index`, `printf`, `len`, `slice`, `urlquery`, and the rest. See [text/template - Functions](https://pkg.go.dev/text/template#hdr-Functions).
 
 ## Dot fields vs template functions
 

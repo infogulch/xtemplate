@@ -1,12 +1,8 @@
 # How to make a custom build of xtemplate
 
-The published binaries and Docker image include a sqlite database driver and the
-[core providers](../reference/glossary.md#providers). Copy a small `main`
-package when you need different drivers, extra FuncMaps, custom providers, or
-embedded templates.
+The published binaries and Docker image include a sqlite database driver and the [core providers](../reference/glossary.md#providers). Copy a small `main` package when you need different drivers, extra FuncMaps, custom providers, or embedded templates.
 
-xtemplate's packaging is intentionally like Caddy's: a thin `main` that
-blank-imports optional packages and calls into a shared library.
+xtemplate's packaging is intentionally like Caddy's: a thin `main` that blank-imports optional packages and calls into a shared library.
 
 ## Default published builds
 
@@ -19,8 +15,7 @@ blank-imports optional packages and calls into a shared library.
 | Caddy module (lean) | `caddy` | Core handler + Caddyfile surface; add `providers/*/caddyfile` as needed |
 | Caddy module (standard) | `caddy/standard` | Lean + Caddyfile parsers for sql, fs, flags, nats + pure-Go sqlite3 driver |
 
-Which variant to pick (including Caddy standard vs lean builds):
-[Deployment modes](../reference/deployment-modes.md).
+Which variant to pick (including Caddy standard vs lean builds): [Deployment modes](../reference/deployment-modes.md).
 
 ## Choose an app
 
@@ -87,14 +82,11 @@ func main() {
 }
 ```
 
-To add **new CLI flags or JSON keys** (not just `With*` overrides), embed
-`app.Config` in your own struct and call `app.LoadConfig`, matching the pattern used by watchfs and git. See
-[CLI reference — Extending the app config](../reference/cli.md#extending-the-app-config).
+To add **new CLI flags or JSON keys** (not just `With*` overrides), embed `app.Config` in your own struct and call `app.LoadConfig`, matching the pattern used by watchfs and git. See [CLI reference — Extending the app config](../reference/cli.md#extending-the-app-config).
 
 ## Embed templates (single binary)
 
-Use `//go:embed` and `WithTemplateFS` so no templates directory is required at
-runtime. Reloading will not be needed, so use the `app` package.
+Use `//go:embed` and `WithTemplateFS` so no templates directory is required at runtime. Reloading will not be needed, so use the `app` package.
 
 ```go
 //go:embed all:templates

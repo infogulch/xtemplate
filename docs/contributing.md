@@ -50,6 +50,10 @@ Reference the [glossary](reference/glossary.md) for xtemplate terminology.
 - [`providers/dotsql/sql.go`](/providers/dotsql/sql.go) - Core SQL provider package
 - [`examples/dotprovider/`](/examples/dotprovider/) - Custom provider example
 
+## Docs style
+
+Do not hard-wrap prose. One paragraph (or list item) per line; headings, tables, and fenced code stay as-is. GitHub reflows the rendered view.
+
 ## Development setup
 
 Requires [mise](https://mise.jdx.dev/).
