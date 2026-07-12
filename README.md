@@ -1,17 +1,24 @@
 # xtemplate
 
-**A directory of Go templates is a complete web application.**
+**Hypermedia web apps from a directory of Go templates.**
 
-`xtemplate` is a hypermedia-oriented web server in Go: file paths become routes,
-templates generate responses, and you work with HTTP and HTML directly instead
-of through a separate handler layer. Good defaults cover loading, reload, static
-files, and safe escaping so you can focus on the app.
+xtemplate is a Go server that treats templates as handlers: file-based routing,
+a request-scoped dot context, and first-class static files; no separate
+application layer.
 
 ```html
-<!-- contacts/{id}.html  →  GET /contacts/{id}
-     (SQL provider configured as .DB) -->
-{{$c := .DB.QueryRow `SELECT id, name, phone, email FROM contacts WHERE id = ?`
-    (.Req.PathValue `id`)}}
+<!-- contacts.html  →  GET /contacts (SQL provider configured as .DB) -->
+<ul>
+  {{range .DB.QueryRows `SELECT id, name FROM contacts`}}
+  <li><a href="/contacts/{{.id}}">{{.name}}</a></li>
+  {{end}}
+</ul>
+```
+
+```html
+<!-- contacts/{id}.html  →  GET /contacts/{id} -->
+{{$id := .Req.PathValue `id`}}
+{{$c := .DB.QueryRow `SELECT id, name, phone, email FROM contacts WHERE id = ?` $id}}
 <form method="POST">
   <input name="name"  value="{{$c.name}}">
   <input name="phone" value="{{$c.phone}}">
@@ -20,21 +27,20 @@ files, and safe escaping so you can focus on the app.
 </form>
 
 {{define "POST /contacts/{id}"}}
-  {{$_ := .DB.Exec `UPDATE contacts SET name=?, phone=?, email=? WHERE id = ?`
-      (.Req.FormValue `name`) (.Req.FormValue `phone`)
-      (.Req.FormValue `email`) (.Req.PathValue `id`)}}
-  {{template `/contacts/{id}.html` .}}
+{{$_ := .DB.Exec `UPDATE contacts SET name=?, phone=?, email=? WHERE id = ?`
+    (.Req.FormValue `name`) (.Req.FormValue `phone`)
+    (.Req.FormValue `email`) (.Req.PathValue `id`)}}
+{{template `/contacts/{id}.html` .}}
 {{end}}
 ```
 
-No route table, no handler functions — one file for the form and the update.
-Path parameters, form values, and SQL all hang off the [dot context](docs/reference/dot-context.md).
+No route table, no handler functions. One file for the index. One file for the
+form and the update. Path parameters, form values, and SQL all hang off the [dot context](docs/reference/dot-context.md).
 
 ## Philosophy
 
 Deal with the first-class citizens of the web: paths, requests, HTML responses,
-and backing data. Templates are expressive enough to be the app. Depth and
-trade-offs: [Design](docs/explanation/design.md).
+and backing data. Templates are expressive enough to be the app. More details in [Design](docs/explanation/design.md).
 
 ## Highlights
 
@@ -47,7 +53,7 @@ trade-offs: [Design](docs/explanation/design.md).
 - **SSE** — `{{define "SSE /path"}}` for live updates. [Dot context → Flush](docs/reference/dot-context.md#streaming-control-in-flush)
 - **Embeddable** — CLI, Docker, Caddy plugin, or `http.Handler` library. [Deployment modes](docs/reference/deployment-modes.md)
 
-### A few more patterns
+Some more patterns:
 
 ```html
 {{- with $hash := .X.StaticFileHash `/assets/reset.css`}}
