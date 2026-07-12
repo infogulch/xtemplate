@@ -44,7 +44,7 @@ func TestResolveProviders_unknownWellKnown(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unregistered well-known type")
 	}
-	want := `add it by importing github.com/infogulch/xtemplate/providers/nats`
+	want := `add it by importing github.com/infogulch/xtemplate/providers/dotnats`
 	if !strings.Contains(err.Error(), want) {
 		t.Fatalf("error %q does not contain %q", err.Error(), want)
 	}
