@@ -31,11 +31,7 @@ type Config struct {
 
 	// Whether html templates are minified at load time. Default `true`.
 	//
-	// This is a *bool so that Defaults() can distinguish "unset" (nil, which
-	// becomes true) from an explicit false. A plain bool could not: Server and
-	// Instance re-apply Defaults internally, so a zero-valued false would be
-	// indistinguishable from unset and could never be honored, and the
-	// documented default of true would only hold when constructing via New().
+	// This is a *bool to distinguish unset (nil) from set false.
 	Minify *bool `json:"minify,omitempty" arg:"-m,--minify" default:"true"`
 
 	CrossOrigin CrossOriginConfig `json:"crossorigin" arg:"-"`
@@ -56,8 +52,13 @@ type Config struct {
 	// Additional functions to add to the template execution context.
 	FuncMaps []template.FuncMap `json:"-" arg:"-"`
 
-	// Custom HTTP handlers, mounted on the router alongside template and static
-	// file routes. Registered on every instance, so they survive reloads.
+	// Peer HTTP handlers registered on the instance ServeMux next to template
+	// and static routes. Use this to embed existing handlers (APIs, webhooks,
+	// health checks) under the same ServeMux as the template app. Errors if the
+	// pattern conflicts with another route registered by the template root.
+	//
+	// Each entry is a sibling route on the mux (net/http.ServeMux pattern).
+	// Re-registered when a new instance is built, so they survive reloads.
 	Handlers []HandlerRoute `json:"-" arg:"-"`
 
 	// The instance context that is threaded through dot providers and can
@@ -163,8 +164,11 @@ func WithFuncMaps(fm ...template.FuncMap) Option {
 	}
 }
 
-// WithHandler adds a custom HTTP handler at pattern (net/http.ServeMux syntax,
-// e.g. "POST /hook").
+// WithHandler mounts h at pattern on the instance ServeMux (net/http.ServeMux
+// syntax, e.g. "POST /api/{id}" or "GET /healthz"). Appends to Config.Handlers.
+//
+// Intended for embedding foreign handlers (API, webhooks, probes) as peer
+// routes beside templates and static files.
 func WithHandler(pattern string, h http.Handler) Option {
 	return func(c *Config) error {
 		if h == nil {
