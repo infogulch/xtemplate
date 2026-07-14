@@ -11,16 +11,27 @@
     {{.Resp.SetHeader "Location" (print "/" $dir "/")}}
     {{.Resp.ReturnStatus 307}}
 {{end}}
-<h1>Files in {{$dir}}</h1>
-{{if ne $dir "/"}}<p><a href="javascript:history.back()">&larr; back</a></p>{{end}}
+<h1>Files in {{or $dir "/"}}</h1>
+{{if ne $dir ""}}<p><a href="javascript:history.back()">&larr; back</a></p>{{end}}
 <ul>
     {{range .FS.ReadDir $dir}}
     <li>
         {{if .IsDir}}
-        <a href="/{{.Name}}/">[dir] {{.Name}}/</a>
+        <a href="/{{$dir}}{{.Name}}/">[dir] {{.Name}}/</a>
         {{else}}
         <a href="/view/{{$dir}}{{.Name}}">{{.Name}}</a> ({{.Size}} bytes)
         {{end}}
     </li>
     {{end}}
 </ul>
+<form method="POST" action="/upload{{with $dir}}?dir={{urlquery .}}{{end}}" enctype="multipart/form-data">
+    <label>Upload <input type="file" name="file" required></label>
+    <button type="submit">Upload</button>
+</form>
+
+{{define "POST /upload"}}
+{{$dest := or (.Req.URL.Query.Get "dir") "."}}
+{{$u := .FS.ReceiveFiles $dest 10 10485760}}
+{{.Resp.AddHeader "Location" (print "/" $u.Dir "/")}}
+{{.Resp.ReturnStatus 303}}
+{{end}}

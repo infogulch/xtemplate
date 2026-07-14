@@ -110,7 +110,7 @@ Providers are a list of objects with a `type` discriminator and a `name` (dot fi
 | `type` | Package | Typical fields |
 |---|---|---|
 | `sql` | `providers/dotsql` | `name`, `driver`, `connstr`, `max_open_conns` |
-| `fs` | `providers/dotfs` | `name`, `path` |
+| `fs` | `providers/dotfs` | `name`, `path`, `writable` (bool, default false) |
 | `flags` | `providers/dotflags` | `name`, `values` (string map) |
 | `nats` | `providers/dotnats` | `name`, `nats_config`, … |
 | `smtp` | `providers/dotsmtp` | `name`, `host`, `from`, `port`, `username`, `password`, `auth`, `tls`, `helo`, `max_recipients`, `max_message_bytes`, `send_timeout` |
@@ -152,6 +152,7 @@ route {
 		}
 		provider fs FS {
 			path data
+			# writable true   # enables ReceiveFiles; root must be writable
 		}
 		provider flags Flags {
 			env production

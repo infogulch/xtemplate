@@ -101,7 +101,7 @@ Package: [`providers/dotfs`](https://pkg.go.dev/github.com/infogulch/xtemplate/p
 </ol>
 ```
 
-See [`examples/filebrowser`](../../examples/filebrowser/).
+Optional `writable: true` exposes multipart upload (`ReceiveFiles`). Full API: package docs. Demo: [`examples/filebrowser`](../../examples/filebrowser/).
 
 ### Static key/value config with `flags`
 

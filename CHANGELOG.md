@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `fs` provider: optional `writable` flag (default false). When true, the
+  template field is `DotFsRW` with `ReceiveFiles` for streaming multipart
+  uploads onto the provider FS; when false, the field stays read-only
+  (`DotFs`) and the backing FS is wrapped with afero `ReadOnlyFs`.
+- `dotfs.WithFsWritable` for Go API opt-in; Caddyfile `writable true` in
+  `provider fs` blocks. Init probes writability when `writable` is true.
+
 ## [v0.10.0] - 2026-07-12
 
 Uniform provider registry and Caddyfile provider dispatch.

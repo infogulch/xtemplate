@@ -33,13 +33,37 @@ func TestFsCaddyfile_HappyPath(t *testing.T) {
 		t.Fatalf("ParseCaddyfile: %v", err)
 	}
 	var got struct {
-		Path string `json:"path"`
+		Path     string `json:"path"`
+		Writable bool   `json:"writable"`
 	}
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if got.Path != "/srv/data" {
 		t.Errorf("path = %q, want /srv/data", got.Path)
+	}
+	if got.Writable {
+		t.Errorf("writable = true, want false default")
+	}
+}
+
+func TestFsCaddyfile_Writable(t *testing.T) {
+	raw, err := parse(t, "\t\tpath /srv/data\n\t\twritable true")
+	if err != nil {
+		t.Fatalf("ParseCaddyfile: %v", err)
+	}
+	var got struct {
+		Path     string `json:"path"`
+		Writable bool   `json:"writable"`
+	}
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got.Path != "/srv/data" {
+		t.Errorf("path = %q, want /srv/data", got.Path)
+	}
+	if !got.Writable {
+		t.Errorf("writable = false, want true")
 	}
 }
 
@@ -61,8 +85,10 @@ func TestFsCaddyfile_EmptyBlock(t *testing.T) {
 
 func TestFsCaddyfile_Errors(t *testing.T) {
 	cases := map[string]string{
-		"unknown key":      "\t\tbogus val",
-		"missing path arg": "\t\tpath",
+		"unknown key":          "\t\tbogus val",
+		"missing path arg":     "\t\tpath",
+		"bad writable":         "\t\twritable maybe",
+		"missing writable arg": "\t\twritable",
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
