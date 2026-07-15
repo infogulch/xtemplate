@@ -1,20 +1,48 @@
 <!doctype html>
-<title>SSE live feed</title>
+<title>SSE chat</title>
 <link rel="stylesheet" href="/assets/app.css" />
-<h1>Live feed</h1>
+<h1>Chat</h1>
+<p>
+    Multi-user realtime chat over Server-Sent Events and the in-process
+    <code>bus</code> provider. Open this page in two tabs to try it.
+</p>
+<form id="send">
+    <input id="msg" name="msg" autofocus required placeholder="Type a message" autocomplete="off" />
+    <button>Send</button>
+</form>
 <ul id="feed"></ul>
 <script>
-    new EventSource("/events?count=3&delay=200").onmessage = (e) => {
+    const feed = document.getElementById("feed");
+    const form = document.getElementById("send");
+    const input = document.getElementById("msg");
+
+    const es = new EventSource("/events");
+    es.onmessage = (e) => {
         const li = document.createElement("li");
         li.textContent = e.data;
-        document.getElementById("feed").appendChild(li);
+        feed.prepend(li);
+    };
+
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        const msg = input.value.trim();
+        if (!msg) return;
+        await fetch("/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ msg }),
+        });
+        form.reset();
+        input.focus();
     };
 </script>
+
+{{- /* Stream bus messages to every connected client. */}}
 {{- define "SSE /events"}}
-{{- $count := .Req.URL.Query.Get `count` | default `20` | atoi}}
-{{- $delay := .Req.URL.Query.Get `delay` | default `1000` | atoi}}
-{{- range $i := .Flush.Repeat $count}}
-    {{- $.Flush.SendSSE "" (printf "message %d" $i)}}
-    {{- $.Flush.Sleep $delay}}
+{{- $.Flush.SendSSE "" "connected"}}
+{{- range .Bus.Subscribe "messages"}}{{$.Flush.SendSSE "" .}}{{end}}
 {{- end}}
+
+{{- define "POST /messages"}}
+{{- .Req.ParseForm}}{{.Bus.Publish "messages" (.Req.FormValue "msg")}}ok
 {{- end}}

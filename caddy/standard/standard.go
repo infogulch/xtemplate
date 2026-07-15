@@ -1,5 +1,5 @@
 // Package standard links the default set of dot-provider Caddyfile parsers
-// (sql, fs, flags, nats, smtp), the pure-Go sqlite3 database/sql driver, and the
+// (sql, fs, flags, nats, smtp, bus), the pure-Go sqlite3 database/sql driver, and the
 // xtemplate caddy module in a single opt-in import.
 //
 // Usage:
@@ -13,6 +13,7 @@ package standard
 
 import (
 	_ "github.com/infogulch/xtemplate/caddy"
+	_ "github.com/infogulch/xtemplate/providers/dotbus/caddyfile"
 	_ "github.com/infogulch/xtemplate/providers/dotflags/caddyfile"
 	_ "github.com/infogulch/xtemplate/providers/dotfs/caddyfile"
 	_ "github.com/infogulch/xtemplate/providers/dotnats/caddyfile"

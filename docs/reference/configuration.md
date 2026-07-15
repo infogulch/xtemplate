@@ -80,6 +80,11 @@ Providers are a list of objects with a `type` discriminator and a `name` (dot fi
       }
     },
     {
+      "type": "bus",
+      "name": "Bus",
+      "buffer": 16
+    },
+    {
       "type": "nats",
       "name": "Nats",
       "nats_config": {
@@ -112,10 +117,11 @@ Providers are a list of objects with a `type` discriminator and a `name` (dot fi
 | `sql` | `providers/dotsql` | `name`, `driver`, `connstr`, `max_open_conns` |
 | `fs` | `providers/dotfs` | `name`, `path`, `writable` (bool, default false) |
 | `flags` | `providers/dotflags` | `name`, `values` (string map) |
+| `bus` | `providers/dotbus` | `name`, `buffer` (int, default 16) |
 | `nats` | `providers/dotnats` | `name`, `nats_config`, … |
 | `smtp` | `providers/dotsmtp` | `name`, `host`, `from`, `port`, `username`, `password`, `auth`, `tls`, `helo`, `max_recipients`, `max_message_bytes`, `send_timeout` |
 
-Unknown `type` values error at load with a hint to import the registering package. The standard CLI blank-imports all five core providers.
+Unknown `type` values error at load with a hint to import the registering package. The standard CLI blank-imports all core providers.
 
 For `smtp`, `send_timeout` is a Go `time.Duration`: in JSON it is a **nanosecond integer** (for example `30000000000` for 30s). Caddyfile `send_timeout 30s` is converted for you.
 

@@ -38,7 +38,7 @@ func resolveProviders(raw []json.RawMessage) ([]DotConfig, error) {
 		ctor, ok := registry[probe.Type]
 		if !ok {
 			switch probe.Type {
-			case "sql", "fs", "flags", "nats", "smtp":
+			case "sql", "fs", "flags", "nats", "smtp", "bus":
 				return nil, fmt.Errorf("xtemplate: unknown provider type %q; add it by importing github.com/infogulch/xtemplate/providers/dot%s", probe.Type, probe.Type)
 			default:
 				return nil, fmt.Errorf("xtemplate: unknown provider type %q; ensure the provider package that registers type %q is imported", probe.Type, probe.Type)

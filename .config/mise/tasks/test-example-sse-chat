@@ -10,10 +10,10 @@ let server = (job spawn {
     ^$bin --loglevel -4 --config-file config.json --listen :0 out+err> server.log
 })
 let port = (wait-listen-port ($work | path join server.log))
-let outcome = (try {
-    run-lightpanda-sse $"http://localhost:($port)/?count=3&delay=10" --selector "#feed li" --contains "message 3"
-    "ok"
-} catch { |e| $e.msg })
+# Hurl covers page render, Publish, and the SSE Accept check. Bus→SSE fan-out
+# is covered by providers/dotbus tests (long-lived EventSource streams are a
+# poor fit for lightpanda's wait-selector).
+let outcome = (try { run-example $port $work; "ok" } catch { |e| $e.msg })
 job kill $server
 if $outcome != "ok" {
     print -e $"test-example-sse-chat failed: ($outcome)"
