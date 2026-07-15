@@ -165,7 +165,7 @@ The `xtemplate/caddy` plugin integrates xtemplate into [Caddy](https://caddyserv
 
 | Build | xcaddy / download | Includes |
 |---|---|---|
-| standard | `--with github.com/infogulch/xtemplate/caddy/standard` | Handler + Caddyfile for sql/fs/flags/nats + pure-Go sqlite3 driver |
+| standard | `--with github.com/infogulch/xtemplate/caddy/standard` | Handler + Caddyfile for sql/fs/flags/nats/smtp + pure-Go sqlite3 driver |
 | lean | `--with …/caddy` plus selected `providers/dot*/caddyfile` | Only the providers you list |
 
 Download a prebuilt Caddy with the standard set:

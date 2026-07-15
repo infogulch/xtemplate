@@ -87,6 +87,14 @@ Providers are a list of objects with a `type` discriminator and a `name` (dot fi
           "dont_listen": true
         }
       }
+    },
+    {
+      "type": "smtp",
+      "name": "Email",
+      "host": "smtp.example.com",
+      "from": "noreply@example.com",
+      "username": "smtp-user",
+      "password": "smtp-pass"
     }
   ],
   "crossorigin": {
@@ -105,8 +113,11 @@ Providers are a list of objects with a `type` discriminator and a `name` (dot fi
 | `fs` | `providers/dotfs` | `name`, `path` |
 | `flags` | `providers/dotflags` | `name`, `values` (string map) |
 | `nats` | `providers/dotnats` | `name`, `nats_config`, … |
+| `smtp` | `providers/dotsmtp` | `name`, `host`, `from`, `port`, `username`, `password`, `auth`, `tls`, `helo`, `max_recipients`, `max_message_bytes`, `send_timeout` |
 
-Unknown `type` values error at load with a hint to import the registering package. The standard CLI blank-imports all four core providers.
+Unknown `type` values error at load with a hint to import the registering package. The standard CLI blank-imports all five core providers.
+
+For `smtp`, `send_timeout` is a Go `time.Duration`: in JSON it is a **nanosecond integer** (for example `30000000000` for 30s). Caddyfile `send_timeout 30s` is converted for you.
 
 Multiple providers of the same type are allowed if their `name` fields differ. For example, two SQL databases as separate dot fields:
 

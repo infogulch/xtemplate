@@ -14,11 +14,13 @@ require (
 	github.com/infogulch/watch v0.2.0
 	github.com/klauspost/compress v1.18.6
 	github.com/microcosm-cc/bluemonday v1.0.27
+	github.com/mocktools/go-smtp-mock/v2 v2.5.4
 	github.com/nats-io/nats-server/v2 v2.14.2
 	github.com/nats-io/nats.go v1.52.0
 	github.com/ncruces/go-sqlite3 v0.35.0
 	github.com/spf13/afero v1.15.0
 	github.com/tdewolff/minify/v2 v2.24.13
+	github.com/wneessen/go-mail v0.8.0
 	github.com/yuin/goldmark v1.8.2
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
 	go.abhg.dev/goldmark/frontmatter v0.3.0

@@ -13,7 +13,7 @@ xtemplate's packaging is intentionally like Caddy's: a thin `main` that blank-im
 | Git CLI | `./cmd/git` | Poll a Git remote; shallow-clone + reload on new commit |
 | Docker image | `infogulch/xtemplate` | Builds `./cmd` (plain) with listen default `:80` |
 | Caddy module (lean) | `caddy` | Core handler + Caddyfile surface; add `providers/*/caddyfile` as needed |
-| Caddy module (standard) | `caddy/standard` | Lean + Caddyfile parsers for sql, fs, flags, nats + pure-Go sqlite3 driver |
+| Caddy module (standard) | `caddy/standard` | Lean + Caddyfile parsers for sql, fs, flags, nats, smtp + pure-Go sqlite3 driver |
 
 Which variant to pick (including Caddy standard vs lean builds): [Deployment modes](../reference/deployment-modes.md).
 
@@ -40,6 +40,7 @@ import (
 	_ "github.com/infogulch/xtemplate/providers/dotflags"
 	_ "github.com/infogulch/xtemplate/providers/dotfs"
 	_ "github.com/infogulch/xtemplate/providers/dotnats"
+	_ "github.com/infogulch/xtemplate/providers/dotsmtp"
 	_ "github.com/infogulch/xtemplate/providers/dotsql"
 
 	_ "github.com/ncruces/go-sqlite3/driver"

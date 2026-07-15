@@ -108,12 +108,30 @@ provider nats Nats {
 
 JetStream options and advanced `server.Options` fields have no JSON representation and must be set via the Go API.
 
+**smtp**: send mail synchronously over SMTP (send-only; body rendering stays in templates):
+
+```Caddy
+provider smtp Email {
+    host     smtp.example.com
+    from     noreply@example.com
+    username {env.SMTP_USER}
+    password {env.SMTP_PASS}
+    # port 587                  # default
+    # auth plain                # plain | login | cram-md5 | none (auto when empty)
+    # tls starttls              # starttls | tls | none
+    # helo mail.example.com
+    # max_recipients 50
+    # max_message_bytes 1048576
+    # send_timeout 30s
+}
+```
+
 #### Linking providers into the binary
 
-Provider Caddyfile support lives in opt-in subpackages. Use `caddy/standard` to pull in the default set (sql, fs, flags, nats) in one flag, or add one `--with` flag per provider to build a leaner subset.
+Provider Caddyfile support lives in opt-in subpackages. Use `caddy/standard` to pull in the default set (sql, fs, flags, nats, smtp) in one flag, or add one `--with` flag per provider to build a leaner subset.
 
 ```shell
-# default set (sql + fs + flags + nats Caddyfile + pure-Go sqlite3 driver)
+# default set (sql + fs + flags + nats + smtp Caddyfile + pure-Go sqlite3 driver)
 xcaddy build --with github.com/infogulch/xtemplate/caddy/standard
 
 # leaner subset: pick desired providers (and a SQL driver) individually
