@@ -7,7 +7,8 @@ body contains "Chat"
 body contains "EventSource"
 body contains "bus"
 
-# Publishing a message succeeds (fan-out is verified by the lightpanda SSE test)
+# Publishing a message succeeds (browser EventSource round-trip is covered by
+# lightpanda in test-example-sse-chat; multi-sub bus fan-out by providers/dotbus)
 POST http://localhost:8080/messages
 [FormParams]
 msg: hello from hurl
