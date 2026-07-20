@@ -10,10 +10,19 @@ let server = (job spawn {
     ^$bin --loglevel -4 --config-file config.json --listen :0 out+err> server.log
 })
 let port = (wait-listen-port ($work | path join server.log))
-# Hurl covers page render, Publish, and the SSE Accept check. Bus→SSE fan-out
-# is covered by providers/dotbus tests (long-lived EventSource streams are a
-# poor fit for lightpanda's wait-selector).
-let outcome = (try { run-example $port $work; "ok" } catch { |e| $e.msg })
+# Hurl: page/POST/406. lightpanda: EventSource + POST→bus→SSE→DOM (stream never closes).
+let outcome = (try {
+    run-example $port $work
+    let tok = ($"lp-(random uuid)" | to json) # JSON string, safe to embed in JS
+    # After "connected", POST tok; wait-script succeeds when it reappears over SSE.
+    let js = ('const t=' + $tok + ';setInterval(()=>{if(window.__p)return;if(![...document.querySelectorAll("#feed li")].some(e=>e.textContent.includes("connected")))return;window.__p=1;fetch("/messages",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({msg:t})})},50)')
+    let wait = ('document.body.innerText.includes(' + $tok + ')')
+    let r = (^lightpanda fetch --inject-script $js --wait-script $wait --wait-ms 5000 --terminate-ms 6000 $"http://localhost:($port)/" | complete)
+    if $r.exit_code != 0 {
+        error make --unspanned { msg: $"lightpanda failed \(($r.exit_code)\): ($r.stderr)\n($r.stdout)" }
+    }
+    "ok"
+} catch { |e| $e.msg })
 job kill $server
 if $outcome != "ok" {
     print -e $"test-example-sse-chat failed: ($outcome)"
