@@ -37,7 +37,7 @@ Reference the [glossary](reference/glossary.md) for xtemplate terminology.
 
 ### Builtin providers (dot context)
 
-- [`dot.go`](/dot.go) - `DotConfig` / dot provider interface
+- [`dot.go`](/dot.go) - `Provider` and extension interfaces
 - [`dot_instance.go`](/dot_instance.go) - `.X` (instance)
 - [`dot_req.go`](/dot_req.go) - `.Req`
 - [`dot_resp.go`](/dot_resp.go) - `.Resp` (buffered handlers)
@@ -45,7 +45,7 @@ Reference the [glossary](reference/glossary.md) for xtemplate terminology.
 
 ### Provider authoring
 
-- [`dot.go`](/dot.go) - `DotConfig` / `CleanupDotProvider`
+- [`dot.go`](/dot.go) - provider interfaces (see Builtin providers above)
 - [`providers.go`](/providers.go) - Provider type registry (`Register`, `resolveProviders`)
 - [`providers/dotsql/sql.go`](/providers/dotsql/sql.go) - Core SQL provider package
 - [`examples/dotprovider/`](/examples/dotprovider/) - Custom provider example

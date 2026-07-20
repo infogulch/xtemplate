@@ -6,21 +6,21 @@ A complete runnable example: [`examples/dotprovider`](../../examples/dotprovider
 
 ## Ways to attach a provider
 
-Every path implements the same `DotConfig` interface. Pick by how the provider is configured:
+Every path implements the same `Provider` interface. Pick by how the provider is configured:
 
 - **Custom provider** - construct it in Go and pass `WithProvider` (or put it on `Config.Providers`). Best for app-specific code next to `main`. Not selectable from JSON or Caddyfile.
 - **Provider package** - self-register a type from `init()` so JSON can decode `"type"`. Required when the binary must resolve providers from config (CLI or Caddy JSON).
 - **Caddyfile provider** - a Caddy module under `xtemplate.providers.*` that parses `provider <type> <field> { }` into JSON.
 
-## 1. Implement DotConfig
+## 1. Implement Provider
 
-Every dot provider has a field name, a one-time init step (when an instance is built), and a per-request value step:
+Every dot provider has a field name, a prototype for type inference, and a per-request value step:
 
 ```go
-type DotConfig interface {
-	FieldName() string            // name of the dot field, e.g. "Shop" → {{.Shop}}
-	Init(context.Context) error   // once per instance load / reload
-	Value(Request) (any, error)   // once per request; assigned to the dot field
+type Provider interface {
+	FieldName() string                    // name of the dot field, e.g. "Shop" → {{.Shop}}
+	Prototype() any                       // non-nil typed zero; used only for reflection at instance build
+	Value(http.ResponseWriter, *http.Request) (any, error) // once per request; assigned to the dot field
 }
 ```
 
@@ -28,23 +28,36 @@ type DotConfig interface {
 // shopProvider is the provider config (here: no extra settings).
 type shopProvider struct{}
 
-func (shopProvider) FieldName() string                    { return "Shop" }
-func (shopProvider) Init(context.Context) error           { return nil }
-func (shopProvider) Value(xtemplate.Request) (any, error) { return Shop{}, nil }
+func (shopProvider) FieldName() string                         { return "Shop" }
+func (shopProvider) Prototype() any                            { return Shop{} }
+func (shopProvider) Value(http.ResponseWriter, *http.Request) (any, error) { return Shop{}, nil }
 ```
 
 - `FieldName` chooses the dot field on the dot context. Two providers on one instance must not share a field name.
+- `Prototype` must return a non-nil value of the same concrete type that `Value` returns. It is discarded after type inference.
 - Methods on the value returned by `Value` are callable from templates (`{{.Shop.Product 1}}`).
 
-> [!important]
-> `Value` must return a stable, non-nil concrete type. When an instance is built, xtemplate calls `Value` once with a mock request to infer the field type via reflection. A `nil` return fails the load.
-
-Optional: implement `CleanupDotProvider` for per-request teardown (commit / rollback, close handles). The core SQL provider uses this.
+Optional: implement `Initializer` for instance-scoped setup (open connections, validate config). The instance context is cancelled on reload/stop; retain it on the provider if request-time code must observe reload/stop (do not expect it on `Value`).
 
 ```go
-type CleanupDotProvider interface {
-	DotConfig
-	Cleanup(v any, err error) error // v is the value Value returned for the request
+type Initializer interface {
+	Init(context.Context) error // save ctx on the provider if needed later
+}
+```
+
+Optional: implement `Finalizer` for per-request teardown after template execution (commit / rollback, close handles, write buffered status). The core SQL provider uses this.
+
+```go
+type Finalizer interface {
+	Finalize(v any, err error) error // v is the value Value returned for the request
+}
+```
+
+Optional: implement `Closer` to release instance-scoped resources when the instance is retired (reload or stop). Prefer this when the provider owns connections; context cancellation alone is easy to forget.
+
+```go
+type Closer interface {
+	Close() error
 }
 ```
 
@@ -61,20 +74,24 @@ app.Main(xtemplate.WithProvider(shopProvider{}))
 
 On instance load, xtemplate builds the dot context struct to include your field. On every request, `Value` runs before the template executes.
 
-No JSON `"type"` is involved: the provider config is already a constructed `DotConfig` value.
+No JSON `"type"` is involved: the provider is already a constructed `Provider` value.
 
 ## 2b. Provider package: xtemplate registry (`providers.go`)
 
-To configure the provider from JSON (`"providers": [{ "type": "…" }]`) which supports both xtemplate CLI and Caddy JSON config, in a provider package, call `xtemplate.Register` with a value that implements `xtemplate.DotConfig` and supports go JSON [un]marshalling:
+To configure the provider from JSON (`"providers": [{ "type": "…" }]`) which supports both xtemplate CLI and Caddy JSON config, in a provider package, call `xtemplate.Register` with a value that implements `xtemplate.Provider` and supports go JSON [un]marshalling:
 
 ```go
 package shop
 
-import "github.com/infogulch/xtemplate"
+import (
+	"net/http"
+
+	"github.com/infogulch/xtemplate"
+)
 
 func init() {
 	// "shop" is the provider type - JSON discriminator and Caddyfile token.
-	xtemplate.Register("shop", func() xtemplate.DotConfig {
+	xtemplate.Register("shop", func() xtemplate.Provider {
 		return &ShopConfig{}
 	})
 }
@@ -85,9 +102,9 @@ type ShopConfig struct {
 	// … other settings …
 }
 
-func (c *ShopConfig) FieldName() string          { return c.Name }
-func (c *ShopConfig) Init(ctx context.Context) error { /* … */ return nil }
-func (c *ShopConfig) Value(r xtemplate.Request) (any, error) {
+func (c *ShopConfig) FieldName() string { return c.Name }
+func (c *ShopConfig) Prototype() any    { return Shop{} }
+func (c *ShopConfig) Value(http.ResponseWriter, *http.Request) (any, error) {
 	return Shop{}, nil
 }
 ```
@@ -95,7 +112,7 @@ func (c *ShopConfig) Value(r xtemplate.Request) (any, error) {
 Here's how the registry works:
 
 1. `Register(name, ctor)`: maps a provider type string to a constructor. Call only from `init()`; duplicate names panic.
-2. At instance build, `resolveProviders` peeks each entry’s `"type"`, looks up the constructor, re-decodes into the concrete type, and returns `[]DotConfig` for the instance. See [`providers.go`](../../providers.go).
+2. At instance build, `resolveProviders` peeks each entry’s `"type"`, looks up the constructor, re-decodes into the concrete type, and returns `[]Provider` for the instance. See [`providers.go`](../../providers.go).
 
 Opt the type into a binary by blank-importing the package (same pattern as the standard provider set under `cmd`):
 
@@ -127,7 +144,7 @@ Mirror the layout under `providers/dotsql/caddyfile/` and blank-import it in you
 package main
 
 import (
-	"context"
+	"net/http"
 
 	"github.com/infogulch/xtemplate"
 	"github.com/infogulch/xtemplate/app"
@@ -148,9 +165,11 @@ func (Shop) Products() []Product {
 
 type shopProvider struct{}
 
-func (shopProvider) FieldName() string                    { return "Shop" }
-func (shopProvider) Init(context.Context) error           { return nil }
-func (shopProvider) Value(xtemplate.Request) (any, error) { return Shop{}, nil }
+func (shopProvider) FieldName() string { return "Shop" }
+func (shopProvider) Prototype() any    { return Shop{} }
+func (shopProvider) Value(http.ResponseWriter, *http.Request) (any, error) {
+	return Shop{}, nil
+}
 
 func main() {
 	app.Main(xtemplate.WithProvider(shopProvider{}))

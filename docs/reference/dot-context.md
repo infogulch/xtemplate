@@ -83,7 +83,7 @@ Package: [`providers/dotsql`](https://pkg.go.dev/github.com/infogulch/xtemplate/
 </ul>
 ```
 
-Methods include `QueryRows`, `QueryRow`, `QueryVal`, `Exec`, and explicit `Commit`. Each request gets a value that opens a transaction on first use and commits on success or rolls back on error (via `CleanupDotProvider`).
+Methods include `QueryRows`, `QueryRow`, `QueryVal`, `Exec`, and explicit `Commit`. Each request gets a value that opens a transaction on first use and commits on success or rolls back on error (via `Finalizer`).
 
 Default builds include the `sqlite3` driver ([ncruces/go-sqlite3](https://github.com/ncruces/go-sqlite3)); other drivers need a [custom build](../how-to/custom-build.md).
 
@@ -145,4 +145,4 @@ Typical field name: `.Email`. Config requires `host` and `from` (default sender)
 
 ## Custom providers
 
-Implement `xtemplate.DotConfig` and attach with `WithProvider` (or register a provider type for JSON/Caddyfile). See [How to create a custom dot provider](../how-to/create-a-provider.md) and [`examples/dotprovider`](../../examples/dotprovider/).
+Implement `xtemplate.Provider` and attach with `WithProvider` (or register a provider type for JSON/Caddyfile). See [How to create a custom dot provider](../how-to/create-a-provider.md) and [`examples/dotprovider`](../../examples/dotprovider/).

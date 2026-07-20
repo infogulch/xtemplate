@@ -1,14 +1,14 @@
 package dotflags
 
 import (
-	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/infogulch/xtemplate"
 )
 
 func init() {
-	xtemplate.Register("flags", func() xtemplate.DotConfig { return &DotFlagsConfig{} })
+	xtemplate.Register("flags", func() xtemplate.Provider { return &DotFlagsConfig{} })
 }
 
 // DotFlags provides template access to a static key/value map.
@@ -39,8 +39,10 @@ type DotFlagsConfig struct {
 	Values map[string]string `json:"values"`
 }
 
-var _ xtemplate.DotConfig = &DotFlagsConfig{}
+var _ xtemplate.Provider = &DotFlagsConfig{}
 
-func (d *DotFlagsConfig) FieldName() string                      { return d.Name }
-func (d *DotFlagsConfig) Init(_ context.Context) error           { return nil }
-func (d *DotFlagsConfig) Value(_ xtemplate.Request) (any, error) { return DotFlags{d.Values}, nil }
+func (d *DotFlagsConfig) FieldName() string { return d.Name }
+func (d *DotFlagsConfig) Prototype() any    { return DotFlags{} }
+func (d *DotFlagsConfig) Value(http.ResponseWriter, *http.Request) (any, error) {
+	return DotFlags{d.Values}, nil
+}

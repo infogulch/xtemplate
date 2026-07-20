@@ -9,12 +9,13 @@ package dotbus
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/infogulch/xtemplate"
 )
 
 func init() {
-	xtemplate.Register("bus", func() xtemplate.DotConfig { return &DotBusConfig{} })
+	xtemplate.Register("bus", func() xtemplate.Provider { return &DotBusConfig{} })
 }
 
 // WithBus creates an [xtemplate.Option] that adds a bus dot provider.
@@ -36,13 +37,19 @@ type DotBusConfig struct {
 	bus *Bus
 }
 
-var _ xtemplate.DotConfig = &DotBusConfig{}
+var (
+	_ xtemplate.Initializer = &DotBusConfig{}
+	_ xtemplate.Closer      = &DotBusConfig{}
+)
 
 // FieldName returns the dot field name contributed by this provider.
 func (d *DotBusConfig) FieldName() string { return d.Name }
 
-// Init validates config, creates the bus, and shuts it down when ctx is cancelled
-// (instance reload / server stop).
+// Prototype returns the per-request field type.
+func (d *DotBusConfig) Prototype() any { return &DotBus{} }
+
+// Init validates config and creates the bus. Call [Close] (or cancel the
+// instance context) to shut the bus down on reload/stop.
 func (d *DotBusConfig) Init(ctx context.Context) error {
 	if d.Name == "" {
 		return fmt.Errorf("bus: name is required")
@@ -60,9 +67,17 @@ func (d *DotBusConfig) Init(ctx context.Context) error {
 	return nil
 }
 
+// Close shuts down the bus. Safe to call more than once.
+func (d *DotBusConfig) Close() error {
+	if d.bus != nil {
+		d.bus.Shutdown()
+	}
+	return nil
+}
+
 // Value returns the per-request [DotBus] bound to the request context.
-func (d *DotBusConfig) Value(r xtemplate.Request) (any, error) {
-	return &DotBus{bus: d.bus, ctx: r.R.Context()}, nil
+func (d *DotBusConfig) Value(_ http.ResponseWriter, r *http.Request) (any, error) {
+	return &DotBus{bus: d.bus, ctx: r.Context()}, nil
 }
 
 // DotBus is the per-request template value for the bus provider.

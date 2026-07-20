@@ -149,6 +149,11 @@ func (x *Server) Reload(cfgs ...Option) error {
 		x.cancel()
 	}
 	x.cancel = newcancel
+	if old != nil {
+		if err := old.Close(); err != nil {
+			log.Warn("error closing previous instance providers", slog.Any("error", err))
+		}
+	}
 
 	log.Info("rebuild succeeded", slog.Int64("new_id", new_.id), slog.Duration("rebuild_time", time.Since(start)))
 	return nil
@@ -162,5 +167,10 @@ func (x *Server) Stop() {
 		x.cancel()
 	}
 	x.cancel = nil
-	x.instance.Store(nil)
+	old := x.instance.Swap(nil)
+	if old != nil {
+		if err := old.Close(); err != nil {
+			x.config.Logger.Warn("error closing instance providers on stop", slog.Any("error", err))
+		}
+	}
 }

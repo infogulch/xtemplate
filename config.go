@@ -37,7 +37,7 @@ type Config struct {
 	CrossOrigin CrossOriginConfig `json:"crossorigin" arg:"-"`
 
 	ProvidersRaw []json.RawMessage `json:"providers,omitempty" arg:"-"`
-	Providers    []DotConfig       `json:"-" arg:"-"`
+	Providers    []Provider        `json:"-" arg:"-"`
 
 	// Encodings to pre-compress static files into at load time. Supported values:
 	// "gzip", "zstd", "br". Default empty (no pre-compression).
@@ -179,7 +179,7 @@ func WithHandler(pattern string, h http.Handler) Option {
 	}
 }
 
-func WithProvider(p DotConfig) Option {
+func WithProvider(p Provider) Option {
 	return func(c *Config) error {
 		c.Providers = append(c.Providers, p)
 		return nil

@@ -1,24 +1,26 @@
 package xtemplate
 
 import (
-	"context"
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 )
 
-// testProvider is a minimal DotConfig used only by the registry tests.
+// testProvider is a minimal Provider shared by package tests (registry, makeDot).
 type testProvider struct {
 	Name string `json:"name"`
 	Val  string `json:"value"`
 }
 
-func (p *testProvider) FieldName() string          { return p.Name }
-func (p *testProvider) Init(context.Context) error { return nil }
-func (p *testProvider) Value(Request) (any, error) { return p.Val, nil }
+func (p *testProvider) FieldName() string { return p.Name }
+func (p *testProvider) Prototype() any    { return "" }
+func (p *testProvider) Value(http.ResponseWriter, *http.Request) (any, error) {
+	return p.Val, nil
+}
 
 func init() {
-	Register("_test", func() DotConfig { return &testProvider{} })
+	Register("_test", func() Provider { return &testProvider{} })
 }
 
 func TestResolveProviders_roundtrip(t *testing.T) {
@@ -69,5 +71,5 @@ func TestRegister_duplicatePanics(t *testing.T) {
 			t.Fatal("expected panic on duplicate registration")
 		}
 	}()
-	Register("_test", func() DotConfig { return &testProvider{} })
+	Register("_test", func() Provider { return &testProvider{} })
 }

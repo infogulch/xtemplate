@@ -9,26 +9,40 @@ import (
 	"time"
 )
 
-type dotFlushProvider struct{}
+// dotFlushProvider contributes .Flush. It stores the instance context in Init
+// so Sleep/Repeat/WaitForServerStop can observe reload/stop without receiving
+// that context on every Value call.
+type dotFlushProvider struct {
+	serverCtx context.Context
+}
 
-func (dotFlushProvider) FieldName() string            { return "Flush" }
-func (dotFlushProvider) Init(_ context.Context) error { return nil }
-func (dotFlushProvider) Value(r Request) (any, error) {
-	f, ok := r.W.(flusher)
+func (dotFlushProvider) FieldName() string { return "Flush" }
+func (dotFlushProvider) Prototype() any    { return &DotFlush{} }
+
+func (p *dotFlushProvider) Init(ctx context.Context) error {
+	p.serverCtx = ctx
+	return nil
+}
+
+func (p *dotFlushProvider) Value(w http.ResponseWriter, r *http.Request) (any, error) {
+	f, ok := w.(flusher)
 	if !ok {
 		return &DotFlush{}, fmt.Errorf("response writer could not cast to http.Flusher")
 	}
-	return &DotFlush{flusher: f, serverCtx: r.ServerCtx, requestCtx: r.R.Context()}, nil
+	return &DotFlush{flusher: f, serverCtx: p.serverCtx, requestCtx: r.Context()}, nil
 }
 
-func (dotFlushProvider) Cleanup(v any, err error) error {
+func (dotFlushProvider) Finalize(v any, err error) error {
 	if err == nil {
 		v.(*DotFlush).flusher.Flush()
 	}
 	return err
 }
 
-var _ CleanupDotProvider = dotFlushProvider{}
+var (
+	_ Initializer = (*dotFlushProvider)(nil)
+	_ Finalizer   = (*dotFlushProvider)(nil)
+)
 
 type flusher interface {
 	http.ResponseWriter

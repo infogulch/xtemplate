@@ -10,6 +10,7 @@ package dotsmtp
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/mail"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 )
 
 func init() {
-	xtemplate.Register("smtp", func() xtemplate.DotConfig { return &DotSMTPConfig{} })
+	xtemplate.Register("smtp", func() xtemplate.Provider { return &DotSMTPConfig{} })
 }
 
 // WithSMTP creates an [xtemplate.Option] that adds an smtp dot provider to the
@@ -74,10 +75,13 @@ type DotSMTPConfig struct {
 	client *gomail.Client
 }
 
-var _ xtemplate.DotConfig = &DotSMTPConfig{}
+var _ xtemplate.Initializer = &DotSMTPConfig{}
 
 // FieldName returns the dot field name contributed by this provider.
 func (d *DotSMTPConfig) FieldName() string { return d.Name }
+
+// Prototype returns the per-request field type.
+func (d *DotSMTPConfig) Prototype() any { return &DotSMTP{} }
 
 // Init applies defaults, validates required fields, and builds the go-mail
 // client. It does not dial; go-mail dials per send.
@@ -178,8 +182,8 @@ func (d *DotSMTPConfig) Init(ctx context.Context) error {
 
 // Value returns the per-request dot value. The returned type carries the
 // request context so a cancelled request aborts the in-flight send.
-func (d *DotSMTPConfig) Value(r xtemplate.Request) (any, error) {
-	return &DotSMTP{cfg: d, ctx: r.R.Context()}, nil
+func (d *DotSMTPConfig) Value(_ http.ResponseWriter, r *http.Request) (any, error) {
+	return &DotSMTP{cfg: d, ctx: r.Context()}, nil
 }
 
 // DotSMTP is the per-request dot value exposed to templates. Call Send to
