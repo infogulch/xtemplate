@@ -107,6 +107,23 @@ Optional `writable: true` exposes multipart upload (`ReceiveFiles`). Full API: p
 
 Package: [`providers/dotflags`](https://pkg.go.dev/github.com/infogulch/xtemplate/providers/dotflags). Provider type: `"flags"`. Exposes a fixed map of strings (feature flags, env labels, versions) without a separate config file format inside templates.
 
+### In-process broadcast with `bus`
+
+Package: [`providers/dotbus`](https://pkg.go.dev/github.com/infogulch/xtemplate/providers/dotbus). Provider type: `"bus"`. Process-local multi-producer multi-consumer topic fan-out for SSE and live UI — no external broker.
+
+Typical field name: `.Bus`. Optional `buffer` is the per-subscriber channel capacity (default 16). Publish is best-effort: if a subscriber's buffer is full, that message is dropped for that subscriber (never blocks the publisher). Prefer `nats` when you need multi-process delivery, request/reply, or durable streams.
+
+```html
+{{define "SSE /events"}}{{range .Bus.Subscribe "messages"}}{{$.Flush.SendSSE "" .}}{{end}}{{end}}
+{{define "POST /messages"}}{{.Req.ParseForm}}{{.Bus.Publish "messages" (.Req.FormValue "msg")}}ok{{end}}
+```
+
+JSON:
+
+```json
+{ "type": "bus", "name": "Bus", "buffer": 16 }
+```
+
 ### Messaging with `nats`
 
 Package: [`providers/dotnats`](https://pkg.go.dev/github.com/infogulch/xtemplate/providers/dotnats). Provider type: `"nats"`. Send, request/reply, and stream-oriented patterns. Integration tests under [`test/templates/nats/`](../../test/templates/nats/) exercise a working configuration with an in-process server.

@@ -6,6 +6,7 @@ package main
 import (
 	"github.com/infogulch/xtemplate/app/git"
 
+	_ "github.com/infogulch/xtemplate/providers/dotbus"
 	_ "github.com/infogulch/xtemplate/providers/dotflags"
 	_ "github.com/infogulch/xtemplate/providers/dotfs"
 	_ "github.com/infogulch/xtemplate/providers/dotnats"

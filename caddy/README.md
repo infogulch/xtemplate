@@ -93,6 +93,14 @@ provider flags Flags {
 }
 ```
 
+**bus**: process-local topic fan-out (no broker; good for single-process SSE):
+
+```Caddy
+provider bus Bus {
+    # buffer 16   # per-subscriber channel capacity (default 16)
+}
+```
+
 **nats**: connect to a NATS messaging server:
 
 ```Caddy
@@ -128,10 +136,10 @@ provider smtp Email {
 
 #### Linking providers into the binary
 
-Provider Caddyfile support lives in opt-in subpackages. Use `caddy/standard` to pull in the default set (sql, fs, flags, nats, smtp) in one flag, or add one `--with` flag per provider to build a leaner subset.
+Provider Caddyfile support lives in opt-in subpackages. Use `caddy/standard` to pull in the default set (sql, fs, flags, bus, nats, smtp) in one flag, or add one `--with` flag per provider to build a leaner subset.
 
 ```shell
-# default set (sql + fs + flags + nats + smtp Caddyfile + pure-Go sqlite3 driver)
+# default set (sql + fs + flags + bus + nats + smtp Caddyfile + pure-Go sqlite3 driver)
 xcaddy build --with github.com/infogulch/xtemplate/caddy/standard
 
 # leaner subset: pick desired providers (and a SQL driver) individually

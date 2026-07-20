@@ -1,1 +1,9 @@
-{ "templates_dir": "templates" }
+{
+  "templates_dir": "templates",
+  "providers": [
+    {
+      "type": "bus",
+      "name": "Bus"
+    }
+  ]
+}

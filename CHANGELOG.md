@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `bus` provider (`providers/dotbus`): process-local multi-producer
+  multi-consumer topic fan-out for single-process SSE / live UI.
+  Template API: `Publish(topic, message)`, `Subscribe(topic)`. Optional
+  `buffer` (default 16); slow subscribers drop rather than block publishers.
+  Caddyfile: `provider bus <field> { buffer <n> }`. Included in standard CLI
+  and `caddy/standard` builds.
 - `fs` provider: optional `writable` flag (default false). When true, the
   template field is `DotFsRW` with `ReceiveFiles` for streaming multipart
   uploads onto the provider FS; when false, the field stays read-only
