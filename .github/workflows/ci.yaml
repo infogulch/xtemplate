@@ -1,6 +1,11 @@
 name: ci
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,7 +19,9 @@ jobs:
           # Full history + tags so `git describe` can derive the version.
           fetch-depth: 0
 
-      # Installs tools pinned by mise, from cache if available
+      # Installs tools pinned by mise, from cache if available. Also exports
+      # project [env] (notably GOPATH=~/.local/go) into GITHUB_ENV so Go and the
+      # prebuild cache paths agree.
       - uses: jdx/mise-action@v4
 
       # prebuild exports the Docker deps cache via `--cache-to type=local`, which

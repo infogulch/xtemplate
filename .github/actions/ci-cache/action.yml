@@ -22,7 +22,7 @@ runs:
           ~/.cache/go-build
           ~/.local/go/pkg/mod
           dist/buildx-cache
-        key: prebuild-${{ steps.prebuild.outputs.key }}
+        key: prebuild-v2-${{ steps.prebuild.outputs.key }}
 
     - name: Run prebuild (downloads modules, precompiles deps, exports build cache)
       if: steps.cache.outputs.cache-hit != 'true'
@@ -37,4 +37,4 @@ runs:
           ~/.cache/go-build
           ~/.local/go/pkg/mod
           dist/buildx-cache
-        key: prebuild-${{ steps.prebuild.outputs.key }}
+        key: prebuild-v2-${{ steps.prebuild.outputs.key }}
