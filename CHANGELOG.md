@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.10.1] - 2026-07-20
+
+New core providers and writable filesystem uploads.
+
 ### Added
 
+- `smtp` provider (`providers/dotsmtp`): synchronous send-only SMTP via
+  go-mail. Template API: `Send` with To/Cc/Bcc, subject, HTML/text bodies,
+  and per-send extras (`from`, attachments map). Config: host, from, port,
+  auth, TLS, helo, recipient/message size limits, `send_timeout`. Caddyfile:
+  `provider smtp <field> { ... }`. Included in standard CLI and
+  `caddy/standard` builds. Fixes #5.
 - `bus` provider (`providers/dotbus`): process-local multi-producer
   multi-consumer topic fan-out for single-process SSE / live UI.
   Template API: `Publish(topic, message)`, `Subscribe(topic)`. Optional
@@ -19,8 +29,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   template field is `DotFsRW` with `ReceiveFiles` for streaming multipart
   uploads onto the provider FS; when false, the field stays read-only
   (`DotFs`) and the backing FS is wrapped with afero `ReadOnlyFs`.
+  Closes #8.
 - `dotfs.WithFsWritable` for Go API opt-in; Caddyfile `writable true` in
   `provider fs` blocks. Init probes writability when `writable` is true.
+
+### Changed
+
+- `sse-chat` example: multi-user chat over the bus provider instead of a
+  synthetic counter stream; browser test uses native EventSource on
+  lightpanda (polyfill dropped after upstream fix). Closes #107.
+- `filebrowser` example: enable writable FS and demonstrate multipart
+  upload via `ReceiveFiles`.
 
 ## [v0.10.0] - 2026-07-12
 
