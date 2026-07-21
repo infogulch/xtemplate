@@ -3,7 +3,7 @@
 # change net/http behavior; e.g. Go 1.26 changed ServeMux's trailing-slash
 # redirect status from 301 to 307, which diverges from the other build targets
 # and breaks the hurl integration tests.
-FROM golang:1.25-alpine AS deps
+FROM golang:1.25-alpine AS build
 
 RUN apk add --no-cache build-base
 
@@ -11,23 +11,14 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Pre-compile stdlib unconditionally
-RUN GOOS=linux GOARCH=amd64 go build std
-
-ARG PRECACHE_PKGS=""
-RUN echo "${PRECACHE_PKGS}" | GOOS=linux GOARCH=amd64 xargs --no-run-if-empty go build
-
-###
-
-FROM deps AS build
-
 ARG LDFLAGS
 
 COPY app ./app/
 COPY cmd ./cmd/
 COPY providers ./providers/
 COPY *.go ./
-RUN GOOS=linux \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    GOOS=linux \
     GOARCH=amd64 \
     go build -ldflags="${LDFLAGS} -X 'github.com/infogulch/xtemplate/app.defaultListenAddress=0.0.0.0:80'" -o /build/xtemplate ./cmd
 

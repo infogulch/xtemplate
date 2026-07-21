@@ -1,8 +1,8 @@
 name: "CI prebuild cache"
 description: |
   Compute content hash of go.mod+go.sum, restore Go build cache and the
-  Docker deps-stage BuildKit layer cache, run mise prebuild, then save
-  caches on miss.  All heavy lifting for the dependency-prebuild phase.
+  Docker BuildKit layer cache, run mise prebuild, then save caches on
+  miss.  All heavy lifting for the dependency-prebuild phase.
 
 runs:
   using: "composite"
@@ -22,7 +22,7 @@ runs:
           ~/.cache/go-build
           ~/.local/go/pkg/mod
           dist/buildx-cache
-        key: prebuild-v2-${{ steps.prebuild.outputs.key }}
+        key: prebuild-v3-${{ steps.prebuild.outputs.key }}
 
     - name: Run prebuild (downloads modules, precompiles deps, exports build cache)
       if: steps.cache.outputs.cache-hit != 'true'
@@ -37,4 +37,4 @@ runs:
           ~/.cache/go-build
           ~/.local/go/pkg/mod
           dist/buildx-cache
-        key: prebuild-v2-${{ steps.prebuild.outputs.key }}
+        key: prebuild-v3-${{ steps.prebuild.outputs.key }}

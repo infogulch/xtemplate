@@ -232,16 +232,12 @@ export def xt-build-docker [
 
     mut args = []
 
-    # Import the prebuilt deps build cache when present (populated by prebuild,
-    # restored from CI cache) so the deps stage is a cache hit; harmless to omit.
     let cache_src = ($env.DIST_DIR | path join buildx-cache)
     if ($cache_src | path exists) {
         $args = ($args | append ["--cache-from" $"type=local,src=($cache_src)"])
     }
 
     $args = ($args | append ["--build-arg" $"LDFLAGS=(xt-ldflags)"])
-    let precache = (with-env { GOOS: linux, GOARCH: amd64 } { xt-precache-pkgs } | str join "\n")
-    $args = ($args | append ["--build-arg" $"PRECACHE_PKGS=($precache)"])
 
     if ($target | is-not-empty) { $args = ($args | append ["--target" $target]) }
     if ($cache_to | is-not-empty) { $args = ($args | append ["--cache-to" $cache_to]) }

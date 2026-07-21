@@ -1,5 +1,5 @@
 #!/usr/bin/env nu
-#MISE description="Restore Go build cache and docker deps build cache from ~/.cache/xtemplate"
+#MISE description="Restore Go build cache and Docker BuildKit layer cache from ~/.cache/xtemplate"
 use ../lib.nu *
 cd $env.ROOT
 
@@ -22,7 +22,7 @@ mkdir ($home | path join .local go pkg)
 ^cp -r ($home | path join .cache xtemplate go-build) $go_build
 ^cp -r ($home | path join .cache xtemplate go pkg mod) $mod
 
-# Restore the Docker deps build cache; build-docker/test-docker read it via
+# Restore the Docker BuildKit layer cache; build-docker/test-docker read it via
 # --cache-from. No `docker load` needed: BuildKit imports the cache directly.
 rm -rf ($env.ROOT | path join dist buildx-cache)
 ^cp -r ($home | path join .cache xtemplate buildx-cache) ($env.ROOT | path join dist buildx-cache)

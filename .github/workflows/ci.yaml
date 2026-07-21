@@ -24,8 +24,8 @@ jobs:
       # prebuild cache paths agree.
       - uses: jdx/mise-action@v4
 
-      # prebuild exports the Docker deps cache via `--cache-to type=local`, which
-      # the default docker driver only supports with the containerd image store.
+      # prebuild exports the Docker BuildKit layer cache via `--cache-to
+      # type=local`, which requires the containerd image store.
       # GitHub runners ship with it disabled, so enable it before any build. This
       # keeps the default driver (images still load into the store for
       # `docker run`/`docker push`), unlike switching to a docker-container builder.

@@ -1,5 +1,5 @@
 #!/usr/bin/env nu
-#MISE description="Download Go modules, pre-compile dependencies, and export the Docker deps build cache"
+#MISE description="Download Go modules, pre-compile dependencies, and export the Docker BuildKit layer cache"
 use ../lib.nu *
 cd $env.ROOT
 
@@ -43,11 +43,12 @@ xt-precache-deps --race
 print -e "  pre-compiling caddy build (xcaddy)"
 xt-build-caddy | print -e
 
-# Build the deps stage and export its BuildKit layer cache to a local directory.
-# Send docker's stdout (the image digest from `-q`) to stderr so it doesn't
-# contaminate the hash on stdout.
-print -e "  exporting docker deps build cache"
-xt-build-docker --target deps --cache-to $"type=local,dest=($env.DIST_DIR)/buildx-cache,mode=max" | print -e
+# Run the Docker build stage so GOCACHE mounts warm on this builder, and export
+# BuildKit layer cache (go mod download, base images) to a local directory for
+# CI restore. Send docker's stdout (the image digest from `-q`) to stderr so it
+# doesn't contaminate the hash on stdout.
+print -e "  exporting docker build cache"
+xt-build-docker --target build --cache-to $"type=local,dest=($env.DIST_DIR)/buildx-cache,mode=max" | print -e
 
 # Emit the hash to stdout.
 print $sum

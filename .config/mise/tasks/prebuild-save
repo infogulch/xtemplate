@@ -1,5 +1,5 @@
 #!/usr/bin/env nu
-#MISE description="Save Go build cache and docker deps build cache to ~/.cache/xtemplate"
+#MISE description="Save Go build cache and Docker BuildKit layer cache to ~/.cache/xtemplate"
 use ../lib.nu *
 cd $env.ROOT
 
