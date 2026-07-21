@@ -13,6 +13,10 @@ golangci-lint = "latest"
 "go:github.com/caddyserver/xcaddy/cmd/xcaddy" = "latest"
 "github:lightpanda-io/browser" = "nightly"
 
+# Align Go module/build paths on local dev and CI.
+[env]
+GOPATH = "{{env.HOME}}/.local/go"
+
 [tasks.lint]
 description = "Run lint checks"
 depends = ["lint-nu", "lint-go"]

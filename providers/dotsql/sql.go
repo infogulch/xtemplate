@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"iter"
 	"log/slog"
+	"net/http"
 	"text/template"
 	"time"
 
@@ -14,7 +15,7 @@ import (
 )
 
 func init() {
-	xtemplate.Register("sql", func() xtemplate.DotConfig { return &DotSqlConfig{} })
+	xtemplate.Register("sql", func() xtemplate.Provider { return &DotSqlConfig{} })
 }
 
 func WithSql(name string, db *sql.DB, opt *sql.TxOptions) xtemplate.Option {
@@ -34,11 +35,20 @@ type DotSqlConfig struct {
 	Driver         string `json:"driver"`
 	Connstr        string `json:"connstr"`
 	MaxOpenConns   int    `json:"max_open_conns"`
+
+	// opened is true when Init opened DB via Driver/Connstr (so Close should
+	// close it). Injected DBs from WithSql are not closed.
+	opened bool
 }
 
-var _ xtemplate.CleanupDotProvider = &DotSqlConfig{}
+var (
+	_ xtemplate.Initializer = &DotSqlConfig{}
+	_ xtemplate.Finalizer   = &DotSqlConfig{}
+	_ xtemplate.Closer      = &DotSqlConfig{}
+)
 
 func (d *DotSqlConfig) FieldName() string { return d.Name }
+func (d *DotSqlConfig) Prototype() any    { return &DotSql{} }
 func (d *DotSqlConfig) Init(ctx context.Context) error {
 	if d.DB != nil {
 		return nil
@@ -49,21 +59,31 @@ func (d *DotSqlConfig) Init(ctx context.Context) error {
 	}
 	db.SetMaxOpenConns(d.MaxOpenConns)
 	if err := db.Ping(); err != nil {
+		_ = db.Close()
 		return fmt.Errorf("failed to ping database on open: %w", err)
 	}
 	d.DB = db
+	d.opened = true
 	return nil
 }
-func (d *DotSqlConfig) Value(r xtemplate.Request) (any, error) {
-	return &DotSql{d.DB, xtemplate.GetLogger(r.R.Context()), r.R.Context(), d.TxOptions, nil}, nil
+func (d *DotSqlConfig) Value(_ http.ResponseWriter, r *http.Request) (any, error) {
+	return &DotSql{d.DB, xtemplate.GetLogger(r.Context()), r.Context(), d.TxOptions, nil}, nil
 }
-func (dp *DotSqlConfig) Cleanup(v any, err error) error {
+func (dp *DotSqlConfig) Finalize(v any, err error) error {
 	d := v.(*DotSql)
 	if err != nil {
 		return errors.Join(err, d.rollback())
-	} else {
-		return errors.Join(err, d.commit())
 	}
+	return errors.Join(err, d.commit())
+}
+func (d *DotSqlConfig) Close() error {
+	if !d.opened || d.DB == nil {
+		return nil
+	}
+	err := d.DB.Close()
+	d.DB = nil
+	d.opened = false
+	return err
 }
 
 // DotSql is used to create a dot field value that can query a SQL database. When

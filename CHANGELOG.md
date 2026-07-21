@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking: Change dot provider API**
+  - Rename base interface `DotConfig` → `Provider`
+  - Renamed extension interfaces: `InitDotProvider` → `Initializer`,
+    `CleanupDotProvider` → `Finalizer`
+  - Added `Closer` interface for instance-stop-time cleanup
+  - `Provider` now requires `Prototype() any` for field type inference,
+    replacing mock `Value` call at instance build
+  - Remove request bag struct passed to `Value`, replaced with separate
+    `http.ResponseWriter`/`*http.Request` args. Instance context can be retained
+    from `Init` when needed.
+  - `Instance.Close` runs `Closer` on reload/stop; Server calls it when retiring
+    an instance.
+
 ## [v0.10.1] - 2026-07-20
 
 New core providers and writable filesystem uploads.

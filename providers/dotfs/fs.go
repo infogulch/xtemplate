@@ -74,7 +74,7 @@ import (
 var bufPool = sync.Pool{New: func() any { return new(bytes.Buffer) }}
 
 func init() {
-	xtemplate.Register("fs", func() xtemplate.DotConfig { return &DotFsConfig{} })
+	xtemplate.Register("fs", func() xtemplate.Provider { return &DotFsConfig{} })
 }
 
 // WithFs creates an [xtemplate.Option] that can be used with
@@ -118,9 +118,19 @@ type DotFsConfig struct {
 	FS       afero.Fs `json:"-"`
 }
 
-var _ xtemplate.CleanupDotProvider = &DotFsConfig{}
+var (
+	_ xtemplate.Initializer = &DotFsConfig{}
+	_ xtemplate.Finalizer   = &DotFsConfig{}
+)
 
 func (c *DotFsConfig) FieldName() string { return c.Name }
+
+func (p *DotFsConfig) Prototype() any {
+	if p.Writable {
+		return DotFsRW{}
+	}
+	return DotFs{}
+}
 
 func (p *DotFsConfig) Init(ctx context.Context) error {
 	if p.FS == nil {
@@ -181,25 +191,25 @@ func probeWritable(afs afero.Fs, pathHint string) error {
 	return nil
 }
 
-func (p *DotFsConfig) Value(r xtemplate.Request) (any, error) {
+func (p *DotFsConfig) Value(w http.ResponseWriter, r *http.Request) (any, error) {
 	base := DotFs{
 		fs:     p.FS,
-		log:    xtemplate.GetLogger(r.R.Context()),
+		log:    xtemplate.GetLogger(r.Context()),
 		opened: make(map[afero.File]struct{}),
 	}
 	if p.Writable {
 		received := false
 		return DotFsRW{
 			DotFs:    base,
-			w:        r.W,
-			r:        r.R,
+			w:        w,
+			r:        r,
 			received: &received,
 		}, nil
 	}
 	return base, nil
 }
 
-func (p *DotFsConfig) Cleanup(a any, err error) error {
+func (p *DotFsConfig) Finalize(a any, err error) error {
 	var d DotFs
 	switch v := a.(type) {
 	case DotFs:

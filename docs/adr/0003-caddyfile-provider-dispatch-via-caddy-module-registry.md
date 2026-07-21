@@ -8,7 +8,7 @@ Caddyfile `provider <type> <field> { }` is a JSON adapter only. If a provider re
 
 ## Considered options
 
-- **`ParseBlock` on `DotConfig` in the provider package.** Rejected: couples every provider to Caddy.
+- **`ParseBlock` on `Provider` in the provider package.** Rejected: couples every provider to Caddy.
 - **Core `BlockParser` hiding Caddy helpers.** Rejected: Caddyfile concepts leak into `xtemplate`; authors lose real `httpcaddyfile.Helper` APIs.
 - **Separate Caddy-side register map.** Rejected: prefer Caddy’s module registry (same pattern as `xtemplate.funcs.*`).
 

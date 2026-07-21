@@ -2,14 +2,15 @@
 // exposes hardcoded in-memory data to templates as {{.Shop}}, which can range
 // over products and look one up by id.
 //
-// To write a dot provider: implement xtemplate.DotConfig (FieldName, Init,
-// Value), then register the instance with xtemplate.WithProvider passed to
-// app.Main. FieldName is the dot field name; Value returns the value assigned
-// to that field for each request.
+// To write a dot provider: implement xtemplate.Provider (FieldName,
+// Prototype, Value), then register the instance with xtemplate.WithProvider
+// passed to app.Main. FieldName is the dot field name; Prototype is a typed
+// zero value for reflection; Value returns the value assigned to that field
+// for each request. Init is optional (Initializer).
 package main
 
 import (
-	"context"
+	"net/http"
 
 	"github.com/infogulch/xtemplate"
 	"github.com/infogulch/xtemplate/app"
@@ -42,12 +43,14 @@ func (Shop) Product(id int) Product {
 	return Product{}
 }
 
-// shopProvider implements xtemplate.DotConfig, attaching Shop under {{.Shop}}.
+// shopProvider implements xtemplate.Provider, attaching Shop under {{.Shop}}.
 type shopProvider struct{}
 
-func (shopProvider) FieldName() string                    { return "Shop" }
-func (shopProvider) Init(context.Context) error           { return nil }
-func (shopProvider) Value(xtemplate.Request) (any, error) { return Shop{}, nil }
+func (shopProvider) FieldName() string { return "Shop" }
+func (shopProvider) Prototype() any    { return Shop{} }
+func (shopProvider) Value(http.ResponseWriter, *http.Request) (any, error) {
+	return Shop{}, nil
+}
 
 func main() {
 	app.Main(xtemplate.WithProvider(shopProvider{}))

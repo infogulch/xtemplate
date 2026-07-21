@@ -127,9 +127,7 @@ func TestDotBusConfig_Init(t *testing.T) {
 	if err := cfg.Init(ctx); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-	v, err := cfg.Value(xtemplate.Request{
-		R: httptest.NewRequest(http.MethodGet, "/", nil),
-	})
+	v, err := cfg.Value(nil, httptest.NewRequest(http.MethodGet, "/", nil))
 	if err != nil {
 		t.Fatalf("Value: %v", err)
 	}
@@ -191,9 +189,7 @@ func TestDotBus_RequestCancelUnsubscribes(t *testing.T) {
 		t.Fatal(err)
 	}
 	reqCtx, cancel := context.WithCancel(context.Background())
-	v, err := cfg.Value(xtemplate.Request{
-		R: httptest.NewRequest(http.MethodGet, "/", nil).WithContext(reqCtx),
-	})
+	v, err := cfg.Value(nil, httptest.NewRequest(http.MethodGet, "/", nil).WithContext(reqCtx))
 	if err != nil {
 		t.Fatal(err)
 	}

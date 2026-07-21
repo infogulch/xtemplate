@@ -9,12 +9,12 @@ import (
 // Written only in init(), read-only afterward.
 // ponytail: init()-only writes; race-free by Go's init happens-before guarantee.
 // Add a sync.RWMutex if runtime registration becomes supported.
-var registry = map[string]func() DotConfig{}
+var registry = map[string]func() Provider{}
 
 // Register makes a provider type available to resolveProviders. Call from init().
 // Panics on duplicate registration (names the type in the message; the registering
 // package is identified by the runtime's stack trace).
-func Register(name string, ctor func() DotConfig) {
+func Register(name string, ctor func() Provider) {
 	if _, exists := registry[name]; exists {
 		panic(fmt.Sprintf("xtemplate: provider type %q already registered", name))
 	}
@@ -23,11 +23,11 @@ func Register(name string, ctor func() DotConfig) {
 
 // resolveProviders decodes each raw JSON entry by peeking its "type" field,
 // looking up the constructor, and re-decoding into the concrete type.
-func resolveProviders(raw []json.RawMessage) ([]DotConfig, error) {
+func resolveProviders(raw []json.RawMessage) ([]Provider, error) {
 	if len(raw) == 0 {
 		return nil, nil
 	}
-	out := make([]DotConfig, 0, len(raw))
+	out := make([]Provider, 0, len(raw))
 	for _, msg := range raw {
 		var probe struct {
 			Type string `json:"type"`

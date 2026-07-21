@@ -40,7 +40,7 @@ Domain terms for xtemplate. Behavior and APIs live in the rest of the [docs](../
 
 ## Providers
 
-**Dot provider**: Contributes one named field on the per-request dot (`{{.Field}}`): type, field name, init, and per-request value.
+**Dot provider**: Contributes one named field on the per-request dot (`{{.Field}}`): field name, prototype type, optional init/finalize/close, and per-request value. Implements `Provider`; optional hooks via `Initializer`, `Finalizer`, `Closer`.
 
 **Dot field**: That field's name (`FieldName`); unique per instance.
 
@@ -56,6 +56,6 @@ Domain terms for xtemplate. Behavior and APIs live in the rest of the [docs](../
 
 **Custom provider**: User Go code via `Config.Providers` / `WithProvider`, not via the type registry.
 
-**Provider config**: Type, field name, and type-specific settings (JSON via the registry, or a constructed `DotConfig`).
+**Provider config**: Type, field name, and type-specific settings (JSON via the registry, or a constructed `Provider`).
 
 **Caddyfile provider**: Caddy module `xtemplate.providers.*` that parses `provider <type> <field> { }` into config JSON.

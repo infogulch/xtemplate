@@ -3,6 +3,7 @@ package dotnats
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/infogulch/xtemplate"
@@ -12,7 +13,7 @@ import (
 )
 
 func init() {
-	xtemplate.Register("nats", func() xtemplate.DotConfig { return &DotNatsConfig{} })
+	xtemplate.Register("nats", func() xtemplate.Provider { return &DotNatsConfig{} })
 }
 
 // WithNats creates an [xtemplate.Option] that adds a nats dot provider to the
@@ -41,11 +42,19 @@ type DotNatsConfig struct {
 
 	server *server.Server
 	js     jetstream.JetStream
+
+	// owned is true when Init created Conn (and possibly the in-process server).
+	// Injected Conn values are not closed.
+	owned bool
 }
 
-var _ xtemplate.DotConfig = &DotNatsConfig{}
+var (
+	_ xtemplate.Initializer = &DotNatsConfig{}
+	_ xtemplate.Closer      = &DotNatsConfig{}
+)
 
 func (d *DotNatsConfig) FieldName() string { return d.Name }
+func (d *DotNatsConfig) Prototype() any    { return &DotNats{} }
 
 func (d *DotNatsConfig) Init(ctx context.Context) error {
 	var err error
@@ -92,12 +101,29 @@ func (d *DotNatsConfig) Init(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to in-process server: %w", err)
 	}
+	d.owned = true
 	d.js, err = jetstream.New(d.Conn, d.JetStreamOptions...)
 	return err
 }
 
-func (d *DotNatsConfig) Value(r xtemplate.Request) (any, error) {
-	return &DotNats{Conn: d.Conn, JetStream: d.js, ctx: r.R.Context()}, nil
+// Close drains/closes a connection opened by Init and shuts down any in-process
+// server. Injected connections are left alone.
+func (d *DotNatsConfig) Close() error {
+	var err error
+	if d.owned && d.Conn != nil {
+		err = d.Conn.Drain()
+		d.Conn = nil
+		d.owned = false
+	}
+	if d.server != nil {
+		d.server.Shutdown()
+		d.server = nil
+	}
+	return err
+}
+
+func (d *DotNatsConfig) Value(_ http.ResponseWriter, r *http.Request) (any, error) {
+	return &DotNats{Conn: d.Conn, JetStream: d.js, ctx: r.Context()}, nil
 }
 
 // DotNats provides template access to a NATS connection.

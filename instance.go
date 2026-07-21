@@ -3,6 +3,7 @@ package xtemplate
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -52,6 +53,10 @@ type Instance struct {
 
 	bufferDot  dot
 	flusherDot dot
+
+	// providers is the user/core provider list for this instance (not builtins).
+	// Used to call [Closer.Close] when the instance is retired.
+	providers []Provider
 }
 
 // Instance creates a new *Instance from the given config
@@ -153,9 +158,9 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 	dcInstance := dotXProvider{build.Instance}
 	dcReq := dotReqProvider{}
 	dcResp := dotRespProvider{}
-	dcFlush := dotFlushProvider{}
+	dcFlush := &dotFlushProvider{}
 
-	var dot []DotConfig
+	var dot []Provider
 
 	{
 		var err error
@@ -171,21 +176,36 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 			}
 			seen[name] = true
 		}
-		for _, d := range dot {
+		// Init user/core providers and any builtin that implements Initializer
+		// (e.g. Flush stores instance ctx for Sleep/WaitForServerStop).
+		toInit := slices.Concat([]Provider{dcInstance, dcReq, dcResp, dcFlush}, dot)
+		var opened []Provider
+		for _, d := range toInit {
+			idp, ok := d.(Initializer)
+			if !ok {
+				continue
+			}
 			start := time.Now()
-			err := d.Init(build.config.Ctx)
+			err := idp.Init(build.config.Ctx)
 			build.config.Logger.Debug("initialized provider", "name", d.FieldName(), "type", reflect.TypeOf(d).String(), "duration", time.Since(start))
 			if err != nil {
+				_ = closeProviders(opened)
 				return nil, nil, nil, fmt.Errorf("failed to initialize dot field '%s': %w", d.FieldName(), err)
 			}
+			opened = append(opened, d)
 		}
+		// Only user/core providers are closed on instance retire (builtins have
+		// no owned resources beyond the instance itself).
+		build.providers = dot
 	}
 
 	var err error
-	if build.bufferDot, err = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, dot, []DotConfig{dcResp})); err != nil {
+	if build.bufferDot, err = makeDot(slices.Concat([]Provider{dcInstance, dcReq}, dot, []Provider{dcResp})); err != nil {
+		_ = closeProviders(dot)
 		return nil, nil, nil, fmt.Errorf("failed to build buffer dot: %w", err)
 	}
-	if build.flusherDot, err = makeDot(slices.Concat([]DotConfig{dcInstance, dcReq}, dot, []DotConfig{dcFlush})); err != nil {
+	if build.flusherDot, err = makeDot(slices.Concat([]Provider{dcInstance, dcReq}, dot, []Provider{dcFlush})); err != nil {
+		_ = closeProviders(dot)
 		return nil, nil, nil, fmt.Errorf("failed to build flusher dot: %w", err)
 	}
 
@@ -194,7 +214,7 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 		// with "INIT ".
 		makeDot := func() (*reflect.Value, error) {
 			w, r := httptest.NewRecorder(), httptest.NewRequest("", "/", nil)
-			return build.bufferDot.value(build.config.Ctx, w, r)
+			return build.bufferDot.value(w, r)
 		}
 		cleanup := build.bufferDot.cleanup
 		buf := new(bytes.Buffer)
@@ -254,6 +274,32 @@ var nextInstanceIdentity atomic.Int64
 // `xtemplate.instance`.
 func (x *Instance) Id() int64 {
 	return x.id
+}
+
+// Close releases instance-scoped provider resources ([Closer]).
+// It is safe to call more than once. [Server] calls Close when retiring an
+// instance on reload or stop; callers of [Config.Instance] should call Close
+// when the instance is no longer needed if providers own connections.
+func (x *Instance) Close() error {
+	if x == nil {
+		return nil
+	}
+	err := closeProviders(x.providers)
+	x.providers = nil
+	return err
+}
+
+func closeProviders(providers []Provider) error {
+	var errs []error
+	// Close in reverse init order so dependents shut down before dependencies.
+	for i := len(providers) - 1; i >= 0; i-- {
+		if c, ok := providers[i].(Closer); ok {
+			if err := c.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("close %s: %w", providers[i].FieldName(), err))
+			}
+		}
+	}
+	return errors.Join(errs...)
 }
 
 var levelDebug2 slog.Level = slog.LevelDebug + 2

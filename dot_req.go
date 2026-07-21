@@ -1,19 +1,18 @@
 package xtemplate
 
 import (
-	"context"
 	"net/http"
 )
 
 type dotReqProvider struct{}
 
-func (dotReqProvider) FieldName() string            { return "Req" }
-func (dotReqProvider) Init(_ context.Context) error { return nil }
-func (dotReqProvider) Value(r Request) (any, error) {
-	return DotReq{r.R}, nil
+func (dotReqProvider) FieldName() string { return "Req" }
+func (dotReqProvider) Prototype() any    { return DotReq{} }
+func (dotReqProvider) Value(_ http.ResponseWriter, r *http.Request) (any, error) {
+	return DotReq{r}, nil
 }
 
-var _ DotConfig = dotReqProvider{}
+var _ Provider = dotReqProvider{}
 
 // DotReq is used as the .Req field for template invocations with an associated
 // request, and contains the current HTTP request struct which can be used to

@@ -1,7 +1,6 @@
 package xtemplate
 
 import (
-	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -14,18 +13,20 @@ import (
 
 type dotRespProvider struct{}
 
-func (dotRespProvider) FieldName() string            { return "Resp" }
-func (dotRespProvider) Init(_ context.Context) error { return nil }
-func (dotRespProvider) Value(r Request) (any, error) {
+func (dotRespProvider) FieldName() string { return "Resp" }
+func (dotRespProvider) Prototype() any {
+	return DotResp{Header: make(http.Header)}
+}
+func (dotRespProvider) Value(w http.ResponseWriter, r *http.Request) (any, error) {
 	return DotResp{
 		Header: make(http.Header),
 		status: http.StatusOK,
-		w:      r.W, r: r.R,
-		log: GetLogger(r.R.Context()),
+		w:      w, r: r,
+		log: GetLogger(r.Context()),
 	}, nil
 }
 
-func (dotRespProvider) Cleanup(v any, err error) error {
+func (dotRespProvider) Finalize(v any, err error) error {
 	d := v.(DotResp)
 	if d.served {
 		// The response was already fully written by ServeContent (which calls
@@ -44,7 +45,7 @@ func (dotRespProvider) Cleanup(v any, err error) error {
 	return err
 }
 
-var _ CleanupDotProvider = dotRespProvider{}
+var _ Finalizer = dotRespProvider{}
 
 // DotResp is used as the .Resp field in buffered template invocations.
 type DotResp struct {

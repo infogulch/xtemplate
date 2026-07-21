@@ -2,10 +2,10 @@ package xtemplate
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"html/template"
+	"net/http"
 	"path"
 )
 
@@ -13,18 +13,20 @@ type dotXProvider struct {
 	instance *Instance
 }
 
-func (dotXProvider) FieldName() string            { return "X" }
-func (dotXProvider) Init(_ context.Context) error { return nil }
-func (p dotXProvider) Value(Request) (any, error) { return DotX(p), nil }
+func (dotXProvider) FieldName() string { return "X" }
+func (p dotXProvider) Prototype() any  { return DotX{} }
+func (p dotXProvider) Value(http.ResponseWriter, *http.Request) (any, error) {
+	return DotX(p), nil
+}
 
-func (dotXProvider) Cleanup(_ any, err error) error {
+func (dotXProvider) Finalize(_ any, err error) error {
 	if errors.As(err, &ReturnError{}) {
 		return nil
 	}
 	return err
 }
 
-var _ CleanupDotProvider = dotXProvider{}
+var _ Finalizer = dotXProvider{}
 
 // DotX is used as the field at .X in all template invocations.
 type DotX struct {
