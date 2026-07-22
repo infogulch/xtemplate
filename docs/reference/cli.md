@@ -1,113 +1,85 @@
 # CLI reference
 
-Flag inventory for the standalone binaries, and how the `app` package lets you extend that surface.
+Flag inventory for the standalone binary, and how the `app` package loads config.
 
 Related:
 
-- When to use each variant and how to install or run them: [Deployment modes](deployment-modes.md).
+- When to use each controller type and how to install or run: [Deployment modes](deployment-modes.md).
 - Field meanings, providers, and JSON/Caddyfile/library shapes: [Configuration](configuration.md).
 - Custom binaries: [Custom build](../how-to/custom-build.md).
 
-## Binaries
+## Binary
 
-Three thin entries share most flags; they differ in template source and reload:
-
-| Entry | Reload |
-|---|---|
-| [`cmd/watchfs`](../../cmd/watchfs) | Filesystem watch (default for local work) |
-| [`cmd`](../../cmd) | None |
-| [`cmd/git`](../../cmd/git) | Git poll (`--git-repo`, `--git-ref`, `--git-interval`) |
+One entrypoint: [`cmd/xtemplate`](../../cmd/xtemplate). It blank-imports core providers and optional controllers (`watchfs`, `git`), then sets [`DefaultControllerType`](https://pkg.go.dev/github.com/infogulch/xtemplate#DefaultControllerType) to **`watchfs`**, so the release CLI defaults to live reload. Override with `--controller-type` or JSON `"controller": {"type":…}`.
 
 ```shell
-go build -o xtemplate ./cmd/watchfs
+go install github.com/infogulch/xtemplate/cmd/xtemplate@latest
+# or
+go build -o xtemplate ./cmd/xtemplate
 ```
 
-## Extending the app config
+## Config loading
 
-The published CLIs are not three separate flag parsers. They share [`app.LoadConfig`](../../app/app.go), which loads **any** struct that implements `app.Configurable` - typically by **embedding** `app.Config` and adding fields.
+[`app.LoadConfig`](../../app/app.go) runs a fixed pipeline: argv bootstrap (pass 0: `--controller-type`, `-f`/`--config-file`, `-c`/`--config`) → merge JSON (legacy-key ban-list) → materialize controller (CLI `--controller-type` > JSON `controller.type` > [`DefaultControllerType`](https://pkg.go.dev/github.com/infogulch/xtemplate#DefaultControllerType)) via [`Config.MaterializeController`](https://pkg.go.dev/github.com/infogulch/xtemplate#Config.MaterializeController) → parse CLI flags into app + controller dest (go-arg handles `--help` / `--version`) → finalize logger. After load, `Controller` is set and `ControllerRaw` is cleared. Pass 0 is hand-scanned because go-arg needs the concrete controller type before full parse (type-specific flags).
 
-`app.Config` itself embeds `xtemplate.Config` and adds listen, log level, and the `-c` / `-f` config sources:
+Effective type when omitted from CLI and JSON: [`xtemplate.DefaultControllerType`](https://pkg.go.dev/github.com/infogulch/xtemplate#DefaultControllerType) (core `"os"`; release CLI sets `"watchfs"`).
 
-```go
-type Config struct {
-	xtemplate.Config
-	Listen      string   `json:"listen" arg:"-l"`
-	LogLevel    int      `json:"log_level" default:"-2"`
-	Configs     []string `json:"-" arg:"-c,--config,separate"`
-	ConfigFiles []string `json:"-" arg:"-f,--config-file,separate"`
-}
-```
+Precedence (later wins): defaults → `-f` files → `-c` fragments → CLI flags.
 
-A variant adds options by embedding that type and tagging new fields for both JSON and [go-arg](https://github.com/alexflint/go-arg). watchfs adds extra watch dirs:
-
-```go
-// app/watchfs - simplified
-type Config struct {
-	app.Config
-	Watch []string `json:"watch_dirs" arg:",separate"`
-}
-
-var _ app.Configurable = (*Config)(nil)
-
-func Main(options ...xtemplate.Option) {
-	config, err := app.LoadConfig(&Config{}, nil)
-	// … wire Reload from config.Watch, then:
-	app.Serve(&config.Config, options...)
-}
-```
-
-git does the same with `--git-repo`, `--git-ref`, and `--git-interval` (see [`app/git`](../../app/git/gitapp.go)). Override `SetDefaults` on your outer struct when new fields need defaults; call the embedded `Config.SetDefaults()` so listen/logger still initialize.
-
-Because `LoadConfig` parses and unmarshals into **your** struct value:
-
-- New fields appear as CLI flags and JSON keys automatically (via `arg` / `json` tags).
-- Existing xtemplate and app fields keep working without redeclaring them.
-- Help (`Epilogue`) and `Version` can be overridden the same way when needed.
-
-For a one-off binary that only needs extra providers or FuncMaps, prefer `watchfs.Main(xtemplate.With…)` or `app.Main(…)` from [Custom build](../how-to/custom-build.md). Embed a new `Configurable` when you need **new flags or JSON keys** of your own (another reload policy, a required remote, etc.).
-
-### Config source precedence
-
-Whatever the outer struct is, `LoadConfig` fills it in this order (later wins): defaults → `-f` files in order → `-c` fragments in order → CLI flags. Flags are parsed twice so they still override JSON after files load. Details live in `app.LoadConfig`.
+When both JSON `"controller"."type"` and `--controller-type` are set, **CLI wins**. If the types differ, JSON `ControllerRaw` is discarded and flags bind to a zero controller of the CLI type (path and other fields from JSON are not carried over).
 
 ## Flags
 
-Flags map onto the embedded config fields above (plus variant-only fields). Verified against the current `watchfs` / `cmd` help output:
+### App-level
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `-t`, `--templates-dir`, `--template-dir` | `templates` | Template root path (relative to working directory / FS) |
-| `--template-ext` | `.html` | Extension for path-template sources |
-| `-m`, `--minify` | `true` | Minify HTML templates at load time (`--minify=false` to disable) |
-| `--precompress` | (none) | Pre-compress static files at load (`gzip`, `zstd`, `br`; repeatable) |
-| `--ldelim` | `{{` | Left template delimiter |
-| `--rdelim` | `}}` | Right template delimiter |
-| `-l`, `--listen` | `0.0.0.0:8080` | Listen address (Docker image defaults to `:80`) |
+| `-l`, `--listen` | `0.0.0.0:8080` | Listen address (Docker often `:80` via ldflag) |
 | `--loglevel` | `-2` | `slog` level (numeric; lower is more verbose) |
-| `-c`, `--config` | | Inline JSON config (repeatable); later fragments win |
-| `-f`, `--config-file` | | JSON config file path (repeatable); later files win |
-| `--watch` | | watchfs only: extra directory to watch (repeatable). The templates dir is always watched |
-| `--git-repo` | | git only: remote URL (required) |
-| `--git-ref` | | git only: branch / tag / commit-ish |
-| `--git-interval` | `15s` | git only: poll interval |
-| `-h`, `--help` | | Help |
+| `-c`, `--config` | | Inline JSON (repeatable); later wins |
+| `-f`, `--config-file` | | JSON config file (repeatable); later wins |
+| `--controller-type` | `DefaultControllerType` | Active controller type; CLI wins over JSON `controller.type` when both set |
+| `-h`, `--help` | | Help (lists registered controller types and the effective default) |
 | `--version` | | Version string |
+
+### Core / shared template options
+
+| Flag | Applies when | Default | Meaning |
+|---|---|---|---|
+| `-t`, `--templates-dir`, `--template-dir` | `os`, `watchfs`, `git` (subdir) | `templates` | Path on that controller |
+| `--template-ext` | always | `.html` | Extension for path-template files |
+| `-m`, `--minify` | always | `true` | Minify HTML templates at load (`--minify=false` to disable) |
+| `--precompress` | always | none | Pre-compress static files (`gzip`, `zstd`, `br`; repeatable) |
+| `--ldelim` / `--rdelim` | always | `{{` / `}}` | Template delimiters |
+
+### Controller-specific (only for the effective type)
+
+| Flag | Type | Default | Meaning |
+|---|---|---|---|
+| `--watch` | `watchfs` | none | Extra watch dirs (repeatable); templates `Path` always watched |
+| `--debounce` | `watchfs` | `200ms` | FS event debounce |
+| `--git-repo` | `git` | required | Repository URL or path |
+| `--git-ref` | `git` | (remote default) | Branch / tag / ref |
+| `--git-interval` | `git` | `15s` | Poll interval |
 
 ## Examples
 
 ```shell
-# Listen on port 80
+# Listen on port 80 (release CLI default is watchfs — live reload)
 ./xtemplate --listen :80
 
-# Custom templates directory (watchfs always reloads when it changes)
+# Templates from a custom directory
 ./xtemplate --templates-dir public
 
-# Also reload when ./data changes
-./xtemplate --watch data
+# No auto-reload
+./xtemplate --controller-type os
 
-# Custom extension and keep minify on
-./xtemplate --template-ext ".go.html" --minify
+# watchfs explicitly; also watch ./data
+./xtemplate --controller-type watchfs --watch data
 
-# Pre-compress static files at startup
-./xtemplate --precompress gzip --precompress br
+# git controller
+./xtemplate --controller-type git --git-repo https://example.com/site.git --git-ref main
+
+# Config file
+./xtemplate -f config.json
 ```

@@ -162,7 +162,7 @@ func staticFileHandler(fs afero.Fs, fileinfo *fileInfo) http.HandlerFunc {
 // osFile unwraps an afero.File down to its underlying *os.File, if any, so that
 // http.ServeContent can use sendfile(2): net.sendFile requires a reader that
 // implements syscall.Conn, which *os.File satisfies but afero wrappers do not.
-// Wrappers like *BasePathFile embed the source File, so unwrap recursively.
+// Wrappers like *BasePathFile embed the controller File, so unwrap recursively.
 func osFile(f afero.File) (*os.File, bool) {
 	for {
 		switch v := f.(type) {

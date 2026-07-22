@@ -32,9 +32,11 @@ func newMemFS(t *testing.T, files map[string]string) afero.Fs {
 func buildInstance(t *testing.T, files map[string]string, opts ...xtemplate.Option) *xtemplate.Instance {
 	t.Helper()
 	fs := newMemFS(t, files)
-	cfg := xtemplate.New()
-	allOpts := append([]xtemplate.Option{xtemplate.WithTemplateFS(fs)}, opts...)
-	inst, _, _, err := cfg.Instance(allOpts...)
+	cfg, err := xtemplate.New().Options(append([]xtemplate.Option{xtemplate.WithTemplateFS(fs)}, opts...)...)
+	if err != nil {
+		t.Fatalf("failed to apply options: %v", err)
+	}
+	inst, err := cfg.Instance()
 	if err != nil {
 		t.Fatalf("failed to build instance: %v", err)
 	}

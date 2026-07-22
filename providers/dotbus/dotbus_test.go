@@ -24,11 +24,13 @@ func buildInstance(t *testing.T, files map[string]string, opts ...xtemplate.Opti
 			t.Fatalf("write %q: %v", name, err)
 		}
 	}
-	cfg := xtemplate.New()
-	all := append([]xtemplate.Option{xtemplate.WithTemplateFS(fs)}, opts...)
-	inst, _, _, err := cfg.Instance(all...)
+	cfg, err := xtemplate.New().Options(append([]xtemplate.Option{xtemplate.WithTemplateFS(fs)}, opts...)...)
 	if err != nil {
-		t.Fatalf("Instance: %v", err)
+		t.Fatalf("failed to apply options: %v", err)
+	}
+	inst, err := cfg.Instance()
+	if err != nil {
+		t.Fatalf("failed to build instance: %v", err)
 	}
 	return inst
 }

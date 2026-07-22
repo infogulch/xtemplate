@@ -2,34 +2,63 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"runtime/debug"
+	"strings"
 
 	"github.com/infogulch/xtemplate"
 
 	"github.com/alexflint/go-arg"
 )
 
+// Config is the CLI app configuration: listen address, log level, and embedded
+// xtemplate.Config for template/server options.
 type Config struct {
 	xtemplate.Config
-	Listen      string   `json:"listen" arg:"-l"`
-	LogLevel    int      `json:"log_level" default:"-2"`
+	Listen      string   `json:"listen" arg:"-l,--listen"`
+	LogLevel    int      `json:"log_level" arg:"--loglevel" default:"-2"`
 	Configs     []string `json:"-" arg:"-c,--config,separate"`
 	ConfigFiles []string `json:"-" arg:"-f,--config-file,separate"`
 }
 
-var _ Configurable = (*Config)(nil)
+// controllerTypeFlag is kept separate to avoid polluting app.Config.
+type controllerTypeFlag struct {
+	Type string `arg:"--controller-type" help:"template controller type (see DefaultControllerType when omitted)"`
+}
 
-func (a *Config) appconfig() *Config { return a }
+// UnmarshalJSON fills app + embedded xtemplate fields. Uses a method-less Config
+// alias so listen/log_level are not dropped. listen and log_level overwrite only
+// when present so defaults survive omitted keys. Call CheckLegacyTemplateKeys
+// before this when needed (LoadConfig does).
+func (a *Config) UnmarshalJSON(data []byte) error {
+	type plainXT xtemplate.Config
+	type alias struct {
+		plainXT
+		Listen   *string `json:"listen"`
+		LogLevel *int    `json:"log_level"`
+	}
+	var raw alias
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	a.Config = xtemplate.Config(raw.plainXT)
+	if raw.Listen != nil {
+		a.Listen = *raw.Listen
+	}
+	if raw.LogLevel != nil {
+		a.LogLevel = *raw.LogLevel
+	}
+	return nil
+}
 
-// these allow for build-time overrides with:
+// defaultListenAddress allows a build-time override:
 //
-//	-ldflags="-X 'github.com/infogulch/xtemplate/app.defaultListenAddress=false'"
+//	-ldflags="-X 'github.com/infogulch/xtemplate/app.defaultListenAddress=0.0.0.0:80'"
 //
-// Used by the default docker build to adjust xtemplate's defaults to better
-// suit to that environment.
+// Docker sets listen :80 via -ldflags.
 var defaultListenAddress = "0.0.0.0:8080"
 
 // SetDefaults sets the default values for this Config.
@@ -39,18 +68,30 @@ func (a *Config) SetDefaults() {
 	a.Config.SetDefaults()
 }
 
-// Epilogue is called by arg when the user requests help via the cli. Can be
-// overridden by a Configurable implementation.
+// Epilogue is shown at the end of --help.
 func (Config) Epilogue() string {
-	return fmt.Sprintf(`Examples:
-    Listen on port 80:
-    ❯ %[1]s --listen :80
+	controllers := strings.Join(xtemplate.RegisteredControllerTypes(), ", ")
+	if controllers == "" {
+		controllers = "(none registered)"
+	}
+	def := xtemplate.DefaultControllerType
+	return fmt.Sprintf(`Controller types (this build): %s
+Default --controller-type: %s
+Examples:
+    Listen on port 80 (this build's default controller):
+    ❯ %[3]s --listen :80
 
-    Specify a template directory:
-    ❯ %[1]s --templates-dir public
+    Specify a template directory (os/watchfs/git path):
+    ❯ %[3]s --templates-dir public
+
+    No auto-reload:
+    ❯ %[3]s --controller-type os
+
+    Use git controller:
+    ❯ %[3]s --controller-type git --git-repo https://example.com/site.git
 
     Parse template files matching a custom extension; disable minify:
-    ❯ %[1]s --template-ext ".go.html" --minify=false`, os.Args[0])
+    ❯ %[3]s --template-ext ".go.html" --minify=false`, controllers, def, os.Args[0])
 }
 
 // version is stamped at build time for releases via
@@ -67,11 +108,9 @@ func (Config) Version() string {
 	if !ok {
 		return "development"
 	}
-	// Set for module-based installs, e.g. `go install ...@v0.8.4`.
 	if v := bi.Main.Version; v != "" && v != "(devel)" {
 		return v
 	}
-	// Otherwise derive from the VCS info the toolchain stamps into the binary.
 	var rev, dirty string
 	for _, s := range bi.Settings {
 		switch s.Key {
@@ -98,101 +137,174 @@ func (Config) Version() string {
 //
 //	app.Main(xtemplate.WithFooConfig())
 func Main(overrides ...xtemplate.Option) {
-	config, err := LoadConfig(&Config{}, nil)
+	config, err := LoadConfig(nil)
 	if err != nil {
-		config.appconfig().Logger.Error("failed to load configuration", slog.Any("error", err))
+		// Logger may not be ready; print to stderr.
+		fmt.Fprintf(os.Stderr, "failed to load configuration: %v\n", err)
 		os.Exit(1)
 	}
 	Serve(config, overrides...)
 }
 
-// Configurable is satisfied by *Config and by a pointer to any struct that embeds
-// Config and implements New. Implementers may implement SetDefaults and Epilogue
-// at their discretion, since the embedded Config implements them natively.
-type Configurable interface {
-	appconfig() *Config
-
-	// SetDefaults can be overridden to provide custom default values
-	// configuration defined by the Configurable
-	SetDefaults()
-
-	// Epilogue can be overridden to provide a custom epilogue message for help
-	// output. Consider combining your custom epilogue with the embedded Config's
-	// Epilogue.
-	Epilogue() string
-}
-
-// LoadConfig loads the app configuration, merging sources in priority order:
-//
-//	CLI flags > JSON cli > JSON file > defaults
-//
-// This function will load configuration into any struct implementing the
-// Configurable interface. To get the merged configuration, call this function
-// with a pointer to the config struct. Pass nil `args` to use the default os.Args.
-//
-// Note: to give CLI args precedence over JSON sources, CLI args are parsed twice:
-// first to discover which config files to load, then again at the end to override any
-// values set by json sources.
-func LoadConfig[T Configurable](config T, args []string) (T, error) {
-	config.appconfig().SetDefaults()
-	config.SetDefaults()
+// LoadConfig merges configuration: CLI flags > inline JSON > files > defaults.
+// Pipeline: defaults → pass0 bootstrap → merge JSON → materialize controller
+// (CLI type > JSON > default) → parse CLI (help/version exit via go-arg) →
+// finalize. Pass nil for os.Args[1:].
+func LoadConfig(args []string) (*Config, error) {
 	if args == nil {
 		args = os.Args[1:]
 	}
 
-	// parse CLI args to discover config files/values to load
-	{
-		p, err := arg.NewParser(arg.Config{}, config)
-		if err != nil {
-			return config, err
-		}
-		// call MustParse to handle arg parse errors and version/help flags
-		p.MustParse(args)
+	config := &Config{}
+	config.SetDefaults()
+
+	p0, err := scanPass0(args)
+	if err != nil {
+		return config, err
 	}
 
-	// parse json file/cli config
-	appconfig := config.appconfig()
-	for _, name := range appconfig.ConfigFiles {
-		data, err := os.ReadFile(name)
-		if err != nil {
-			return config, fmt.Errorf("failed to read config file %q: %w", name, err)
+	if err := mergeJSON(config, p0.configFiles, p0.configs); err != nil {
+		return config, err
+	}
+
+	// Empty controllerType means no CLI override (JSON / default win).
+	effectiveType, err := config.MaterializeController(p0.controllerType)
+	if err != nil {
+		return config, err
+	}
+
+	if err := parseCLI(config, config.Controller, args); err != nil {
+		return config, err
+	}
+
+	finalize(config, effectiveType)
+	return config, nil
+}
+
+// pass0 holds argv scan results before full go-arg parsing.
+// Hand-scanned because go-arg needs the concrete controller type as a dest for
+// type-specific flags, but that type depends on --controller-type and JSON
+// (chicken-and-egg). See docs/reference/cli.md.
+type pass0 struct {
+	controllerType string
+	configFiles    []string
+	configs        []string
+}
+
+// scanPass0 scans argv for --controller-type, -f/--config-file, and -c/--config
+// without full go-arg on controller structs. Help/version are left to go-arg.
+func scanPass0(args []string) (pass0, error) {
+	var p pass0
+	types, err := flagValues(args, "--controller-type")
+	if err != nil {
+		return p, err
+	}
+	if n := len(types); n > 0 {
+		p.controllerType = types[n-1] // last wins
+	}
+	if p.configFiles, err = flagValues(args, "-f", "--config-file"); err != nil {
+		return p, err
+	}
+	if p.configs, err = flagValues(args, "-c", "--config"); err != nil {
+		return p, err
+	}
+	return p, nil
+}
+
+// flagValues collects every occurrence of the named flags from args: separate
+// form (name value) or, for long names, inline form (name=value). Left-to-right.
+func flagValues(args []string, names ...string) ([]string, error) {
+	var out []string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		for _, name := range names {
+			if a == name {
+				if i+1 >= len(args) {
+					return nil, fmt.Errorf("%s requires a value", name)
+				}
+				i++
+				out = append(out, args[i])
+				break
+			}
+			if strings.HasPrefix(name, "--") && strings.HasPrefix(a, name+"=") {
+				out = append(out, strings.TrimPrefix(a, name+"="))
+				break
+			}
+		}
+	}
+	return out, nil
+}
+
+// mergeJSON applies config files then inline fragments in order. Later sources win.
+func mergeJSON(config *Config, configFiles, configs []string) error {
+	apply := func(data []byte, origin string) error {
+		if err := xtemplate.CheckLegacyTemplateKeys(data); err != nil {
+			return fmt.Errorf("%s: %w", origin, err)
 		}
 		if err := json.Unmarshal(data, config); err != nil {
-			return config, fmt.Errorf("failed to decode config file %q: %w", name, err)
+			return fmt.Errorf("%s: %w", origin, err)
 		}
+		return nil
 	}
-	for _, conf := range appconfig.Configs {
-		if err := json.Unmarshal([]byte(conf), config); err != nil {
-			return config, fmt.Errorf("failed to decode --config value: %w", err)
-		}
-	}
-
-	// parse CLI args again to preserve the defined config precedence
-	{
-		p, err := arg.NewParser(arg.Config{}, config)
+	for _, name := range configFiles {
+		data, err := os.ReadFile(name)
 		if err != nil {
-			return config, err
+			return fmt.Errorf("failed to read config file %q: %w", name, err)
 		}
-		if err := p.Parse(args); err != nil {
-			return config, fmt.Errorf("failed to parse cli flags: %w", err)
+		if err := apply(data, fmt.Sprintf("config file %q", name)); err != nil {
+			return err
 		}
 	}
+	for _, conf := range configs {
+		if err := apply([]byte(conf), "--config"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-	// Rebuild the logger after flags/JSON so --loglevel / log_level apply.
-	// SetDefaults may have created a Logger at the zero LogLevel.
-	appconfig.Logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(appconfig.LogLevel)}))
+// parseCLI binds argv into app config and the already-materialized controller.
+// typeFlag absorbs --controller-type so go-arg does not reject it.
+// --help / --version print and exit like arg.MustParse; other errors are returned.
+func parseCLI(config *Config, controller xtemplate.ServerController, args []string) error {
+	var typeFlag controllerTypeFlag
+	parser, err := arg.NewParser(arg.Config{}, config, controller, &typeFlag)
+	if err != nil {
+		return err
+	}
+	switch err := parser.Parse(args); {
+	case errors.Is(err, arg.ErrHelp):
+		parser.WriteHelp(os.Stdout)
+		os.Exit(0)
+		return nil
+	case errors.Is(err, arg.ErrVersion):
+		_, _ = fmt.Fprintln(os.Stdout, config.Version())
+		os.Exit(0)
+		return nil
+	case err != nil:
+		return fmt.Errorf("failed to parse cli flags: %w", err)
+	}
+	return nil
+}
 
-	appconfig.Logger.Debug("loaded configuration", slog.Any("config", config))
-	return config, nil
+// finalize rebuilds the logger after flags/JSON so --loglevel applies.
+func finalize(config *Config, effectiveType string) {
+	config.Logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.Level(config.LogLevel)}))
+	config.Logger.Debug("loaded configuration", slog.String("controller_type", effectiveType), slog.Any("listen", config.Listen))
 }
 
 // Serve sets up the xtemplate server from config and serves it.
 // Serve blocks until the server stops.
-func Serve(config *Config, overrides ...xtemplate.Option) {
-	server, err := config.Server(overrides...)
+func Serve(config *Config, options ...xtemplate.Option) {
+	_, err := config.Options(options...)
+	if err != nil {
+		config.Logger.Error("failed to apply overrides", slog.Any("error", err))
+		os.Exit(2)
+	}
+	server, err := config.Server()
 	if err != nil {
 		config.Logger.Error("failed to start server", slog.Any("error", err))
-		os.Exit(2)
+		os.Exit(3)
 	}
 	config.Logger.Info("server stopped", slog.Any("exit", server.Serve(config.Listen)))
 }

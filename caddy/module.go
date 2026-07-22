@@ -2,14 +2,13 @@ package xtemplate_caddy
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
-	"time"
 
 	"log/slog"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
-	"github.com/infogulch/watch"
 	"github.com/infogulch/xtemplate"
 	"go.uber.org/zap/exp/zapslog"
 )
@@ -29,12 +28,30 @@ func (XTemplateModule) CaddyModule() caddy.ModuleInfo {
 type XTemplateModule struct {
 	xtemplate.Config
 
-	WatchTemplatePath bool `json:"watch_template_path"`
-
 	FuncsModules []string `json:"funcs_modules,omitempty"`
 
 	handler *xtemplate.Server
 	cancel  func()
+}
+
+// UnmarshalJSON applies the ban-list then unmarshals. Uses a method-less Config
+// alias so embedded UnmarshalJSON does not swallow module-only fields (funcs_modules).
+func (m *XTemplateModule) UnmarshalJSON(data []byte) error {
+	if err := xtemplate.CheckLegacyTemplateKeys(data); err != nil {
+		return err
+	}
+	type plainConfig xtemplate.Config
+	type moduleAlias struct {
+		plainConfig
+		FuncsModules []string `json:"funcs_modules,omitempty"`
+	}
+	var a moduleAlias
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	m.Config = xtemplate.Config(a.plainConfig)
+	m.FuncsModules = a.FuncsModules
+	return nil
 }
 
 // Validate ensures t has a valid configuration. Implements caddy.Validator.
@@ -43,17 +60,14 @@ func (m *XTemplateModule) Validate() error {
 	return err
 }
 
-// Provision provisions t. Implements caddy.Provisioner.
+// Provision implements caddy.Provisioner.
 func (m *XTemplateModule) Provision(ctx caddy.Context) error {
-	// Wrap zap logger into a slog logger for xtemplate
 	log := slog.New(zapslog.NewHandler(ctx.Logger().Core())).WithGroup("xtemplate-caddy")
 
 	m.Logger = log
 	m.SetDefaults()
 	m.Ctx, m.cancel = context.WithCancel(ctx.Context)
 
-	// Resolve any `xtemplate.funcs.*` modules into template FuncMaps and pass
-	// them to the server as options so they're available to all templates.
 	fps, err := resolveFuncsModules(m.FuncsModules)
 	if err != nil {
 		m.cancel()
@@ -69,32 +83,17 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 		opts = append(opts, xtemplate.WithFuncMaps(funcMaps...))
 	}
 
-	server, err := m.Server(opts...)
+	_, err = m.Options(opts...)
+	if err != nil {
+		m.cancel()
+		return err
+	}
+	server, err := m.Server()
 	if err != nil {
 		m.cancel()
 		return err
 	}
 	m.handler = server
-
-	if m.WatchTemplatePath {
-		halt, err := watch.Watch([]string{m.TemplatesDir}, 200*time.Millisecond, log.WithGroup("fswatch"), func() bool {
-			err := server.Reload()
-			if err != nil {
-				log.Error("failed to reload xtemplate server", slog.Any("reload_error", err))
-			}
-			return true
-		})
-		if err != nil {
-			return err
-		}
-		cancel := m.cancel
-		m.cancel = func() {
-			close(halt)
-			if cancel != nil {
-				cancel()
-			}
-		}
-	}
 	return nil
 }
 
@@ -122,4 +121,5 @@ var (
 	_ caddy.Provisioner           = (*XTemplateModule)(nil)
 	_ caddyhttp.MiddlewareHandler = (*XTemplateModule)(nil)
 	_ caddy.CleanerUpper          = (*XTemplateModule)(nil)
+	_ json.Unmarshaler            = (*XTemplateModule)(nil)
 )

@@ -13,22 +13,20 @@ func init() {
 }
 
 // parseCaddyfile sets up the handler from Caddyfile tokens.
+// Omitted controller uses DefaultControllerType. Banned legacy keys hard-reject
+// until 1.0 (REMOVE BEFORE 1.0).
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
 	t := &XTemplateModule{
-		// Inherit xtemplate defaults
 		Config: *xtemplate.New(),
-
-		// Set defaults on custom fields
-		WatchTemplatePath: true,
 	}
 
 	for h.Next() {
 		for h.NextBlock(0) {
 			switch h.Val() {
-			case "templates_dir", "templates_path":
-				if !h.AllArgs(&t.TemplatesDir) {
-					return nil, h.ArgErr()
-				}
+			case "templates_dir", "templates_path": // REMOVE BEFORE 1.0
+				return nil, h.Errf("templates_dir is no longer supported; use: controller os { path <dir> } (or controller watchfs { path <dir> … } if they need reload)")
+			case "watch_template_path": // REMOVE BEFORE 1.0
+				return nil, h.Errf("watch_template_path is no longer supported; use controller os or watchfs to control reload behavior")
 			case "template_extension":
 				if !h.AllArgs(&t.TemplateExtension) {
 					return nil, h.ArgErr()
@@ -56,18 +54,16 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 						return nil, h.Errf("unknown precompress encoding %q; want gzip, zstd, or br", enc)
 					}
 				}
-			case "watch_template_path":
-				b, err := parseBoolArg(h)
-				if err != nil {
-					return nil, err
-				}
-				t.WatchTemplatePath = b
 			case "crossorigin":
 				if err := parseCrossOrigin(h, &t.CrossOrigin); err != nil {
 					return nil, err
 				}
 			case "provider":
 				if err := parseProviderBlock(h, t); err != nil {
+					return nil, err
+				}
+			case "controller":
+				if err := parseControllerBlock(h, t); err != nil {
 					return nil, err
 				}
 			default:

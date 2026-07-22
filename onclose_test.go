@@ -14,18 +14,13 @@ import (
 
 func TestWithOnClose_RunsOnInstanceClose(t *testing.T) {
 	var calls atomic.Int32
-	fs := newMemFS(t, map[string]string{"index.html": "ok"})
 
-	inst, _, _, err := New().Instance(
-		WithTemplateFS(fs),
+	inst := buildInstance(t, map[string]string{"index.html": "ok"},
 		WithOnClose(func() error {
 			calls.Add(1)
 			return nil
 		}),
 	)
-	if err != nil {
-		t.Fatalf("Instance: %v", err)
-	}
 	if calls.Load() != 0 {
 		t.Fatalf("OnClose ran before Close: %d", calls.Load())
 	}
@@ -53,16 +48,11 @@ func TestWithOnClose_ReverseOrderAfterProviders(t *testing.T) {
 		mu.Unlock()
 	}
 
-	fs := newMemFS(t, map[string]string{"index.html": "ok"})
-	inst, _, _, err := New().Instance(
-		WithTemplateFS(fs),
+	inst := buildInstance(t, map[string]string{"index.html": "ok"},
 		WithProvider(&closeOrderProvider{name: "P", onClose: func() { add("provider") }}),
 		WithOnClose(func() error { add("onClose1"); return nil }),
 		WithOnClose(func() error { add("onClose2"); return nil }),
 	)
-	if err != nil {
-		t.Fatalf("Instance: %v", err)
-	}
 	if err := inst.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -83,19 +73,14 @@ func TestWithOnClose_ReverseOrderAfterProviders(t *testing.T) {
 
 func TestWithOnClose_BaseConfigRunsPerRetiredInstance(t *testing.T) {
 	var calls atomic.Int32
-	fs1 := newMemFS(t, map[string]string{"index.html": "v1"})
 	fs2 := newMemFS(t, map[string]string{"index.html": "v2"})
 
-	srv, err := New().Server(
-		WithTemplateFS(fs1),
+	srv := buildServer(t, map[string]string{"index.html": "v1"},
 		WithOnClose(func() error {
 			calls.Add(1)
 			return nil
 		}),
 	)
-	if err != nil {
-		t.Fatalf("Server: %v", err)
-	}
 	if calls.Load() != 0 {
 		t.Fatalf("OnClose ran before any retire: %d", calls.Load())
 	}
@@ -120,18 +105,23 @@ func TestWithOnClose_ResliceDoesNotTrampleBase(t *testing.T) {
 	baseFn := func() error { baseCalls.Add(1); return nil }
 	extraFn := func() error { extraCalls.Add(1); return nil }
 
-	cfg := New()
-	if _, err := cfg.Options(
+	cfg, err := New().Options(
 		WithTemplateFS(newMemFS(t, map[string]string{"index.html": "ok"})),
 		WithOnClose(baseFn),
-	); err != nil {
+	)
+	if err != nil {
 		t.Fatalf("Options: %v", err)
 	}
 	if len(cfg.onClose) != 1 {
 		t.Fatalf("base onClose len = %d, want 1", len(cfg.onClose))
 	}
 
-	inst1, _, _, err := cfg.Instance(WithOnClose(extraFn))
+	// Extra options are applied to a copy so the base config is untouched.
+	c1 := *cfg
+	if _, err := c1.Options(WithOnClose(extraFn)); err != nil {
+		t.Fatalf("Options extra1: %v", err)
+	}
+	inst1, err := c1.Instance()
 	if err != nil {
 		t.Fatalf("Instance1: %v", err)
 	}
@@ -139,7 +129,11 @@ func TestWithOnClose_ResliceDoesNotTrampleBase(t *testing.T) {
 		t.Fatalf("base onClose len after Instance1 = %d, want 1 (reslice isolation)", len(cfg.onClose))
 	}
 
-	inst2, _, _, err := cfg.Instance(WithOnClose(extraFn))
+	c2 := *cfg
+	if _, err := c2.Options(WithOnClose(extraFn)); err != nil {
+		t.Fatalf("Options extra2: %v", err)
+	}
+	inst2, err := c2.Instance()
 	if err != nil {
 		t.Fatalf("Instance2: %v", err)
 	}
@@ -162,13 +156,13 @@ func TestWithOnClose_ResliceCapGreaterThanLen(t *testing.T) {
 	// backing array with spare capacity. Grow base to cap>len, then build an
 	// instance that appends more OnClose — base must stay untrampled.
 	var baseN, instN, lateN atomic.Int32
-	cfg := New()
-	if _, err := cfg.Options(
+	cfg, err := New().Options(
 		WithTemplateFS(newMemFS(t, map[string]string{"index.html": "ok"})),
 		WithOnClose(func() error { baseN.Add(1); return nil }),
 		WithOnClose(func() error { baseN.Add(1); return nil }),
 		WithOnClose(func() error { baseN.Add(1); return nil }),
-	); err != nil {
+	)
+	if err != nil {
 		t.Fatalf("Options: %v", err)
 	}
 	if len(cfg.onClose) != 3 {
@@ -185,7 +179,11 @@ func TestWithOnClose_ResliceCapGreaterThanLen(t *testing.T) {
 		t.Fatalf("need cap>len for trampling regression; cap=%d len=%d", cap(cfg.onClose), len(cfg.onClose))
 	}
 
-	inst, _, _, err := cfg.Instance(WithOnClose(func() error { instN.Add(1); return nil }))
+	c := *cfg
+	if _, err := c.Options(WithOnClose(func() error { instN.Add(1); return nil })); err != nil {
+		t.Fatalf("Options: %v", err)
+	}
+	inst, err := c.Instance()
 	if err != nil {
 		t.Fatalf("Instance: %v", err)
 	}
@@ -215,7 +213,7 @@ func TestWithOnClose_ResliceCapGreaterThanLen(t *testing.T) {
 	// New instance from base should get the 4 base handlers only.
 	baseN.Store(0)
 	lateN.Store(0)
-	inst2, _, _, err := cfg.Instance()
+	inst2, err := cfg.Instance()
 	if err != nil {
 		t.Fatalf("Instance2: %v", err)
 	}
@@ -233,10 +231,8 @@ func TestWithOnClose_ResliceCapGreaterThanLen(t *testing.T) {
 
 func TestWithOnClose_BuildFailureRunsCallbacks(t *testing.T) {
 	var calls atomic.Int32
-	// Missing templates FS path that doesn't exist as dir with no default walk
-	// — use invalid provider-free build: empty TemplatesDir on Os that fails scan
-	// is hard. Force Options success then fail: unsupported precompress encoding.
-	_, _, _, err := New().Instance(
+	// Force Options success then fail: unsupported precompress encoding.
+	cfg, err := New().Options(
 		WithTemplateFS(newMemFS(t, map[string]string{"index.html": "ok"})),
 		WithOnClose(func() error {
 			calls.Add(1)
@@ -247,6 +243,10 @@ func TestWithOnClose_BuildFailureRunsCallbacks(t *testing.T) {
 			return nil
 		},
 	)
+	if err != nil {
+		t.Fatalf("Options: %v", err)
+	}
+	_, err = cfg.Instance()
 	if err == nil {
 		t.Fatal("Instance: want error for bad precompress")
 	}
@@ -255,11 +255,11 @@ func TestWithOnClose_BuildFailureRunsCallbacks(t *testing.T) {
 	}
 }
 
-func TestWithOnClose_OptionsFailureRunsCallbacks(t *testing.T) {
-	// WithOnClose applied before a later Option error must still run on the
-	// fail path (closeOnce points at the same Instance config field Options mutates).
+func TestWithOnClose_OptionsFailureDoesNotRunCallbacks(t *testing.T) {
+	// Options is applied before Instance; a mid-Options failure leaves OnClose
+	// registered on the config but does not auto-run them (caller's Config).
 	var calls atomic.Int32
-	_, _, _, err := New().Instance(
+	_, err := New().Options(
 		WithOnClose(func() error {
 			calls.Add(1)
 			return nil
@@ -267,18 +267,18 @@ func TestWithOnClose_OptionsFailureRunsCallbacks(t *testing.T) {
 		func(*Config) error { return errors.New("option-fail") },
 	)
 	if err == nil {
-		t.Fatal("Instance: want option-fail")
+		t.Fatal("Options: want option-fail")
 	}
 	if !strings.Contains(err.Error(), "option-fail") {
 		t.Fatalf("err = %v, want option-fail", err)
 	}
-	if calls.Load() != 1 {
-		t.Fatalf("OnClose on Options failure calls = %d, want 1", calls.Load())
+	if calls.Load() != 0 {
+		t.Fatalf("OnClose on Options failure calls = %d, want 0", calls.Load())
 	}
 }
 
 func TestWithOnClose_BuildFailureJoinsCloseErrors(t *testing.T) {
-	_, _, _, err := New().Instance(
+	cfg, err := New().Options(
 		WithTemplateFS(newMemFS(t, map[string]string{"index.html": "ok"})),
 		WithOnClose(func() error { return errors.New("close-boom") }),
 		func(c *Config) error {
@@ -286,6 +286,10 @@ func TestWithOnClose_BuildFailureJoinsCloseErrors(t *testing.T) {
 			return nil
 		},
 	)
+	if err != nil {
+		t.Fatalf("Options: %v", err)
+	}
+	_, err = cfg.Instance()
 	if err == nil {
 		t.Fatal("Instance: want error")
 	}
@@ -306,7 +310,7 @@ func TestWithOnClose_InitFailureClosesOpenedProviders(t *testing.T) {
 		mu.Unlock()
 	}
 
-	_, _, _, err := New().Instance(
+	cfg, err := New().Options(
 		WithTemplateFS(newMemFS(t, map[string]string{"index.html": "ok"})),
 		WithProvider(&initCloseProvider{
 			name:    "OK",
@@ -318,6 +322,10 @@ func TestWithOnClose_InitFailureClosesOpenedProviders(t *testing.T) {
 		}),
 		WithOnClose(func() error { add("onClose"); return nil }),
 	)
+	if err != nil {
+		t.Fatalf("Options: %v", err)
+	}
+	_, err = cfg.Instance()
 	if err == nil {
 		t.Fatal("Instance: want init failure")
 	}
@@ -326,6 +334,8 @@ func TestWithOnClose_InitFailureClosesOpenedProviders(t *testing.T) {
 	}
 	// Provider that successfully Init'd must Close; user OnClose must run.
 	// Fail provider never Init'd successfully so it is not on the close list.
+	// User OnClose is registered first; providers are appended after Init, so
+	// reverse-order close runs providers before user OnClose.
 	want := []string{"provider-ok", "onClose"}
 	mu.Lock()
 	got := append([]string(nil), seq...)
@@ -341,15 +351,10 @@ func TestWithOnClose_InitFailureClosesOpenedProviders(t *testing.T) {
 }
 
 func TestWithOnClose_ErrorJoined(t *testing.T) {
-	fs := newMemFS(t, map[string]string{"index.html": "ok"})
-	inst, _, _, err := New().Instance(
-		WithTemplateFS(fs),
+	inst := buildInstance(t, map[string]string{"index.html": "ok"},
 		WithOnClose(func() error { return errors.New("boom") }),
 	)
-	if err != nil {
-		t.Fatalf("Instance: %v", err)
-	}
-	err = inst.Close()
+	err := inst.Close()
 	if err == nil || err.Error() == "" {
 		t.Fatalf("Close error = %v, want boom", err)
 	}
@@ -366,16 +371,12 @@ func TestClose_SecondCloseReturnsMemoizedError(t *testing.T) {
 	// OnceValue memoizes the first Close error; second Close must not re-run
 	// callbacks but does return the same error.
 	var calls atomic.Int32
-	inst, _, _, err := New().Instance(
-		WithTemplateFS(newMemFS(t, map[string]string{"index.html": "ok"})),
+	inst := buildInstance(t, map[string]string{"index.html": "ok"},
 		WithOnClose(func() error {
 			calls.Add(1)
 			return errors.New("boom")
 		}),
 	)
-	if err != nil {
-		t.Fatalf("Instance: %v", err)
-	}
 	err1 := inst.Close()
 	if err1 == nil || !strings.Contains(err1.Error(), "boom") {
 		t.Fatalf("first Close: %v, want boom", err1)
@@ -431,16 +432,9 @@ func TestClose_WarnsWhenInflight(t *testing.T) {
 	var buf bytes.Buffer
 	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))
 
-	inst, _, _, err := New().Instance(
-		WithTemplateFS(newMemFS(t, map[string]string{"index.html": "ok"})),
-		func(c *Config) error {
-			c.Logger = log
-			return nil
-		},
+	inst := buildInstance(t, map[string]string{"index.html": "ok"},
+		WithLogger(log),
 	)
-	if err != nil {
-		t.Fatalf("Instance: %v", err)
-	}
 
 	// Simulate a request still in ServeHTTP when Close runs (grace expired).
 	inst.inflight.Add(1)
@@ -470,16 +464,9 @@ func TestClose_NoWarnWhenIdle(t *testing.T) {
 	var buf bytes.Buffer
 	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))
 
-	inst, _, _, err := New().Instance(
-		WithTemplateFS(newMemFS(t, map[string]string{"index.html": "ok"})),
-		func(c *Config) error {
-			c.Logger = log
-			return nil
-		},
+	inst := buildInstance(t, map[string]string{"index.html": "ok"},
+		WithLogger(log),
 	)
-	if err != nil {
-		t.Fatalf("Instance: %v", err)
-	}
 	if err := inst.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}

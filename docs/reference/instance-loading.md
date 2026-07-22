@@ -2,9 +2,11 @@
 
 How an instance is built from a template root: walking files, parsing templates, hashing static files, and registering routes. An instance is immutable after load; a reload builds a new instance and swaps it in.
 
+On a **Server**, every Instance is built through `Server.Reload`. When no instance is loaded yet, the Server answers HTTP 503. Standalone **`Config.Instance`** requires a resolved template FS (`WithTemplateFS` / `WithTemplateDir`).
+
 ## Walking the root directory
 
-While an instance is loading, xtemplate walks `Config.TemplatesFS`. If unset, an FS is built from `Config.TemplatesDir` path relative to the process working directory, defaulting to `templates`.
+While an instance is loading, xtemplate walks the private build-root FS. For Server reloads the root is sticky base, then per-call options (`WithTemplateFS` / `WithTemplateDir`). Controllers such as `os` / `watchfs` set sticky in `Init`; `git` supplies FS on each Reload.
 
 - Files matching `Config.TemplateExtension` (default `.html`) are parsed into the instance's template namespace: each becomes a path template (and may define additional define templates).
 - All other files are static files (served as-is), except compressed siblings of static files (`.gz`, `.zst`, `.br`) which become alternate encodings of the identity file.
@@ -17,7 +19,7 @@ Each matching file under the template root is read once, optionally minified, an
 
 ### Minification
 
-When `minify` is true (the default), HTML sources for path templates are minified at load time with [tdewolff/minify](https://github.com/tdewolff/minify) before parse. This is a build-time transform of the template source, not a per-response filter.
+When `minify` is true (the default), HTML sources for path templates are minified at load time with [tdewolff/minify](https://github.com/tdewolff/minify) before parse. This is a build-time transform of the template controller, not a per-response filter.
 
 ### Initialization templates
 

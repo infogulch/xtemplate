@@ -231,7 +231,7 @@ func (d *DotSMTP) Send(to any, subject, body string, extra ...map[string]any) (s
 	return d.sendMap(msg)
 }
 
-// sendMap is the single source of truth for assembling and delivering a
+// sendMap is the single controller of truth for assembling and delivering a
 // message from the canonical schema. A future SendMap entry point will call
 // this directly.
 //

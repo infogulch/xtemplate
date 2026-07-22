@@ -22,9 +22,11 @@ func buildInstance(t *testing.T, files map[string]string, opts ...xtemplate.Opti
 			t.Fatalf("failed to write file %q to mem fs: %v", name, err)
 		}
 	}
-	cfg := xtemplate.New()
-	allOpts := append([]xtemplate.Option{xtemplate.WithTemplateFS(fs)}, opts...)
-	inst, _, _, err := cfg.Instance(allOpts...)
+	cfg, err := xtemplate.New().Options(append([]xtemplate.Option{xtemplate.WithTemplateFS(fs)}, opts...)...)
+	if err != nil {
+		t.Fatalf("failed to apply options: %v", err)
+	}
+	inst, err := cfg.Instance()
 	if err != nil {
 		t.Fatalf("failed to build instance: %v", err)
 	}
