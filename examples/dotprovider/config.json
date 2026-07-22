@@ -1,3 +1,6 @@
 {
-    "templates_dir": "templates"
+  "source": {
+    "type": "os",
+    "path": "templates"
+  }
 }

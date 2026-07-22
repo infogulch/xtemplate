@@ -3,6 +3,7 @@ package xtemplate
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -25,6 +26,10 @@ const defaultGrace = 5 * time.Second
 // Instance are given a grace period to finish after the old instance context
 // is cancelled, then providers are closed.
 //
+// When [TemplateSource.Start] returned a nil initial FS, Reload options must
+// include [WithTemplateFS] or [WithTemplateDir]: the sticky base FS is only a
+// 503 placeholder and reload options are not written back onto the base.
+//
 // Call [Server.Shutdown] for a graceful stop or [Server.Stop] for immediate
 // teardown. When using [Server.Serve], cancelling the server context also
 // drains the local [http.Server] (Serve owns that; Server does not store it).
@@ -44,12 +49,17 @@ type Server struct {
 var _ http.Handler = (*Server)(nil)
 
 // Server creates a new Server from an xtemplate.Config.
-func (config Config) Server(cfgs ...Option) (*Server, error) {
-	if _, err := config.SetDefaults().Options(cfgs...); err != nil {
+func (config Config) Server(options ...Option) (*Server, error) {
+	if _, err := config.SetDefaults().Options(options...); err != nil {
 		return nil, err
 	}
 
 	config.Logger = config.Logger.WithGroup("xtemplate")
+
+	if err := config.resolveSourceRaw(); err != nil {
+		return nil, err
+	}
+	config.ensureSource()
 
 	serverCtx, serverCancel := context.WithCancel(config.Ctx)
 
@@ -58,21 +68,44 @@ func (config Config) Server(cfgs ...Option) (*Server, error) {
 		serverCtx:    serverCtx,
 		serverCancel: serverCancel,
 	}
-	err := server.Reload()
 
+	initial, reloads, err := config.Source.Start(serverCtx, config.Logger.WithGroup("source"))
 	if err != nil {
 		serverCancel()
 		return nil, err
 	}
+	if initial != nil {
+		server.config.templatesFS = initial
+	} else if reloads != nil {
+		server.config.templatesFS = notReadyTemplatesFS
+	} else {
+		serverCancel()
+		return nil, fmt.Errorf("xtemplate: source failed to provide initial fs or reload channel")
+	}
 
-	if config.Reload != nil {
+	// First instance Ctx is a child of serverCtx so Stop/Shutdown cancel SSE
+	// without requiring the parent Config.Ctx to be cancelled.
+	var instanceCancel context.CancelFunc
+	server.config.Ctx, instanceCancel = context.WithCancel(serverCtx)
+	server.cancel = instanceCancel
+
+	new_, _, _, err := server.config.buildInstance()
+	if err != nil {
+		instanceCancel()
+		serverCancel()
+		return nil, err
+	}
+	server.instance.Store(new_)
+
+	// Do not start the reload consumer until the first instance build succeeds.
+	if reloads != nil {
 		go func() {
-			log := config.Logger.WithGroup("reload")
+			log := server.config.Logger.WithGroup("reload")
 			for {
 				select {
 				case <-server.serverCtx.Done():
 					return
-				case opts, ok := <-config.Reload:
+				case opts, ok := <-reloads:
 					if !ok {
 						return
 					}
@@ -85,6 +118,91 @@ func (config Config) Server(cfgs ...Option) (*Server, error) {
 	}
 
 	return server, nil
+}
+
+// Reload creates a new Instance from the config and swaps it with the
+// current instance if successful, otherwise returns the error. The previous
+// instance context is cancelled, in-flight requests are waited on up to
+// [defaultGrace], then providers are closed.
+//
+// WithSource is rejected. WithTemplateFS/Dir update the copy's private FS
+// for this build only (not sticky on the Server base). Empty opts rebuild
+// from the base templatesFS (from Source.Start).
+//
+// If Source.Start returned a nil initial FS, opts must include WithTemplateFS
+// or WithTemplateDir so a failed or FS-less reload cannot replace live content
+// with the 503 placeholder.
+func (x *Server) Reload(options ...Option) (err error) {
+	start := time.Now()
+
+	x.mutex.Lock()
+
+	if ctxErr := x.serverCtx.Err(); ctxErr != nil {
+		x.mutex.Unlock()
+		// Options were never applied — free per-build resources (e.g. git clone dirs).
+		_ = invokeOnCloseFromOptions(options)
+		err := errors.New("server stopped")
+		if notify := reloadResultFromOptions(options); notify != nil {
+			notify(err)
+		}
+		return err
+	}
+
+	log := x.config.Logger.WithGroup("reload")
+	old := x.instance.Load()
+	if old != nil {
+		log = log.With(slog.Int64("old_id", old.id))
+	}
+
+	// Capture notify before build: buildInstance returns nil Instance on error.
+	notify := reloadResultFromOptions(options)
+
+	var newcancel context.CancelFunc
+	var new_ *Instance
+	{
+		config := x.config
+		config.Ctx, newcancel = context.WithCancel(x.serverCtx)
+		new_, _, _, err = config.buildInstance(options...)
+		if err != nil {
+			newcancel()
+			x.mutex.Unlock()
+			// buildInstance already ran OnClose via closeOnce when Options were applied.
+			if notify != nil {
+				notify(err)
+			}
+			log.Info("failed to load", slog.Any("error", err), slog.Duration("rebuild_time", time.Since(start)))
+			return err
+		}
+		if new_.config.templatesFS == notReadyTemplatesFS {
+			newcancel()
+			closeErr := new_.Close()
+			x.mutex.Unlock()
+			err = errors.New("xtemplate: reload must include WithTemplateFS or WithTemplateDir when Source.Start returned nil initial FS")
+			if notify != nil {
+				notify(err)
+			}
+			log.Info("failed to load", slog.Any("error", err), slog.Duration("rebuild_time", time.Since(start)), slog.Any("close_error", closeErr))
+			return err
+		}
+	}
+
+	old = x.instance.Swap(new_)
+	oldCancel := x.cancel
+	x.cancel = newcancel
+	x.mutex.Unlock()
+
+	if notify != nil {
+		notify(nil)
+	}
+
+	if old != nil {
+		graceCtx, graceCancel := context.WithTimeout(context.Background(), defaultGrace)
+		x.retire(old, oldCancel, graceCtx)
+		graceCancel()
+	}
+
+	log.Info("rebuild succeeded", slog.Int64("new_id", new_.id), slog.Duration("rebuild_time", time.Since(start)))
+	return nil
 }
 
 // Instance returns the current [Instance]. After calling Reload, previous calls
@@ -113,7 +231,6 @@ func (x *Server) Serve(listen_addr string) error {
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       120 * time.Second,
-		// ponytail: no WriteTimeout; it would cap streaming/SSE responses. Add a per-handler deadline if slow writers become a problem.
 	}
 
 	go func() {
@@ -141,56 +258,6 @@ func (x *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	instance.ServeHTTP(w, r)
-}
-
-// Reload creates a new Instance from the config and swaps it with the
-// current instance if successful, otherwise returns the error. The previous
-// instance context is cancelled, in-flight requests are waited on up to
-// [defaultGrace], then providers are closed.
-func (x *Server) Reload(cfgs ...Option) error {
-	start := time.Now()
-
-	x.mutex.Lock()
-
-	if err := x.serverCtx.Err(); err != nil {
-		x.mutex.Unlock()
-		return errors.New("server stopped")
-	}
-
-	log := x.config.Logger.WithGroup("reload")
-	old := x.instance.Load()
-	if old != nil {
-		log = log.With(slog.Int64("old_id", old.id))
-	}
-
-	var newcancel context.CancelFunc
-	var new_ *Instance
-	{
-		var err error
-		config := x.config
-		config.Ctx, newcancel = context.WithCancel(x.serverCtx)
-		new_, _, _, err = config.Instance(cfgs...)
-		if err != nil {
-			newcancel()
-			x.mutex.Unlock()
-			log.Info("failed to load", slog.Any("error", err), slog.Duration("rebuild_time", time.Since(start)))
-			return err
-		}
-	}
-
-	old = x.instance.Swap(new_)
-	oldCancel := x.cancel
-	x.cancel = newcancel
-	x.mutex.Unlock()
-
-	if old != nil {
-		graceCtx, graceCancel := context.WithTimeout(context.Background(), defaultGrace)
-		x.retire(old, oldCancel, graceCtx)
-		graceCancel()
-	}
-
-	log.Info("rebuild succeeded", slog.Int64("new_id", new_.id), slog.Duration("rebuild_time", time.Since(start)))
-	return nil
 }
 
 // Shutdown stops the server gracefully.

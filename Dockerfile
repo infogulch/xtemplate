@@ -16,11 +16,12 @@ ARG LDFLAGS
 COPY app ./app/
 COPY cmd ./cmd/
 COPY providers ./providers/
+COPY sources ./sources/
 COPY *.go ./
 RUN --mount=type=cache,target=/root/.cache/go-build \
     GOOS=linux \
     GOARCH=amd64 \
-    go build -ldflags="${LDFLAGS} -X 'github.com/infogulch/xtemplate/app.defaultListenAddress=0.0.0.0:80'" -o /build/xtemplate ./cmd
+    go build -ldflags="${LDFLAGS} -X 'github.com/infogulch/xtemplate/app.defaultListenAddress=0.0.0.0:80' -X 'github.com/infogulch/xtemplate/app.defaultSourceType=os'" -o /build/xtemplate ./cmd/xtemplate
 
 ###
 

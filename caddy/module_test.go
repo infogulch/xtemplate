@@ -3,6 +3,12 @@ package xtemplate_caddy
 import (
 	"encoding/json"
 	"html/template"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/caddyserver/caddy/v2"
@@ -18,15 +24,12 @@ func TestModuleRegistered(t *testing.T) {
 	}
 }
 
-// TestModuleUnmarshalJSON guards that the full xtemplate.Config surface remains
-// reachable through the embedded Config when configuring the module via Caddy's
-// JSON config. If a Config field's json tag changes or embedding breaks, this
-// test catches it.
+// TestModuleUnmarshalJSON guards that the Config surface remains reachable
+// through the embedded Config when configuring via Caddy JSON.
 func TestModuleUnmarshalJSON(t *testing.T) {
 	const cfg = `{
 		"minify": true,
-		"templates_dir": "templates",
-		"watch_template_path": true,
+		"source": {"type": "os", "path": "templates"},
 		"funcs_modules": ["testfuncs"],
 		"crossorigin": {
 			"disabled": false,
@@ -48,11 +51,8 @@ func TestModuleUnmarshalJSON(t *testing.T) {
 	if m.Minify == nil || !*m.Minify {
 		t.Errorf("Minify = %v, want non-nil true", m.Minify)
 	}
-	if m.TemplatesDir != "templates" {
-		t.Errorf("TemplatesDir = %q, want %q", m.TemplatesDir, "templates")
-	}
-	if !m.WatchTemplatePath {
-		t.Error("WatchTemplatePath = false, want true")
+	if len(m.SourceRaw) == 0 {
+		t.Error("SourceRaw empty, want source object")
 	}
 	if got := m.FuncsModules; !equalStrings(got, []string{"testfuncs"}) {
 		t.Errorf("FuncsModules = %v, want [testfuncs]", got)
@@ -65,6 +65,59 @@ func TestModuleUnmarshalJSON(t *testing.T) {
 	}
 	if len(m.ProvidersRaw) != 3 {
 		t.Errorf("ProvidersRaw len = %d, want 3", len(m.ProvidersRaw))
+	}
+}
+
+func TestModuleUnmarshalJSON_BannedKeys(t *testing.T) {
+	for _, key := range []string{
+		"templates_dir", "templates_path", "watch_dirs", "watch_template_path",
+		"git_repo", "git_ref", "git_interval",
+	} {
+		raw := `{"` + key + `": true}`
+		var m XTemplateModule
+		err := json.Unmarshal([]byte(raw), &m)
+		if err == nil {
+			t.Errorf("key %s: want ban-list error", key)
+			continue
+		}
+		if !strings.Contains(err.Error(), "no longer supported") {
+			t.Errorf("key %s: error %q", key, err)
+		}
+	}
+}
+
+// TestServer_SourceRaw_ViaModuleConfig ensures Caddy-style SourceRaw is honored
+// when Config.Server runs (not only when app.LoadConfig materializes).
+func TestServer_SourceRaw_ViaModuleConfig(t *testing.T) {
+	dir := t.TempDir()
+	marker := "CADDY-SOURCE-RAW"
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte(marker), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(map[string]string{"type": "os", "path": dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := false
+	m := &XTemplateModule{}
+	m.SourceRaw = raw
+	m.Minify = &f
+	m.SetDefaults()
+	m.Logger = slog.New(slog.DiscardHandler)
+
+	srv, err := m.Server()
+	if err != nil {
+		t.Fatalf("Server: %v", err)
+	}
+	defer srv.Stop()
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%q", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), marker) {
+		t.Errorf("body = %q, want %s", w.Body.String(), marker)
 	}
 }
 

@@ -2,18 +2,41 @@ package xtemplate_caddy
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 )
 
 // CaddyfileBlockParser is implemented by Caddy modules in the
-// "xtemplate.providers.*" namespace that want to expose Caddyfile block syntax.
-// ParseCaddyfile must return a JSON object containing only the provider's
-// type-specific fields. The "type" and "name" keys are reserved - the dispatch
-// injects them; returning either is a contract violation surfaced at parse time.
+// "xtemplate.providers.*" and "xtemplate.source.*" namespaces that want to
+// expose Caddyfile block syntax. ParseCaddyfile must return a JSON object
+// containing only the type-specific fields. Reserved keys are injected by the
+// dispatch (providers: "type" and "name"; sources: "type").
 type CaddyfileBlockParser interface {
 	ParseCaddyfile(h httpcaddyfile.Helper) (json.RawMessage, error)
+}
+
+// injectReserved unmarshals parser JSON, rejects any key present in inject,
+// then injects those keys and re-marshals.
+func injectReserved(raw json.RawMessage, inject map[string]any) (json.RawMessage, error) {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, fmt.Errorf("parser returned invalid JSON: %w", err)
+	}
+	for k := range inject {
+		if _, ok := m[k]; ok {
+			return nil, fmt.Errorf("parser must not emit a %q key; it is injected by the dispatch", k)
+		}
+	}
+	for k, v := range inject {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return nil, err
+		}
+		m[k] = b
+	}
+	return json.Marshal(m)
 }
 
 // parseProviderBlock handles a `provider <type> <field> { }` block inside
@@ -46,23 +69,48 @@ func parseProviderBlock(h httpcaddyfile.Helper, t *XTemplateModule) error {
 		return err
 	}
 
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return h.Errf("provider %s: parser returned invalid JSON: %v", typeName, err)
+	final, err := injectReserved(raw, map[string]any{"type": typeName, "name": fieldName})
+	if err != nil {
+		return h.Errf("provider %s: %v", typeName, err)
 	}
-	if _, ok := m["type"]; ok {
-		return h.Errf("provider %s parser must not emit a 'type' key; it is injected by the dispatch", typeName)
+	t.ProvidersRaw = append(t.ProvidersRaw, final)
+	return nil
+}
+
+// parseSourceBlock handles a `source <type> { }` block inside parseCaddyfile.
+// It looks up xtemplate.source.<type>, asserts CaddyfileBlockParser, injects
+// "type", and sets SourceRaw (one source per module).
+func parseSourceBlock(h httpcaddyfile.Helper, t *XTemplateModule) error {
+	if !h.NextArg() {
+		return h.Errf("source requires a type")
 	}
-	if _, ok := m["name"]; ok {
-		return h.Errf("provider %s parser must not emit a 'name' key; it is injected by the dispatch", typeName)
+	typeName := h.Val()
+
+	if len(t.SourceRaw) > 0 {
+		return h.Errf("only one source block is allowed")
 	}
 
-	m["type"], _ = json.Marshal(typeName)
-	m["name"], _ = json.Marshal(fieldName)
-	final, err := json.Marshal(m)
+	mi, err := caddy.GetModule("xtemplate.source." + typeName)
+	if err != nil {
+		return h.Errf("source type %q is not available in this build; "+
+			"add it with --with github.com/infogulch/xtemplate/sources/%s/caddyfile "+
+			"(built-in os is in xtemplate/caddy)",
+			typeName, typeName)
+	}
+	parser, ok := mi.New().(CaddyfileBlockParser)
+	if !ok {
+		return h.Errf("module xtemplate.source.%s does not implement CaddyfileBlockParser", typeName)
+	}
+
+	raw, err := parser.ParseCaddyfile(h)
 	if err != nil {
 		return err
 	}
-	t.ProvidersRaw = append(t.ProvidersRaw, final)
+
+	final, err := injectReserved(raw, map[string]any{"type": typeName})
+	if err != nil {
+		return h.Errf("source %s: %v", typeName, err)
+	}
+	t.SourceRaw = final
 	return nil
 }

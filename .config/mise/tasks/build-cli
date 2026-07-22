@@ -5,4 +5,4 @@ cd $env.ROOT
 
 # Use the default buildmode so the build reuses the prebuild cache on every
 # platform (forcing -buildmode=exe defeats it on darwin; see the dist task).
-^go build -ldflags (xt-ldflags) -o ($env.DIST_DIR | path join xtemplate) ./cmd/watchfs
+^go build -ldflags (xt-ldflags) -o ($env.DIST_DIR | path join xtemplate) ./cmd/xtemplate

@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Template sources** (pluggable, mirror providers): `TemplateSource` +
+  `RegisterSource` / `ResolveSource`. Config holds one required `Source` and a
+  private build-root FS. Built-ins: `os`, `fs`. Optional packages:
+  `sources/watchfs`, `sources/git`. JSON: `"source": {"type":"…", …}`.
+  Nil `initial` from Start → placeholder MemMapFs (`.any.html` with
+  `{{define "ANY /"}}` → 503) until a reload brings content (git). When initial
+  is nil, every `Server.Reload` must include `WithTemplateFS`/`WithTemplateDir`
+  (options are not sticky). Git emits `WithTemplateFS` + `WithOnClose(RemoveAll)`
+  per clone.
+- Define-route pseudo-method `ANY` (methodless ServeMux pattern: every HTTP
+  method). `ANY /` is a full-tree catch-all.
+- Unified CLI: single `cmd/xtemplate` + `app.LoadConfig` with pass-0
+  `--source-type` scan. Defaults: library/Caddy → `os`, release CLI → `watchfs`,
+  Docker → `os` (`defaultSourceType` ldflag).
+- Caddyfile `source <type> { … }` via shared `CaddyfileBlockParser`
+  (was `CaddyfileProvider`); in-tree `xtemplate.source.os`;
+  `sources/*/caddyfile`; `caddy/standard` blank-imports sources + providers.
 - `Server.Shutdown(ctx)` for graceful stop: cancel server-owned context first
   (so SSE `WaitForServerStop` / Flush helpers observe stop), wait for
   in-flight instance requests up to `ctx`, then close providers. `Stop` is

@@ -10,7 +10,7 @@
                 {
                   "handler": "xtemplate",
                   "minify": true,
-                  "templates_dir": "templates",
+                  "source": {"type": "os", "path": "templates"},
                   "providers": [
                     {
                       "type": "sql",

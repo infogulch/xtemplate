@@ -63,11 +63,89 @@ type Instance struct {
 }
 
 // Instance creates a new *Instance from the given config and options.
+// For standalone use: calls Source.Start when templatesFS is unset, and rejects
+// reload-capable sources (use Server). Server.Reload uses buildInstance instead
+// (no Start).
 func (config *Config) Instance(cfgs ...Option) (_ *Instance, _ *InstanceStats, _ []InstanceRoute, err error) {
+	cfg := *config.SetDefaults()
+	// clone onClose so Options cannot trample the caller's base config
+	cfg.onClose = slices.Clone(cfg.onClose)
+	if _, err = cfg.Options(cfgs...); err != nil {
+		// Match buildInstance: OnClose from successfully applied options still run.
+		return nil, nil, nil, errors.Join(err, invokeOnClose(cfg.onClose))
+	}
+
+	if err = cfg.resolveSourceRaw(); err != nil {
+		return nil, nil, nil, errors.Join(err, invokeOnClose(cfg.onClose))
+	}
+
+	if cfg.templatesFS == nil {
+		if cfg.Source == nil {
+			return nil, nil, nil, errors.Join(fmt.Errorf("xtemplate: no Source and no templates FS"), invokeOnClose(cfg.onClose))
+		}
+		log := cfg.Logger
+		if log == nil {
+			log = slog.Default()
+		}
+		initial, reloads, startErr := cfg.Source.Start(cfg.Ctx, log.WithGroup("source"))
+		if startErr != nil {
+			return nil, nil, nil, errors.Join(startErr, invokeOnClose(cfg.onClose))
+		}
+		if reloads != nil {
+			return nil, nil, nil, errors.Join(
+				fmt.Errorf("xtemplate: source returns a reload channel; use Server, not Instance"),
+				invokeOnClose(cfg.onClose),
+			)
+		}
+		if initial == nil {
+			cfg.templatesFS = notReadyTemplatesFS
+		} else {
+			cfg.templatesFS = initial
+		}
+	}
+
+	// Options already applied; buildInstance must not re-apply them.
+	return cfg.buildInstance()
+}
+
+// invokeOnClose runs onClose callbacks in reverse order (same as Instance.Close).
+func invokeOnClose(fns []func() error) error {
+	var err error
+	for _, fn := range slices.Backward(fns) {
+		err = errors.Join(err, fn())
+	}
+	return err
+}
+
+// invokeOnCloseFromOptions applies opts to a scratch Config and runs any
+// WithOnClose callbacks. Used when Reload fails before adopting the option set
+// so sources can free temps (e.g. git clones).
+func invokeOnCloseFromOptions(opts []Option) error {
+	var c Config
+	for _, o := range opts {
+		// Best-effort: collect OnClose even if some options error.
+		_ = o(&c)
+	}
+	return invokeOnClose(c.onClose)
+}
+
+// reloadResultFromOptions returns the WithReloadResult callback from opts, if any.
+func reloadResultFromOptions(opts []Option) func(error) {
+	var c Config
+	for _, o := range opts {
+		_ = o(&c)
+	}
+	return c.reloadResult
+}
+
+// buildInstance builds an Instance from an already-resolved config (templatesFS
+// set). Options may set templatesFS for this build. Does not call Source.Start.
+// Used by Server.Reload and by Instance after Start.
+func (config *Config) buildInstance(cfgs ...Option) (_ *Instance, _ *InstanceStats, _ []InstanceRoute, err error) {
 	start := time.Now()
 
 	inst := &Instance{
-		config: *config.SetDefaults(),
+		config: *config,
 		id:     nextInstanceIdentity.Add(1),
 	}
 	// clone onClose so Options cannot trample the caller's base config
@@ -84,16 +162,20 @@ func (config *Config) Instance(cfgs ...Option) (_ *Instance, _ *InstanceStats, _
 		}
 	}()
 
+	inst.config.Source = nil
 	if _, err = inst.config.Options(cfgs...); err != nil {
 		return nil, nil, nil, err
+	}
+	if inst.config.Source != nil {
+		return nil, nil, nil, fmt.Errorf("setting Source is not allowed during Reload")
 	}
 
 	inst.config.Logger = inst.config.Logger.With(slog.Int64("instance", inst.id))
 	inst.config.Logger.Info("initializing")
 	inst.files = make(map[string]*fileInfo)
 
-	if inst.config.TemplatesFS == nil {
-		inst.config.TemplatesFS = afero.NewBasePathFs(afero.NewOsFs(), inst.config.TemplatesDir)
+	if inst.config.templatesFS == nil {
+		return nil, nil, nil, fmt.Errorf("xtemplate: templates FS is not set")
 	}
 
 	if len(inst.config.Precompress) > 0 {
@@ -111,7 +193,7 @@ func (config *Config) Instance(cfgs ...Option) (_ *Instance, _ *InstanceStats, _
 			_ = os.RemoveAll(tempdir)
 		}()
 		overlay := afero.NewBasePathFs(afero.NewOsFs(), tempdir)
-		inst.config.TemplatesFS = afero.NewCopyOnWriteFs(inst.config.TemplatesFS, overlay)
+		inst.config.templatesFS = afero.NewCopyOnWriteFs(inst.config.templatesFS, overlay)
 	}
 
 	{
@@ -142,7 +224,7 @@ func (config *Config) Instance(cfgs ...Option) (_ *Instance, _ *InstanceStats, _
 		build.m = m
 	}
 
-	if err := afero.Walk(build.config.TemplatesFS, ".", func(path_ string, d fs.FileInfo, err error) error {
+	if err := afero.Walk(build.config.templatesFS, ".", func(path_ string, d fs.FileInfo, err error) error {
 		path_ = strings.ReplaceAll(path_, "\\", "/")
 		if err != nil {
 			return err

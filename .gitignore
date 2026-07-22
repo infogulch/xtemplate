@@ -1,5 +1,6 @@
 go.work*
-xtemplate
-xtemplate.*
+# Built CLI binary at repo root (not cmd/xtemplate package)
+/xtemplate
+/xtemplate.*
 /dist
 __debug_bin*

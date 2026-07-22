@@ -89,6 +89,7 @@ A `{{define}}` whose name matches `METHOD path` registers that route:
 | Name prefix | Handler kind |
 |---|---|
 | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` | Buffered template handler (`.Resp` available) |
+| `ANY` | Buffered handler registered with no method (matches every HTTP method). Path `/` is a ServeMux subtree matching every path. |
 | `SSE` | Flushing handler (`.Flush` available); registered as `GET` for the path. Clients must send `Accept: text/event-stream` (browser `EventSource` does) or the request is rejected with `406`. |
 
 ```html

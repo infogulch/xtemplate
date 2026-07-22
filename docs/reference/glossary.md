@@ -32,7 +32,7 @@ Domain terms for xtemplate. Behavior and APIs live in the rest of the [docs](../
 
 ## Routing
 
-**Route**: Method + path pattern (`http.ServeMux`) on the instance router. From path templates or define-template names; pseudo-method `SSE` selects a flushing handler.
+**Route**: Method + path pattern (`http.ServeMux`) on the instance router. From path templates or define-template names; pseudo-method `SSE` selects a flushing handler; pseudo-method `ANY` registers a methodless pattern (every HTTP method).
 
 **Buffered handler**: Default template handler; buffers output so status and headers can change mid-execution.
 

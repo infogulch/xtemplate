@@ -23,9 +23,8 @@ func TestServe_ReturnsOnCtxCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cfg := New()
 	cfg.Ctx = ctx
-	cfg.TemplatesFS = newMemFS(t, map[string]string{"index.html": "ok"})
 
-	srv, err := cfg.Server()
+	srv, err := cfg.Server(WithTemplateFS(newMemFS(t, map[string]string{"index.html": "ok"})))
 	if err != nil {
 		t.Fatalf("Server: %v", err)
 	}
