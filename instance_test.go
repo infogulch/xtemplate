@@ -271,9 +271,7 @@ func TestServer_Lifecycle(t *testing.T) {
 		t.Fatalf("server.Instance() = nil after Reload, want non-nil")
 	}
 
-	// After Stop the instance pointer is cleared. Do NOT route a request
-	// through the handler after Stop: Server.Stop currently stores nil and the
-	// handler would panic. Only assert the instance is nil.
+	// After Stop the instance pointer is cleared (new requests get 503).
 	server.Stop()
 	if server.Instance() != nil {
 		t.Errorf("server.Instance() = %v after Stop, want nil", server.Instance())

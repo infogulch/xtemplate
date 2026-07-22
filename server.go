@@ -2,6 +2,7 @@ package xtemplate
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -10,6 +11,10 @@ import (
 	"time"
 )
 
+// defaultGrace is the bound for draining in-flight work on Serve cancel and
+// on instance retire after Reload. Not a fixed sleep: wait returns early when idle.
+const defaultGrace = 5 * time.Second
+
 // Server is a configured, *reloadable*, xtemplate request handler ready to
 // execute templates and serve static files in response to http requests. It
 // implements [http.Handler] by always routing to the current [Instance].
@@ -17,20 +22,28 @@ import (
 // Call [Server.Reload] to rebuild from the same config (or with options). If
 // successful, Reload atomically swaps the old Instance for the new one so
 // subsequent requests use the new instance; outstanding requests on the old
-// Instance can finish. The old instance's Config.Ctx is cancelled.
+// Instance are given a grace period to finish after the old instance context
+// is cancelled, then providers are closed.
+//
+// Call [Server.Shutdown] for a graceful stop or [Server.Stop] for immediate
+// teardown. When using [Server.Serve], cancelling the server context also
+// drains the local [http.Server] (Serve owns that; Server does not store it).
 //
 // The only way to create a valid *Server is to call [Config.Server].
 type Server struct {
 	instance atomic.Pointer[Instance]
-	cancel   func()
+	cancel   context.CancelFunc // cancels current instance ctx
 
 	mutex  sync.Mutex
 	config Config
+
+	serverCtx    context.Context
+	serverCancel context.CancelFunc
 }
 
 var _ http.Handler = (*Server)(nil)
 
-// Build creates a new Server from an xtemplate.Config.
+// Server creates a new Server from an xtemplate.Config.
 func (config Config) Server(cfgs ...Option) (*Server, error) {
 	if _, err := config.SetDefaults().Options(cfgs...); err != nil {
 		return nil, err
@@ -38,12 +51,17 @@ func (config Config) Server(cfgs ...Option) (*Server, error) {
 
 	config.Logger = config.Logger.WithGroup("xtemplate")
 
+	serverCtx, serverCancel := context.WithCancel(config.Ctx)
+
 	server := &Server{
-		config: config,
+		config:       config,
+		serverCtx:    serverCtx,
+		serverCancel: serverCancel,
 	}
 	err := server.Reload()
 
 	if err != nil {
+		serverCancel()
 		return nil, err
 	}
 
@@ -52,7 +70,7 @@ func (config Config) Server(cfgs ...Option) (*Server, error) {
 			log := config.Logger.WithGroup("reload")
 			for {
 				select {
-				case <-config.Ctx.Done():
+				case <-server.serverCtx.Done():
 					return
 				case opts, ok := <-config.Reload:
 					if !ok {
@@ -70,14 +88,16 @@ func (config Config) Server(cfgs ...Option) (*Server, error) {
 }
 
 // Instance returns the current [Instance]. After calling Reload, previous calls
-// to Instance may be stale.
+// to Instance may be stale. After Stop/Shutdown, returns nil.
 func (x *Server) Instance() *Instance {
 	return x.instance.Load()
 }
 
 // Serve opens a net listener on `listen_addr` and serves requests from it.
-// It returns when the listener fails or when Config.Ctx is cancelled, in which
-// case the server is gracefully shut down and Serve returns nil.
+// It returns when the listener fails or when the server context is cancelled
+// (parent [Config.Ctx] or [Server.Shutdown]/[Server.Stop]), in which case the
+// local [http.Server] is drained (default grace [defaultGrace]), the instance
+// is retired, and Serve returns nil.
 func (x *Server) Serve(listen_addr string) error {
 	ln, err := net.Listen("tcp", listen_addr)
 	if err != nil {
@@ -95,10 +115,17 @@ func (x *Server) Serve(listen_addr string) error {
 		IdleTimeout:       120 * time.Second,
 		// ponytail: no WriteTimeout; it would cap streaming/SSE responses. Add a per-handler deadline if slow writers become a problem.
 	}
+
 	go func() {
-		<-x.config.Ctx.Done()
-		_ = srv.Shutdown(context.Background())
+		<-x.serverCtx.Done()
+		drainCtx, cancel := context.WithTimeout(context.Background(), defaultGrace)
+		defer cancel()
+		// Retire instance first (serverCtx already cancelled → SSE unblocks),
+		// then drain this Serve-local http.Server. Server does not own *http.Server.
+		_ = x.Shutdown(drainCtx)
+		_ = srv.Shutdown(drainCtx)
 	}()
+
 	if err := srv.Serve(ln); err != http.ErrServerClosed {
 		return err
 	}
@@ -117,12 +144,18 @@ func (x *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // Reload creates a new Instance from the config and swaps it with the
-// current instance if successful, otherwise returns the error.
+// current instance if successful, otherwise returns the error. The previous
+// instance context is cancelled, in-flight requests are waited on up to
+// [defaultGrace], then providers are closed.
 func (x *Server) Reload(cfgs ...Option) error {
 	start := time.Now()
 
 	x.mutex.Lock()
-	defer x.mutex.Unlock()
+
+	if err := x.serverCtx.Err(); err != nil {
+		x.mutex.Unlock()
+		return errors.New("server stopped")
+	}
 
 	log := x.config.Logger.WithGroup("reload")
 	old := x.instance.Load()
@@ -130,47 +163,95 @@ func (x *Server) Reload(cfgs ...Option) error {
 		log = log.With(slog.Int64("old_id", old.id))
 	}
 
-	var newcancel func()
+	var newcancel context.CancelFunc
 	var new_ *Instance
 	{
 		var err error
 		config := x.config
-		config.Ctx, newcancel = context.WithCancel(x.config.Ctx)
+		config.Ctx, newcancel = context.WithCancel(x.serverCtx)
 		new_, _, _, err = config.Instance(cfgs...)
 		if err != nil {
 			newcancel()
+			x.mutex.Unlock()
 			log.Info("failed to load", slog.Any("error", err), slog.Duration("rebuild_time", time.Since(start)))
 			return err
 		}
 	}
 
-	x.instance.CompareAndSwap(old, new_)
-	if x.cancel != nil {
-		x.cancel()
-	}
+	old = x.instance.Swap(new_)
+	oldCancel := x.cancel
 	x.cancel = newcancel
+	x.mutex.Unlock()
+
 	if old != nil {
-		if err := old.Close(); err != nil {
-			log.Warn("error closing previous instance providers", slog.Any("error", err))
-		}
+		graceCtx, graceCancel := context.WithTimeout(context.Background(), defaultGrace)
+		x.retire(old, oldCancel, graceCtx)
+		graceCancel()
 	}
 
 	log.Info("rebuild succeeded", slog.Int64("new_id", new_.id), slog.Duration("rebuild_time", time.Since(start)))
 	return nil
 }
 
-func (x *Server) Stop() {
-	x.mutex.Lock()
-	defer x.mutex.Unlock()
-
-	if x.cancel != nil {
-		x.cancel()
+// Shutdown stops the server gracefully.
+//
+//  1. Nils the current instance (new requests get 503) and cancels serverCtx
+//     (cascades into the instance context so SSE/Flush observe stop).
+//  2. Waits for in-flight instance requests up to ctx, then Closes providers.
+//
+// When [Server.Serve] is running, cancelling serverCtx also causes Serve to
+// drain its local [http.Server]; Shutdown itself does not own or call into it.
+//
+// ctx bounds only the in-flight wait; teardown always runs. Safe if Serve never
+// ran (handler-only / Caddy). Idempotent.
+func (x *Server) Shutdown(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	x.cancel = nil
+
+	x.mutex.Lock()
 	old := x.instance.Swap(nil)
+	oldCancel := x.cancel
+	x.cancel = nil
+
+	if x.serverCancel != nil {
+		x.serverCancel()
+	}
+	x.mutex.Unlock()
+
+	// Cancel instance explicitly as well (no-op if already cancelled via serverCtx).
+	if oldCancel != nil {
+		oldCancel()
+	}
+
 	if old != nil {
+		old.waitInFlight(ctx)
 		if err := old.Close(); err != nil {
-			x.config.Logger.Warn("error closing instance providers on stop", slog.Any("error", err))
+			x.config.Logger.Warn("error closing instance providers on shutdown", slog.Any("error", err))
 		}
+	}
+
+	return nil
+}
+
+// Stop is immediate teardown: no drain wait, then the same path as [Shutdown].
+func (x *Server) Stop() {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_ = x.Shutdown(ctx)
+}
+
+// retire cancels an instance, waits for in-flight requests (or grace), then Closes.
+// Must not be called under x.mutex (wait can take up to grace).
+func (x *Server) retire(old *Instance, oldCancel context.CancelFunc, graceCtx context.Context) {
+	if old == nil {
+		return
+	}
+	if oldCancel != nil {
+		oldCancel()
+	}
+	old.waitInFlight(graceCtx)
+	if err := old.Close(); err != nil {
+		x.config.Logger.Warn("error closing previous instance providers", slog.Any("error", err))
 	}
 }

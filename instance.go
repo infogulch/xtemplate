@@ -57,10 +57,17 @@ type Instance struct {
 	// providers is the user/core provider list for this instance (not builtins).
 	// Used to call [Closer.Close] when the instance is retired.
 	providers []Provider
+
+	// onClose from [WithOnClose]; owned reslice for this instance only.
+	onClose []func() error
+
+	// inflight counts requests that have entered ServeHTTP and not yet returned.
+	// Enter is add-then-check-cancel (no mutex); see waitInFlight.
+	inflight atomic.Int64
 }
 
 // Instance creates a new *Instance from the given config
-func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []InstanceRoute, error) {
+func (config *Config) Instance(cfgs ...Option) (inst *Instance, stats *InstanceStats, routes []InstanceRoute, err error) {
 	start := time.Now()
 
 	build := &builder{
@@ -70,8 +77,25 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 		},
 		InstanceStats: &InstanceStats{},
 	}
+	// Reslice so Options append (and other builds) cannot share/trample the
+	// caller's or base config's onClose backing array.
+	build.config.onClose = slices.Clone(build.config.onClose)
 
-	if _, err := build.config.Options(cfgs...); err != nil {
+	defer func() {
+		if err != nil {
+			// Build failed: release any OnClose resources registered for this attempt.
+			if closeErr := runOnClose(build.config.onClose); closeErr != nil {
+				err = errors.Join(err, closeErr)
+			}
+			return
+		}
+		if inst != nil {
+			inst.onClose = build.config.onClose
+			inst.config.onClose = nil
+		}
+	}()
+
+	if _, err = build.config.Options(cfgs...); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -199,7 +223,6 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 		build.providers = dot
 	}
 
-	var err error
 	if build.bufferDot, err = makeDot(slices.Concat([]Provider{dcInstance, dcReq}, dot, []Provider{dcResp})); err != nil {
 		_ = closeProviders(dot)
 		return nil, nil, nil, fmt.Errorf("failed to build buffer dot: %w", err)
@@ -276,16 +299,19 @@ func (x *Instance) Id() int64 {
 	return x.id
 }
 
-// Close releases instance-scoped provider resources ([Closer]).
-// It is safe to call more than once. [Server] calls Close when retiring an
-// instance on reload or stop; callers of [Config.Instance] should call Close
-// when the instance is no longer needed if providers own connections.
+// Close releases instance-scoped provider resources ([Closer]), then runs
+// [WithOnClose] callbacks. It is safe to call more than once. [Server] calls
+// Close when retiring an instance on reload or stop; callers of
+// [Config.Instance] should call Close when the instance is no longer needed if
+// providers own connections or OnClose was used.
 func (x *Instance) Close() error {
 	if x == nil {
 		return nil
 	}
 	err := closeProviders(x.providers)
 	x.providers = nil
+	err = errors.Join(err, runOnClose(x.onClose))
+	x.onClose = nil
 	return err
 }
 
@@ -302,16 +328,34 @@ func closeProviders(providers []Provider) error {
 	return errors.Join(errs...)
 }
 
+// runOnClose runs callbacks in reverse registration order (destructor-like).
+func runOnClose(fns []func() error) error {
+	var errs []error
+	for i := len(fns) - 1; i >= 0; i-- {
+		if fns[i] == nil {
+			continue
+		}
+		if err := fns[i](); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
 var levelDebug2 slog.Level = slog.LevelDebug + 2
 
 func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	select {
-	case <-instance.config.Ctx.Done():
+	// Add before checking cancel so waitInFlight cannot observe 0 while a
+	// request is still between "not cancelled" and the increment (WaitGroup
+	// would panic on Add-after-Wait; an atomic counter does not).
+	instance.inflight.Add(1)
+	if instance.config.Ctx.Err() != nil {
+		instance.inflight.Add(-1)
 		instance.config.Logger.Error("received request after xtemplate instance cancelled", slog.String("method", r.Method), slog.String("path", r.URL.Path))
 		http.Error(w, "server stopped", http.StatusInternalServerError)
 		return
-	default:
 	}
+	defer instance.inflight.Add(-1)
 
 	ctx := r.Context()
 	rid := GetRequestId(ctx)
@@ -346,6 +390,31 @@ func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			slog.Int64("bytes", metrics.Written),
 			slog.String("pattern", r.Pattern),
 		))
+}
+
+// waitInFlight blocks until inflight is 0 or ctx is done. Caller must cancel
+// the instance context first: concurrent enters then bump the counter, see
+// cancel, and decrement without running the handler. Retire is rare, so a
+// short poll is enough (returns immediately when already idle).
+func (instance *Instance) waitInFlight(ctx context.Context) {
+	if instance == nil {
+		return
+	}
+	if instance.inflight.Load() == 0 {
+		return
+	}
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if instance.inflight.Load() == 0 {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 type requestIdType struct{}
