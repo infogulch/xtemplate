@@ -2,6 +2,7 @@ package dotsmtp
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -82,8 +83,18 @@ func TestInit_Defaults(t *testing.T) {
 	if cfg.MaxMessageBytes != 1<<20 {
 		t.Errorf("MaxMessageBytes = %d, want %d", cfg.MaxMessageBytes, 1<<20)
 	}
-	if cfg.SendTimeout != 30*time.Second {
+	if cfg.SendTimeout != xtemplate.Duration(30*time.Second) {
 		t.Errorf("SendTimeout = %v, want 30s", cfg.SendTimeout)
+	}
+}
+
+func TestInit_SendTimeoutJSON(t *testing.T) {
+	var cfg DotSMTPConfig
+	if err := json.Unmarshal([]byte(`{"name":"Email","host":"h","from":"a@b.com","send_timeout":"45s"}`), &cfg); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if cfg.SendTimeout != xtemplate.Duration(45*time.Second) {
+		t.Errorf("SendTimeout = %v, want 45s", cfg.SendTimeout)
 	}
 }
 

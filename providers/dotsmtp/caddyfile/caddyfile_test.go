@@ -3,7 +3,6 @@ package caddyfile_test
 import (
 	"encoding/json"
 	"testing"
-	"time"
 
 	caddy "github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
@@ -43,7 +42,7 @@ func TestSMTPCaddyfile_Full(t *testing.T) {
 		From            string `json:"from"`
 		MaxRecipients   int    `json:"max_recipients"`
 		MaxMessageBytes int64  `json:"max_message_bytes"`
-		SendTimeout     int64  `json:"send_timeout"`
+		SendTimeout     string `json:"send_timeout"`
 	}
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -75,8 +74,8 @@ func TestSMTPCaddyfile_Full(t *testing.T) {
 	if got.MaxMessageBytes != 2097152 {
 		t.Errorf("max_message_bytes = %d, want 2097152", got.MaxMessageBytes)
 	}
-	if got.SendTimeout != int64(45*time.Second.Nanoseconds()) {
-		t.Errorf("send_timeout = %d, want %d", got.SendTimeout, int64(45*time.Second.Nanoseconds()))
+	if got.SendTimeout != "45s" {
+		t.Errorf("send_timeout = %q, want 45s", got.SendTimeout)
 	}
 }
 
@@ -86,13 +85,13 @@ func TestSMTPCaddyfile_SendTimeoutDuration(t *testing.T) {
 		t.Fatalf("ParseCaddyfile: %v", err)
 	}
 	var got struct {
-		SendTimeout int64 `json:"send_timeout"`
+		SendTimeout string `json:"send_timeout"`
 	}
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if want := int64((90 * time.Second).Nanoseconds()); got.SendTimeout != want {
-		t.Errorf("send_timeout = %d, want %d", got.SendTimeout, want)
+	if got.SendTimeout != "1m30s" {
+		t.Errorf("send_timeout = %q, want 1m30s", got.SendTimeout)
 	}
 }
 
