@@ -7,17 +7,17 @@ import (
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 )
 
-// CaddyfileProvider is implemented by Caddy modules in the
+// CaddyfileBlockParser is implemented by Caddy modules in the
 // "xtemplate.providers.*" namespace that want to expose Caddyfile block syntax.
 // ParseCaddyfile must return a JSON object containing only the provider's
 // type-specific fields. The "type" and "name" keys are reserved - the dispatch
 // injects them; returning either is a contract violation surfaced at parse time.
-type CaddyfileProvider interface {
+type CaddyfileBlockParser interface {
 	ParseCaddyfile(h httpcaddyfile.Helper) (json.RawMessage, error)
 }
 
 // parseProviderBlock handles a `provider <type> <field> { }` block inside
-// parseCaddyfile. It looks up the named Caddy module, asserts CaddyfileProvider,
+// parseCaddyfile. It looks up the named Caddy module, asserts CaddyfileBlockParser,
 // calls ParseCaddyfile, injects "type" and "name", and appends to ProvidersRaw.
 func parseProviderBlock(h httpcaddyfile.Helper, t *XTemplateModule) error {
 	if !h.NextArg() {
@@ -36,9 +36,9 @@ func parseProviderBlock(h httpcaddyfile.Helper, t *XTemplateModule) error {
 			"add it with --with github.com/infogulch/xtemplate/providers/%s/caddyfile",
 			typeName, typeName)
 	}
-	parser, ok := mi.New().(CaddyfileProvider)
+	parser, ok := mi.New().(CaddyfileBlockParser)
 	if !ok {
-		return h.Errf("module xtemplate.providers.%s does not implement CaddyfileProvider", typeName)
+		return h.Errf("module xtemplate.providers.%s does not implement CaddyfileBlockParser", typeName)
 	}
 
 	raw, err := parser.ParseCaddyfile(h)

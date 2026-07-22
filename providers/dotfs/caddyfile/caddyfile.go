@@ -23,7 +23,7 @@ func (fsCaddyfile) CaddyModule() caddy.ModuleInfo {
 	}
 }
 
-var _ xtc.CaddyfileProvider = (*fsCaddyfile)(nil)
+var _ xtc.CaddyfileBlockParser = (*fsCaddyfile)(nil)
 
 func (fsCaddyfile) ParseCaddyfile(h httpcaddyfile.Helper) (json.RawMessage, error) {
 	var path string
