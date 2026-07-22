@@ -57,6 +57,10 @@ type Instance struct {
 	// providers is the user/core provider list for this instance (not builtins).
 	// Used to call [Closer.Close] when the instance is retired.
 	providers []Provider
+
+	// inflight counts requests that have entered ServeHTTP and not yet returned.
+	// Enter is add-then-check-cancel (no mutex); see waitInFlight.
+	inflight atomic.Int64
 }
 
 // Instance creates a new *Instance from the given config
@@ -305,13 +309,17 @@ func closeProviders(providers []Provider) error {
 var levelDebug2 slog.Level = slog.LevelDebug + 2
 
 func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	select {
-	case <-instance.config.Ctx.Done():
+	// Add before checking cancel so waitInFlight cannot observe 0 while a
+	// request is still between "not cancelled" and the increment (WaitGroup
+	// would panic on Add-after-Wait; an atomic counter does not).
+	instance.inflight.Add(1)
+	if instance.config.Ctx.Err() != nil {
+		instance.inflight.Add(-1)
 		instance.config.Logger.Error("received request after xtemplate instance cancelled", slog.String("method", r.Method), slog.String("path", r.URL.Path))
 		http.Error(w, "server stopped", http.StatusInternalServerError)
 		return
-	default:
 	}
+	defer instance.inflight.Add(-1)
 
 	ctx := r.Context()
 	rid := GetRequestId(ctx)
@@ -346,6 +354,31 @@ func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			slog.Int64("bytes", metrics.Written),
 			slog.String("pattern", r.Pattern),
 		))
+}
+
+// waitInFlight blocks until inflight is 0 or ctx is done. Caller must cancel
+// the instance context first: concurrent enters then bump the counter, see
+// cancel, and decrement without running the handler. Retire is rare, so a
+// short poll is enough (returns immediately when already idle).
+func (instance *Instance) waitInFlight(ctx context.Context) {
+	if instance == nil {
+		return
+	}
+	if instance.inflight.Load() == 0 {
+		return
+	}
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if instance.inflight.Load() == 0 {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 type requestIdType struct{}

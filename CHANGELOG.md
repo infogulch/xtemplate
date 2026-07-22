@@ -7,7 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Server.Shutdown(ctx)` for graceful stop: cancel server-owned context first
+  (so SSE `WaitForServerStop` / Flush helpers observe stop), wait for
+  in-flight instance requests up to `ctx`, then close providers. `Stop` is
+  immediate teardown (cancelled drain context) on the same path. Addresses #96.
+
 ### Changed
+
+- **Server lifecycle:** `Server` owns a `serverCtx` (child of `Config.Ctx`).
+  Instance contexts parent on `serverCtx`. Reload retires the old instance by
+  cancelling its context, waiting for in-flight requests (default grace 5s,
+  returns early when idle), then closing providers—without holding the server
+  mutex during the wait. `Serve` watches `serverCtx`, retires the instance, and
+  drains its local `http.Server` (not stored on `Server`). Caddy module
+  `Cleanup` calls `Server.Stop`.
 
 - **Breaking: Change dot provider API**
   - Rename base interface `DotConfig` → `Provider`

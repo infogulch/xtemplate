@@ -33,7 +33,7 @@ type XTemplateModule struct {
 
 	FuncsModules []string `json:"funcs_modules,omitempty"`
 
-	handler http.Handler
+	handler *xtemplate.Server
 	cancel  func()
 }
 
@@ -104,8 +104,15 @@ func (m *XTemplateModule) ServeHTTP(w http.ResponseWriter, r *http.Request, _ ca
 }
 
 // Cleanup discards resources held by t. Implements caddy.CleanerUpper.
+// Stops the xtemplate Server so instance providers and contexts tear down even
+// though Caddy never calls Serve (handler-only embed).
 func (m *XTemplateModule) Cleanup() error {
-	m.cancel()
+	if m.handler != nil {
+		m.handler.Stop()
+	}
+	if m.cancel != nil {
+		m.cancel()
+	}
 	return nil
 }
 
