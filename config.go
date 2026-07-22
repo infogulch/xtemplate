@@ -77,6 +77,10 @@ type Config struct {
 	// the next reload starts from the original config again. Use a single reload
 	// source per server unless you persist options into the base config yourself.
 	Reload <-chan []Option `json:"-" arg:"-"`
+
+	// onClose callbacks for the next Instance built from this config.
+	// See [WithOnClose]. Not JSON. Each Instance takes a reslice at build time.
+	onClose []func() error
 }
 
 // HandlerRoute pairs a ServeMux pattern with an http.Handler.
@@ -182,6 +186,31 @@ func WithHandler(pattern string, h http.Handler) Option {
 func WithProvider(p Provider) Option {
 	return func(c *Config) error {
 		c.Providers = append(c.Providers, p)
+		return nil
+	}
+}
+
+// WithOnClose registers fn to run when the [Instance] built with this option
+// is [Instance.Close]d (reload retire or [Server.Stop]/[Server.Shutdown]).
+// Multiple WithOnClose options append; they run after provider [Closer]s, in
+// reverse registration order. Nil fns are ignored.
+//
+// Callbacks are per instance, not once per Server: if set on the Server base
+// config (e.g. Server(WithOnClose(fn))), fn runs once for every retired
+// instance after each successful Reload and on final stop. That is intentional
+// for hooks like metrics; for one-shot process cleanup wrap with sync.Once.
+// For per-build resources (e.g. a git clone directory), pass WithOnClose only
+// on the Reload options that install that build—not on the base config—so each
+// clone is released with the instance that adopted it.
+//
+// Each Instance stores its own reslice of handlers so Options appends during
+// one build cannot trample another instance's list or the base config slice.
+func WithOnClose(fn func() error) Option {
+	return func(c *Config) error {
+		if fn == nil {
+			return nil
+		}
+		c.onClose = append(c.onClose, fn)
 		return nil
 	}
 }

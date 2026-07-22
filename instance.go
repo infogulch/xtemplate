@@ -58,13 +58,16 @@ type Instance struct {
 	// Used to call [Closer.Close] when the instance is retired.
 	providers []Provider
 
+	// onClose from [WithOnClose]; owned reslice for this instance only.
+	onClose []func() error
+
 	// inflight counts requests that have entered ServeHTTP and not yet returned.
 	// Enter is add-then-check-cancel (no mutex); see waitInFlight.
 	inflight atomic.Int64
 }
 
 // Instance creates a new *Instance from the given config
-func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []InstanceRoute, error) {
+func (config *Config) Instance(cfgs ...Option) (inst *Instance, stats *InstanceStats, routes []InstanceRoute, err error) {
 	start := time.Now()
 
 	build := &builder{
@@ -74,8 +77,25 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 		},
 		InstanceStats: &InstanceStats{},
 	}
+	// Reslice so Options append (and other builds) cannot share/trample the
+	// caller's or base config's onClose backing array.
+	build.config.onClose = slices.Clone(build.config.onClose)
 
-	if _, err := build.config.Options(cfgs...); err != nil {
+	defer func() {
+		if err != nil {
+			// Build failed: release any OnClose resources registered for this attempt.
+			if closeErr := runOnClose(build.config.onClose); closeErr != nil {
+				err = errors.Join(err, closeErr)
+			}
+			return
+		}
+		if inst != nil {
+			inst.onClose = build.config.onClose
+			inst.config.onClose = nil
+		}
+	}()
+
+	if _, err = build.config.Options(cfgs...); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -203,7 +223,6 @@ func (config *Config) Instance(cfgs ...Option) (*Instance, *InstanceStats, []Ins
 		build.providers = dot
 	}
 
-	var err error
 	if build.bufferDot, err = makeDot(slices.Concat([]Provider{dcInstance, dcReq}, dot, []Provider{dcResp})); err != nil {
 		_ = closeProviders(dot)
 		return nil, nil, nil, fmt.Errorf("failed to build buffer dot: %w", err)
@@ -280,16 +299,19 @@ func (x *Instance) Id() int64 {
 	return x.id
 }
 
-// Close releases instance-scoped provider resources ([Closer]).
-// It is safe to call more than once. [Server] calls Close when retiring an
-// instance on reload or stop; callers of [Config.Instance] should call Close
-// when the instance is no longer needed if providers own connections.
+// Close releases instance-scoped provider resources ([Closer]), then runs
+// [WithOnClose] callbacks. It is safe to call more than once. [Server] calls
+// Close when retiring an instance on reload or stop; callers of
+// [Config.Instance] should call Close when the instance is no longer needed if
+// providers own connections or OnClose was used.
 func (x *Instance) Close() error {
 	if x == nil {
 		return nil
 	}
 	err := closeProviders(x.providers)
 	x.providers = nil
+	err = errors.Join(err, runOnClose(x.onClose))
+	x.onClose = nil
 	return err
 }
 
@@ -301,6 +323,20 @@ func closeProviders(providers []Provider) error {
 			if err := c.Close(); err != nil {
 				errs = append(errs, fmt.Errorf("close %s: %w", providers[i].FieldName(), err))
 			}
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// runOnClose runs callbacks in reverse registration order (destructor-like).
+func runOnClose(fns []func() error) error {
+	var errs []error
+	for i := len(fns) - 1; i >= 0; i-- {
+		if fns[i] == nil {
+			continue
+		}
+		if err := fns[i](); err != nil {
+			errs = append(errs, err)
 		}
 	}
 	return errors.Join(errs...)

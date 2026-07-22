@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (so SSE `WaitForServerStop` / Flush helpers observe stop), wait for
   in-flight instance requests up to `ctx`, then close providers. `Stop` is
   immediate teardown (cancelled drain context) on the same path. Addresses #96.
+- `WithOnClose(fn)` registers per-instance cleanup run from `Instance.Close`
+  after provider Closers (reload retire / stop). Per instance, not once per
+  Server—base-config callbacks run on every retire; use `sync.Once` or
+  per-Reload options for one-shot / per-build resources (e.g. temp dirs).
 
 ### Changed
 
