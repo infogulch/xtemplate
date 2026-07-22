@@ -37,6 +37,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: template Config surface**
+  - Drop public `TemplatesDir`, `TemplatesFS`, `Config.Reload`
+  - Use `Source` / `WithSource` / `WithTemplateFS` / `WithTemplateDir`
+  - `Register` → `RegisterProvider` (no alias)
+  - `CaddyfileProvider` → `CaddyfileBlockParser`
+  - CLI: only `cmd/xtemplate` (removed `cmd/watchfs`, `cmd/git`, plain `cmd`,
+    `app/watchfs`, `app/git`)
+  - **Caddy no longer watches by default** (default source is `os`). Use
+    `source watchfs { … }` for reload-on-change.
+  - Legacy JSON/Caddy keys `templates_dir`, `templates_path`, `watch_dirs`,
+    `watch_template_path`, `git_repo`, `git_ref`, `git_interval` hard-reject
+    with migrate messages (remove ban-list before 1.0). Other unknown JSON keys
+    still ignored. Ban-list runs on `Config` JSON decode (library, CLI, Caddy).
+
 - **Server lifecycle:** `Server` owns a `serverCtx` (child of `Config.Ctx`).
   Instance contexts parent on `serverCtx`. Reload retires the old instance by
   cancelling its context, waiting for in-flight requests (default grace 5s,

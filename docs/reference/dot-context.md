@@ -134,7 +134,7 @@ For raw JSON provider config, nats connection options follow the [`nats.Options`
 
 Package: [`providers/dotsmtp`](https://pkg.go.dev/github.com/infogulch/xtemplate/providers/dotsmtp). Provider type: `"smtp"`. Synchronous, send-only SMTP delivery. Body rendering stays with [`.X.Template`](#instance-data-in-x); this provider only transports already-rendered strings. There is no built-in queue — compose with `nats`/JetStream if you need durable async delivery.
 
-Typical field name: `.Email`. Config requires `host` and `from` (default sender). Optional connection settings: `port` (default 587), `username` / `password`, `auth` (`plain`, `login`, `cram-md5`, `none`, or empty for auto), `tls` (`starttls` default, `tls`, `none`), `helo`. Safety limits: `max_recipients` (default 50), `max_message_bytes` (default 1 MiB), `send_timeout` (default 30s; JSON is nanoseconds — see [Configuration](configuration.md#provider-types)).
+Typical field name: `.Email`. Config requires `host` and `from` (default sender). Optional connection settings: `port` (default 587), `username` / `password`, `auth` (`plain`, `login`, `cram-md5`, `none`, or empty for auto), `tls` (`starttls` default, `tls`, `none`), `helo`. Safety limits: `max_recipients` (default 50), `max_message_bytes` (default 1 MiB), `send_timeout` (default `"30s"`; JSON duration **string** only — see [Configuration](configuration.md#provider-types)).
 
 ```html
 {{$body := .X.Template "email/welcome.html" .}}

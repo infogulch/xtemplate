@@ -1,128 +1,80 @@
-# How to make a custom build of xtemplate
+# Custom build
 
-The published binaries and Docker image include a sqlite database driver and the [core providers](../reference/glossary.md#providers). Copy a small `main` package when you need different drivers, extra FuncMaps, custom providers, or embedded templates.
+Ship a binary with the drivers, providers, sources, and defaults you need.
 
-xtemplate's packaging is intentionally like Caddy's: a thin `main` that blank-imports optional packages and calls into a shared library.
+## Stock entries
 
-## Default published builds
-
-| Artifact | Entry | Notes |
+| Build | Path | Notes |
 |---|---|---|
-| GitHub release CLI | `./cmd/watchfs` | Live-reloads templates; binary named `xtemplate` in archives |
-| Plain CLI | `./cmd` | Same providers, no filesystem watch; used by Docker |
-| Git CLI | `./cmd/git` | Poll a Git remote; shallow-clone + reload on new commit |
-| Docker image | `infogulch/xtemplate` | Builds `./cmd` (plain) with listen default `:80` |
-| Caddy module (lean) | `caddy` | Core handler + Caddyfile surface; add `providers/*/caddyfile` as needed |
-| Caddy module (standard) | `caddy/standard` | Lean + Caddyfile parsers for sql, fs, flags, bus, nats, smtp + pure-Go sqlite3 driver |
+| GitHub release / default CLI | `./cmd/xtemplate` | Blank-imports providers + watchfs + git; default `--source-type` `watchfs` |
+| Docker image | `infogulch/xtemplate` | Same entry; ldflags set listen `:80` and `defaultSourceType=os` |
 
-Which variant to pick (including Caddy standard vs lean builds): [Deployment modes](../reference/deployment-modes.md).
+## App package
 
-## Choose an app
-
-| Package | Behavior |
+| Import | Role |
 |---|---|
-| `github.com/infogulch/xtemplate/app` | Parse flags/JSON, serve once |
-| `github.com/infogulch/xtemplate/app/watchfs` | Same + reload when templates (and `--watch` dirs) change |
-| `github.com/infogulch/xtemplate/app/git` | Load/reload templates from a Git remote (`--git-repo`) |
+| `github.com/infogulch/xtemplate/app` | CLI load + serve (`app.Main`) |
 
-Start from the matching `cmd/*` file.
+Optional sources (blank-import to register):
 
-## Choose providers and drivers
+| Import | Type string |
+|---|---|
+| `github.com/infogulch/xtemplate/sources/watchfs` | `watchfs` |
+| `github.com/infogulch/xtemplate/sources/git` | `git` |
 
-Default `cmd/watchfs/main.go`:
+## Minimal main
+
+Default `cmd/xtemplate/main.go` shape:
 
 ```go
 package main
 
 import (
-	"github.com/infogulch/xtemplate/app/watchfs"
+	"github.com/infogulch/xtemplate/app"
 
-	_ "github.com/infogulch/xtemplate/providers/dotbus"
-	_ "github.com/infogulch/xtemplate/providers/dotflags"
-	_ "github.com/infogulch/xtemplate/providers/dotfs"
-	_ "github.com/infogulch/xtemplate/providers/dotnats"
-	_ "github.com/infogulch/xtemplate/providers/dotsmtp"
 	_ "github.com/infogulch/xtemplate/providers/dotsql"
+	// … other providers …
+	_ "github.com/infogulch/xtemplate/sources/git"
+	_ "github.com/infogulch/xtemplate/sources/watchfs"
 
 	_ "github.com/ncruces/go-sqlite3/driver"
 )
 
 func main() {
-	watchfs.Main()
+	app.Main()
 }
 ```
 
-To add another SQL driver, blank-import it instead of sqlite3:
+Pass overrides:
 
 ```go
-_ "github.com/jackc/pgx/v5/stdlib" // driver name "pgx"
+app.Main(
+	xtemplate.WithFuncMaps(myFuncs),
+	xtemplate.WithProvider(...),
+)
 ```
 
-Then point the SQL provider at that driver name in config:
+## Drivers and providers
 
-```json
-{
-  "type": "sql",
-  "name": "DB",
-  "driver": "pgx",
-  "connstr": "postgres://..."
-}
-```
+Blank-import `database/sql` drivers and provider packages so `RegisterProvider` runs in `init`. See [Create a provider](create-a-provider.md).
 
-Omit provider imports you do not need to reduce the binary size.
-
-## Pass options from main
+## Embed templates
 
 ```go
-func main() {
-	watchfs.Main(
-		xtemplate.WithProvider(myProvider{}),
-		xtemplate.WithFuncMaps(template.FuncMap{
-			"myFunc": func(s string) string { return s },
-		}),
-	)
-}
-```
-
-To add **new CLI flags or JSON keys** (not just `With*` overrides), embed `app.Config` in your own struct and call `app.LoadConfig`, matching the pattern used by watchfs and git. See [CLI reference - Extending the app config](../reference/cli.md#extending-the-app-config).
-
-## Embed templates (single binary)
-
-Use `//go:embed` and `WithTemplateFS` so no templates directory is required at runtime. Reloading will not be needed, so use the `app` package.
-
-```go
-//go:embed all:templates
-var templatesFS embed.FS
+//go:embed templates/*
+var templates embed.FS
 
 func main() {
-	sub, err := fs.Sub(templatesFS, "templates")
-	if err != nil {
-		panic(err)
-	}
-	app.Main(xtemplate.WithTemplateFS(afero.FromIOFS{FS: sub}))
+	fs := afero.FromIOFS{FS: templates}
+	app.Main(xtemplate.WithTemplateFS(fs))
 }
 ```
 
-Full example: [`examples/embedded`](../../examples/embedded/).
-
-## Caddy custom builds
+## Caddy custom build
 
 ```shell
-# Full standard set
 xcaddy build \
   --with github.com/infogulch/xtemplate/caddy/standard
-
-# Leaner: core module + selected provider Caddyfile packages + driver as needed
-xcaddy build \
-  --with github.com/infogulch/xtemplate/caddy \
-  --with github.com/infogulch/xtemplate/providers/dotsql/caddyfile \
-  --with github.com/ncruces/go-sqlite3/driver
 ```
 
-See [`caddy/README.md`](../../caddy/README.md).
-
-## Related
-
-- [Create a custom dot provider](create-a-provider.md)
-- [CLI reference](../reference/cli.md)
-- [Configuration](../reference/configuration.md)
+Or pick individual `providers/*/caddyfile` and `sources/*/caddyfile` modules.

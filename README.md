@@ -69,16 +69,16 @@ More complete apps: [`examples/`](examples/).
 |---|---|
 | Step-by-step first app | [Getting started tutorial](docs/tutorial/getting-started.md) |
 | Zero setup container | [Docker](docs/reference/deployment-modes.md#docker) |
-| Local templates + live reload | [CLI watchfs](docs/reference/deployment-modes.md#watchfs-cmdwatchfs) · [CLI flags](docs/reference/cli.md) |
-| Templates from a Git remote | [CLI git](docs/reference/deployment-modes.md#git-cmdgit) |
+| Local templates + live reload | [CLI](docs/reference/deployment-modes.md) · [CLI flags](docs/reference/cli.md) |
+| Templates from a Git remote | [CLI `--source-type git`](docs/reference/deployment-modes.md) |
 | Automatic HTTPS, auth, proxy | [Caddy module](docs/reference/deployment-modes.md#caddy-module) |
 | Embed in your Go program | [Go library](docs/reference/deployment-modes.md#go-library) |
 
 ```shell
 # CLI (live reload)
-go install github.com/infogulch/xtemplate/cmd/watchfs@latest
+go install github.com/infogulch/xtemplate/cmd/xtemplate@latest
 mkdir -p templates && echo '<h1>{{.Req.URL.Path}}</h1>' > templates/index.html
-watchfs --listen :8080
+xtemplate --listen :8080
 # open http://localhost:8080
 ```
 

@@ -6,11 +6,10 @@
 
 | Package | Description |
 |---|---|
-| `github.com/infogulch/xtemplate` | Core library: Server, Instance, builtin providers |
+| `github.com/infogulch/xtemplate` | Core library: Server, Instance, sources, providers |
 | `./app/` | `app.Main`; configures and starts xtemplate from CLI args and JSON config |
-| `./app/*/` | App variants (watchfs / git) that reload when files change or a remote updates |
-| `./cmd/` | Standalone binary that calls `app.Main`; start here for a custom build |
-| `./cmd/*/` | Standalone binaries for the respective app variants |
+| `./cmd/xtemplate/` | Standalone binary; blank-imports providers + sources; calls `app.Main` |
+| `./sources/*/` | Optional template sources (watchfs, git) |
 | `./caddy/` | Caddy module; xtemplate as HTTP middleware |
 | `./providers/*/` | Core provider packages (self-register provider types) |
 | `./test/` | Main integration test suite |
@@ -22,7 +21,7 @@ Reference the [glossary](reference/glossary.md) for xtemplate terminology.
 
 ### Application startup
 
-- [`cmd/main.go`](/cmd/main.go) - Package main; binary feature selection; calls `app.Main`
+- [`cmd/xtemplate/main.go`](/cmd/xtemplate/main.go) - Package main; blank-imports providers/sources; calls `app.Main`
 - [`app/app.go`](/app/app.go) - Parses cli & json configs and runs `Server.Serve`
 - [`config.go`](/config.go) - xtemplate's configuration struct
 - [`server.go`](/server.go) - Builds and manages instances

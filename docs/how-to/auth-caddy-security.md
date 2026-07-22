@@ -28,7 +28,9 @@ Conceptual Caddyfile shape (consult caddy-security docs for exact directives rel
 	route {
 		authorize with <policy_name>
 		xtemplate {
-			templates_dir templates
+			source os {
+			path templates
+		}
 		}
 	}
 }

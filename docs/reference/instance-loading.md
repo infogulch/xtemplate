@@ -4,7 +4,7 @@ How an instance is built from a template root: walking files, parsing templates,
 
 ## Walking the root directory
 
-While an instance is loading, xtemplate walks `Config.TemplatesFS`. If unset, an FS is built from `Config.TemplatesDir` path relative to the process working directory, defaulting to `templates`.
+While an instance is loading, xtemplate walks the private build-root FS (`templatesFS`). It comes from `Source.Start` (or `WithTemplateFS` / `WithTemplateDir`). The default source is `os` with path `templates`.
 
 - Files matching `Config.TemplateExtension` (default `.html`) are parsed into the instance's template namespace: each becomes a path template (and may define additional define templates).
 - All other files are static files (served as-is), except compressed siblings of static files (`.gz`, `.zst`, `.br`) which become alternate encodings of the identity file.
