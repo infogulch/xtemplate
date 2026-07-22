@@ -15,7 +15,7 @@ import (
 )
 
 func init() {
-	xtemplate.Register("sql", func() xtemplate.Provider { return &DotSqlConfig{} })
+	xtemplate.RegisterProvider("sql", func() xtemplate.Provider { return &DotSqlConfig{} })
 }
 
 func WithSql(name string, db *sql.DB, opt *sql.TxOptions) xtemplate.Option {
