@@ -26,7 +26,7 @@ func (natsCaddyfile) CaddyModule() caddy.ModuleInfo {
 	}
 }
 
-var _ xtc.CaddyfileProvider = (*natsCaddyfile)(nil)
+var _ xtc.CaddyfileBlockParser = (*natsCaddyfile)(nil)
 
 func (natsCaddyfile) ParseCaddyfile(h httpcaddyfile.Helper) (json.RawMessage, error) {
 	// Local structs mirror only the curated JSON subset of NatsConfig /
