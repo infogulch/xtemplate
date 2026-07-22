@@ -15,7 +15,7 @@ import (
 )
 
 func init() {
-	xtemplate.Register("bus", func() xtemplate.Provider { return &DotBusConfig{} })
+	xtemplate.RegisterProvider("bus", func() xtemplate.Provider { return &DotBusConfig{} })
 }
 
 // WithBus creates an [xtemplate.Option] that adds a bus dot provider.

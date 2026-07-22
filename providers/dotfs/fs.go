@@ -74,7 +74,7 @@ import (
 var bufPool = sync.Pool{New: func() any { return new(bytes.Buffer) }}
 
 func init() {
-	xtemplate.Register("fs", func() xtemplate.Provider { return &DotFsConfig{} })
+	xtemplate.RegisterProvider("fs", func() xtemplate.Provider { return &DotFsConfig{} })
 }
 
 // WithFs creates an [xtemplate.Option] that can be used with

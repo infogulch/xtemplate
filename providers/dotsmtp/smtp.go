@@ -19,7 +19,7 @@ import (
 )
 
 func init() {
-	xtemplate.Register("smtp", func() xtemplate.Provider { return &DotSMTPConfig{} })
+	xtemplate.RegisterProvider("smtp", func() xtemplate.Provider { return &DotSMTPConfig{} })
 }
 
 // WithSMTP creates an [xtemplate.Option] that adds an smtp dot provider to the
