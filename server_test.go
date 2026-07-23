@@ -2,13 +2,20 @@ package xtemplate
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestMain(m *testing.M) {
+	slog.SetDefault(slog.New(slog.DiscardHandler))
+	os.Exit(m.Run())
+}
 
 // TestServe_ReturnsOnCtxCancel verifies that cancelling Config.Ctx shuts down
 // the running server so Serve returns instead of blocking forever.
