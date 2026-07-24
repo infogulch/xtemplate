@@ -25,7 +25,7 @@ func (busCaddyfile) CaddyModule() caddy.ModuleInfo {
 	}
 }
 
-var _ xtc.CaddyfileProvider = (*busCaddyfile)(nil)
+var _ xtc.CaddyfileBlockParser = (*busCaddyfile)(nil)
 
 func (busCaddyfile) ParseCaddyfile(h httpcaddyfile.Helper) (json.RawMessage, error) {
 	type result struct {

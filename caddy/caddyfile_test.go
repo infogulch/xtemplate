@@ -2,6 +2,7 @@ package xtemplate_caddy
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/caddyserver/caddy/v2"
@@ -26,22 +27,22 @@ func parse(t *testing.T, input string) *XTemplateModule {
 }
 
 // parseErr runs the parser and asserts that it returns an error.
-func parseErr(t *testing.T, input string) {
+func parseErr(t *testing.T, input string) error {
 	t.Helper()
 	h := httpcaddyfile.Helper{}.WithDispenser(caddyfile.NewTestDispenser(input))
-	if _, err := parseCaddyfile(h); err == nil {
+	_, err := parseCaddyfile(h)
+	if err == nil {
 		t.Errorf("parseCaddyfile(%q) = nil error, want an error", input)
 	}
+	return err
 }
 
 func TestParseCaddyfile_Defaults(t *testing.T) {
 	m := parse(t, `xtemplate`)
 
-	if !m.WatchTemplatePath {
-		t.Error("WatchTemplatePath = false, want true by default")
-	}
-	if m.TemplatesDir != "templates" {
-		t.Errorf("TemplatesDir = %q, want %q", m.TemplatesDir, "templates")
+	// Default is os at Provision — no SourceRaw means default os.
+	if len(m.SourceRaw) != 0 {
+		t.Errorf("SourceRaw = %s, want empty (default os at Provision)", m.SourceRaw)
 	}
 	if m.TemplateExtension != ".html" {
 		t.Errorf("TemplateExtension = %q, want %q", m.TemplateExtension, ".html")
@@ -56,16 +57,27 @@ func TestParseCaddyfile_Defaults(t *testing.T) {
 
 func TestParseCaddyfile_AllOptions(t *testing.T) {
 	m := parse(t, `xtemplate {
-		templates_dir tpl
+		source os {
+			path tpl
+		}
 		template_extension .gohtml
 		delimiters [[ ]]
 		minify false
 		precompress gzip br
-		watch_template_path false
 	}`)
 
-	if m.TemplatesDir != "tpl" {
-		t.Errorf("TemplatesDir = %q, want %q", m.TemplatesDir, "tpl")
+	if len(m.SourceRaw) == 0 {
+		t.Fatal("SourceRaw empty, want os source")
+	}
+	var src struct {
+		Type string `json:"type"`
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(m.SourceRaw, &src); err != nil {
+		t.Fatal(err)
+	}
+	if src.Type != "os" || src.Path != "tpl" {
+		t.Errorf("source = %+v, want type=os path=tpl", src)
 	}
 	if m.TemplateExtension != ".gohtml" {
 		t.Errorf("TemplateExtension = %q, want %q", m.TemplateExtension, ".gohtml")
@@ -78,9 +90,6 @@ func TestParseCaddyfile_AllOptions(t *testing.T) {
 	}
 	if !equalStrings(m.Precompress, []string{"gzip", "br"}) {
 		t.Errorf("Precompress = %v, want [gzip br]", m.Precompress)
-	}
-	if m.WatchTemplatePath {
-		t.Error("WatchTemplatePath = true, want false")
 	}
 }
 
@@ -95,12 +104,30 @@ func TestParseCaddyfile_Precompress(t *testing.T) {
 	}
 }
 
-func TestParseCaddyfile_TemplatesPathAlias(t *testing.T) {
-	m := parse(t, `xtemplate {
+func TestParseCaddyfile_LegacyTemplatesDirRejected(t *testing.T) {
+	err := parseErr(t, `xtemplate {
+		templates_dir tpl
+	}`)
+	if err != nil && !strings.Contains(err.Error(), "no longer supported") {
+		t.Errorf("error %q should mention no longer supported", err)
+	}
+}
+
+func TestParseCaddyfile_LegacyWatchRejected(t *testing.T) {
+	err := parseErr(t, `xtemplate {
+		watch_template_path true
+	}`)
+	if err != nil && !strings.Contains(err.Error(), "no longer supported") {
+		t.Errorf("error %q should mention no longer supported", err)
+	}
+}
+
+func TestParseCaddyfile_TemplatesPathAliasRejected(t *testing.T) {
+	err := parseErr(t, `xtemplate {
 		templates_path legacy
 	}`)
-	if m.TemplatesDir != "legacy" {
-		t.Errorf("TemplatesDir = %q, want %q (templates_path alias)", m.TemplatesDir, "legacy")
+	if err != nil && !strings.Contains(err.Error(), "no longer supported") {
+		t.Errorf("error %q should mention no longer supported", err)
 	}
 }
 
@@ -127,28 +154,26 @@ func TestParseCaddyfile_CrossOrigin(t *testing.T) {
 }
 
 func TestParseCaddyfile_Errors(t *testing.T) {
-	// Inputs are newline-delimited like real Caddyfiles so closing braces are
-	// not read as directive arguments.
 	cases := map[string]string{
-		"unknown directive":         "xtemplate {\n\tbogus\n}",
-		"non-bool minify":           "xtemplate {\n\tminify notabool\n}",
-		"non-bool watch":            "xtemplate {\n\twatch_template_path maybe\n}",
-		"precompress no args":       "xtemplate {\n\tprecompress\n}",
-		"precompress bad encoding":  "xtemplate {\n\tprecompress lzma\n}",
-		"unknown crossorigin opt":   "xtemplate {\n\tcrossorigin {\n\t\tbogus true\n\t}\n}",
-		"non-bool crossorigin":      "xtemplate {\n\tcrossorigin {\n\t\tdisabled notabool\n\t}\n}",
-		"missing trusted_origins":   "xtemplate {\n\tcrossorigin {\n\t\ttrusted_origins\n\t}\n}",
-		"too few delimiters":        "xtemplate {\n\tdelimiters [[\n}",
-		"missing templates_dir arg": "xtemplate {\n\ttemplates_dir\n}",
+		"unknown directive":        "xtemplate {\n\tbogus\n}",
+		"non-bool minify":          "xtemplate {\n\tminify notabool\n}",
+		"legacy watch":             "xtemplate {\n\twatch_template_path maybe\n}",
+		"precompress no args":      "xtemplate {\n\tprecompress\n}",
+		"precompress bad encoding": "xtemplate {\n\tprecompress lzma\n}",
+		"unknown crossorigin opt":  "xtemplate {\n\tcrossorigin {\n\t\tbogus true\n\t}\n}",
+		"non-bool crossorigin":     "xtemplate {\n\tcrossorigin {\n\t\tdisabled notabool\n\t}\n}",
+		"missing trusted_origins":  "xtemplate {\n\tcrossorigin {\n\t\ttrusted_origins\n\t}\n}",
+		"too few delimiters":       "xtemplate {\n\tdelimiters [[\n}",
+		"legacy templates_dir":     "xtemplate {\n\ttemplates_dir\n}",
 	}
 	for name, input := range cases {
 		t.Run(name, func(t *testing.T) {
-			parseErr(t, input)
+			_ = parseErr(t, input)
 		})
 	}
 }
 
-// fakeProvider is a minimal CaddyfileProvider registered for tests.
+// fakeProvider is a minimal CaddyfileBlockParser registered for tests.
 type fakeProvider struct{}
 
 func (fakeProvider) CaddyModule() caddy.ModuleInfo {
@@ -213,7 +238,7 @@ func TestParseCaddyfile_ProviderErrors(t *testing.T) {
 	}
 	for name, input := range cases {
 		t.Run(name, func(t *testing.T) {
-			parseErr(t, input)
+			_ = parseErr(t, input)
 		})
 	}
 }

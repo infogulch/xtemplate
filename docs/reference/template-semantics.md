@@ -72,7 +72,7 @@ A path template is associated with a `GET` route derived from its file path (ext
 
 ## Define-based routes
 
-`{{define "METHOD /path/{param}"}}` registers a route. Supported methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, and the pseudo-method `SSE` (flushing handler). Path parameters use ServeMux syntax and are read with `.Req.PathValue`.
+`{{define "METHOD /path/{param}"}}` registers a route. Supported methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, and the pseudo-methods `SSE` (flushing handler, registered as `GET`) and `ANY` (buffered handler for every HTTP method). Path parameters use ServeMux syntax and are read with `.Req.PathValue`.
 
 ```html
 {{define "GET /contact/{id}"}}

@@ -29,12 +29,12 @@ func (smtpCaddyfile) CaddyModule() caddy.ModuleInfo {
 	}
 }
 
-var _ xtc.CaddyfileProvider = (*smtpCaddyfile)(nil)
+var _ xtc.CaddyfileBlockParser = (*smtpCaddyfile)(nil)
 
 func (smtpCaddyfile) ParseCaddyfile(h httpcaddyfile.Helper) (json.RawMessage, error) {
 	// Local struct mirrors only the curated JSON subset of DotSMTPConfig.
-	// SendTimeout is emitted as a nanosecond integer because time.Duration
-	// (the target field's type) unmarshals from a JSON number.
+	// SendTimeout is emitted as a duration string (e.g. "45s"); the target
+	// field is xtemplate.Duration.
 	type result struct {
 		Host            string `json:"host,omitempty"`
 		Port            int    `json:"port,omitempty"`
@@ -46,7 +46,7 @@ func (smtpCaddyfile) ParseCaddyfile(h httpcaddyfile.Helper) (json.RawMessage, er
 		From            string `json:"from,omitempty"`
 		MaxRecipients   int    `json:"max_recipients,omitempty"`
 		MaxMessageBytes int64  `json:"max_message_bytes,omitempty"`
-		SendTimeout     int64  `json:"send_timeout,omitempty"`
+		SendTimeout     string `json:"send_timeout,omitempty"`
 	}
 
 	cfg := &result{}
@@ -103,11 +103,10 @@ func (smtpCaddyfile) ParseCaddyfile(h httpcaddyfile.Helper) (json.RawMessage, er
 			if !h.AllArgs(&s) {
 				return nil, h.ArgErr()
 			}
-			d, err := time.ParseDuration(s)
-			if err != nil {
+			if _, err := time.ParseDuration(s); err != nil {
 				return nil, h.Errf("send_timeout must be a duration (e.g. 30s): %v", err)
 			}
-			cfg.SendTimeout = d.Nanoseconds()
+			cfg.SendTimeout = s
 		default:
 			return nil, h.Errf("unknown smtp provider option '%s'", key)
 		}

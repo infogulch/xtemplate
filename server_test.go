@@ -2,13 +2,20 @@ package xtemplate
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestMain(m *testing.M) {
+	slog.SetDefault(slog.New(slog.DiscardHandler))
+	os.Exit(m.Run())
+}
 
 // TestServe_ReturnsOnCtxCancel verifies that cancelling Config.Ctx shuts down
 // the running server so Serve returns instead of blocking forever.
@@ -16,9 +23,8 @@ func TestServe_ReturnsOnCtxCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cfg := New()
 	cfg.Ctx = ctx
-	cfg.TemplatesFS = newMemFS(t, map[string]string{"index.html": "ok"})
 
-	srv, err := cfg.Server()
+	srv, err := cfg.Server(WithTemplateFS(newMemFS(t, map[string]string{"index.html": "ok"})))
 	if err != nil {
 		t.Fatalf("Server: %v", err)
 	}

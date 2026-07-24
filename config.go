@@ -20,11 +20,22 @@ func New() (c *Config) {
 }
 
 type Config struct {
-	// The path to the templates directory within the filesystem. Default `templates`.
-	TemplatesDir string `json:"templates_dir,omitempty" arg:"-t,--template-dir,--templates-dir" default:"templates"`
+	// Source is the template lifecycle provider for this Server/Instance.
+	// Set via WithSource, WithTemplateFS/Dir (Server invents a Source if needed),
+	// or JSON SourceRaw (resolved by LoadConfig / Server / Instance).
+	Source TemplateSource `json:"-" arg:"-"`
 
-	// The FS to load templates from. Default: a FS made from the current working directory.
-	TemplatesFS afero.Fs `json:"-" arg:"-"`
+	// SourceRaw is the JSON "source" object. Resolved into Source by LoadConfig
+	// or Server/Instance; cleared after materialization.
+	SourceRaw json.RawMessage `json:"source,omitempty" arg:"-"`
+
+	// templatesFS is the private build root for the next Instance. Not JSON;
+	// not public API. Filled by Source.Start or WithTemplateFS/Dir.
+	templatesFS afero.Fs
+
+	// reloadResult is set by WithReloadResult and invoked by Server.Reload with
+	// the outcome of applying that option set (success or failure).
+	reloadResult func(error)
 
 	// File extension to search for to find template files. Default `.html`.
 	TemplateExtension string `json:"template_extension,omitempty" arg:"--template-ext" default:".html"`
@@ -68,16 +79,6 @@ type Config struct {
 	// The default logger. Defaults to `slog.Default()`.
 	Logger *slog.Logger `json:"-" arg:"-"`
 
-	// Reload, when non-nil, triggers server.Reload(opts...) on each receive.
-	// Send options to mutate the config for that reload (e.g. WithTemplateFS to
-	// swap the templates source). Send nil to reload in place. Close the channel
-	// to stop the consumer. The caller owns the source and any debounce.
-	//
-	// Options apply to a copy of the config per reload, so they are not sticky:
-	// the next reload starts from the original config again. Use a single reload
-	// source per server unless you persist options into the base config yourself.
-	Reload <-chan []Option `json:"-" arg:"-"`
-
 	// onClose callbacks for the next Instance built from this config.
 	// See [WithOnClose]. Not JSON. Each Instance takes a reslice at build time.
 	onClose []func() error
@@ -96,12 +97,9 @@ type CrossOriginConfig struct {
 	InsecureBypassPatterns []string `json:"insecure_bypass_patterns" arg:"--insecure-bypass-pattern,separate"`
 }
 
-// FillDefaults sets default values for unset fields
+// FillDefaults sets default values for unset fields.
+// Does not install a default Source (Server uses os path "templates" when unset).
 func (config *Config) SetDefaults() *Config {
-	if config.TemplatesDir == "" {
-		config.TemplatesDir = "templates"
-	}
-
 	if config.TemplateExtension == "" {
 		config.TemplateExtension = ".html"
 	}
@@ -130,6 +128,54 @@ func (config *Config) SetDefaults() *Config {
 	return config
 }
 
+// UnmarshalJSON applies the legacy-key ban-list then unmarshals into Config.
+// REMOVE BEFORE 1.0: temporary hard-rejects for renamed top-level keys.
+func (c *Config) UnmarshalJSON(data []byte) error {
+	if err := CheckLegacyTemplateKeys(data); err != nil {
+		return err
+	}
+	type alias Config
+	var a alias
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	*c = Config(a)
+	return nil
+}
+
+// resolveSourceRaw materializes Source from SourceRaw when Source is unset.
+// Clears SourceRaw after a successful resolve (or when Source was already set).
+func (c *Config) resolveSourceRaw() error {
+	if len(c.SourceRaw) == 0 {
+		return nil
+	}
+	if c.Source != nil {
+		c.SourceRaw = nil
+		return nil
+	}
+	s, err := ResolveSource(c.SourceRaw)
+	if err != nil {
+		return err
+	}
+	c.Source = s
+	c.SourceRaw = nil
+	return nil
+}
+
+// ensureSource sets a default Source when neither Source nor templatesFS is set
+// (os path "templates"), or wraps an existing templatesFS in FsSource.
+// Call after resolveSourceRaw. Used by Server; Instance does not invent defaults.
+func (c *Config) ensureSource() {
+	if c.Source != nil {
+		return
+	}
+	if c.templatesFS == nil {
+		c.Source = &OsFsSource{"templates"}
+	} else {
+		c.Source = &FsSource{FS: c.templatesFS}
+	}
+}
+
 func (c *Config) Options(options ...Option) (*Config, error) {
 	for _, o := range options {
 		if err := o(c); err != nil {
@@ -141,12 +187,57 @@ func (c *Config) Options(options ...Option) (*Config, error) {
 
 type Option func(*Config) error
 
+// WithSource sets the template Source and clears templatesFS so Start fills it.
+// Illegal during Reload.
+func WithSource(s TemplateSource) Option {
+	return func(c *Config) error {
+		if s == nil {
+			return fmt.Errorf("nil source")
+		}
+		c.Source = s
+		c.templatesFS = nil
+		return nil
+	}
+}
+
+// WithReloadResult registers fn to be called once with the result of
+// [Server.Reload] for this option set (nil on success). Used by sources that
+// need success/failure feedback (e.g. git last-SHA advancement). fn must not
+// block. No-op for standalone [Config.Instance] builds.
+func WithReloadResult(fn func(error)) Option {
+	return func(c *Config) error {
+		if fn == nil {
+			return nil
+		}
+		prev := c.reloadResult
+		c.reloadResult = func(err error) {
+			if prev != nil {
+				prev(err)
+			}
+			fn(err)
+		}
+		return nil
+	}
+}
+
+// WithTemplateFS sets the private build-root FS for the next Instance.
 func WithTemplateFS(fs afero.Fs) Option {
 	return func(c *Config) error {
 		if fs == nil {
 			return fmt.Errorf("nil fs")
 		}
-		c.TemplatesFS = fs
+		c.templatesFS = fs
+		return nil
+	}
+}
+
+// WithTemplateDir sets the private build-root FS to an OS directory.
+func WithTemplateDir(dir string) Option {
+	return func(c *Config) error {
+		if dir == "" {
+			return fmt.Errorf("empty template dir")
+		}
+		c.templatesFS = afero.NewBasePathFs(afero.NewOsFs(), dir)
 		return nil
 	}
 }

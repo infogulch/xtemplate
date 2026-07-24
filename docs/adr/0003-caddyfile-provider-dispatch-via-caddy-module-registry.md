@@ -4,7 +4,7 @@ status: accepted
 
 # Caddyfile provider dispatch via Caddy’s module registry
 
-Caddyfile `provider <type> <field> { }` is a JSON adapter only. If a provider registers a Caddy module under the `xtemplate.providers.*` namespace, dispatch looks up the module by type, type-asserts it to `CaddyfileProvider`, and invokes it to get the provider's raw JSON config. It then injects `"type"` and `"name"` and appends to `ProvidersRaw`. This is separate from the provider type registry (ADR-0001) and doesn't force Caddy into provider packages (ADR-0002).
+Caddyfile `provider <type> <field> { }` and `source <type> { }` are JSON adapters only. Modules under `xtemplate.providers.*` / `xtemplate.source.*` implement `CaddyfileBlockParser` (formerly `CaddyfileProvider`). Dispatch looks up the module by type, asserts the interface, invokes `ParseCaddyfile`, then injects reserved keys (`type`/`name` for providers; `type` for sources) into `ProvidersRaw` / `SourceRaw`. This is separate from the provider/source type registries (ADR-0001, ADR-0007) and doesn't force Caddy into those packages (ADR-0002).
 
 ## Considered options
 

@@ -91,7 +91,7 @@ import (
 
 func init() {
 	// "shop" is the provider type - JSON discriminator and Caddyfile token.
-	xtemplate.Register("shop", func() xtemplate.Provider {
+	xtemplate.RegisterProvider("shop", func() xtemplate.Provider {
 		return &ShopConfig{}
 	})
 }
@@ -111,7 +111,7 @@ func (c *ShopConfig) Value(http.ResponseWriter, *http.Request) (any, error) {
 
 Here's how the registry works:
 
-1. `Register(name, ctor)`: maps a provider type string to a constructor. Call only from `init()`; duplicate names panic.
+1. `RegisterProvider(name, ctor)`: maps a provider type string to a constructor. Call only from `init()`; duplicate names panic.
 2. At instance build, `resolveProviders` peeks each entry’s `"type"`, looks up the constructor, re-decodes into the concrete type, and returns `[]Provider` for the instance. See [`providers.go`](../../providers.go).
 
 Opt the type into a binary by blank-importing the package (same pattern as the standard provider set under `cmd`):

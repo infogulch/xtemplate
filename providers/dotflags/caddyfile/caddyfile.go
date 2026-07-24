@@ -23,7 +23,7 @@ func (flagsCaddyfile) CaddyModule() caddy.ModuleInfo {
 	}
 }
 
-var _ xtc.CaddyfileProvider = (*flagsCaddyfile)(nil)
+var _ xtc.CaddyfileBlockParser = (*flagsCaddyfile)(nil)
 
 func (flagsCaddyfile) ParseCaddyfile(h httpcaddyfile.Helper) (json.RawMessage, error) {
 	values := map[string]string{}

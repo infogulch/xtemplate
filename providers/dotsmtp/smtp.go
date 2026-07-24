@@ -19,7 +19,7 @@ import (
 )
 
 func init() {
-	xtemplate.Register("smtp", func() xtemplate.Provider { return &DotSMTPConfig{} })
+	xtemplate.RegisterProvider("smtp", func() xtemplate.Provider { return &DotSMTPConfig{} })
 }
 
 // WithSMTP creates an [xtemplate.Option] that adds an smtp dot provider to the
@@ -67,7 +67,8 @@ type DotSMTPConfig struct {
 	// MaxMessageBytes caps len(html)+len(text) per send (default 1 MiB).
 	MaxMessageBytes int64 `json:"max_message_bytes"`
 	// SendTimeout bounds a single DialAndSend (default 30s).
-	SendTimeout time.Duration `json:"send_timeout"`
+	// Accepts JSON duration strings (e.g. "30s").
+	SendTimeout xtemplate.Duration `json:"send_timeout"`
 
 	// client is built in Init and reused across sends; go-mail dials a fresh
 	// connection per DialAndSendWithContext, so the client itself is stateless
@@ -122,7 +123,7 @@ func (d *DotSMTPConfig) Init(ctx context.Context) error {
 		d.MaxMessageBytes = 1 << 20
 	}
 	if d.SendTimeout == 0 {
-		d.SendTimeout = 30 * time.Second
+		d.SendTimeout = xtemplate.Duration(30 * time.Second)
 	}
 
 	opts := []gomail.Option{gomail.WithPort(d.Port)}
@@ -170,7 +171,7 @@ func (d *DotSMTPConfig) Init(ctx context.Context) error {
 	if d.Helo != "" {
 		opts = append(opts, gomail.WithHELO(d.Helo))
 	}
-	opts = append(opts, gomail.WithTimeout(d.SendTimeout))
+	opts = append(opts, gomail.WithTimeout(d.SendTimeout.Duration()))
 
 	client, err := gomail.NewClient(d.Host, opts...)
 	if err != nil {

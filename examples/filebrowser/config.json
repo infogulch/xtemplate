@@ -1,5 +1,4 @@
 {
-  "templates_dir": "templates",
   "providers": [
     {
       "type": "fs",
@@ -7,5 +6,9 @@
       "path": "files",
       "writable": true
     }
-  ]
+  ],
+  "source": {
+    "type": "os",
+    "path": "templates"
+  }
 }

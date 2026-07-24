@@ -27,7 +27,7 @@ func parse(t *testing.T, body string) (json.RawMessage, error) {
 	if err != nil {
 		t.Fatalf("GetModule: %v", err)
 	}
-	p := mi.New().(xtc.CaddyfileProvider)
+	p := mi.New().(xtc.CaddyfileBlockParser)
 	return p.ParseCaddyfile(h)
 }
 

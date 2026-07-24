@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -54,60 +55,131 @@ type Instance struct {
 	bufferDot  dot
 	flusherDot dot
 
-	// providers is the user/core provider list for this instance (not builtins).
-	// Used to call [Closer.Close] when the instance is retired.
-	providers []Provider
-
-	// onClose from [WithOnClose]; owned reslice for this instance only.
-	onClose []func() error
+	closeOnce func() error
 
 	// inflight counts requests that have entered ServeHTTP and not yet returned.
 	// Enter is add-then-check-cancel (no mutex); see waitInFlight.
 	inflight atomic.Int64
 }
 
-// Instance creates a new *Instance from the given config
-func (config *Config) Instance(cfgs ...Option) (inst *Instance, stats *InstanceStats, routes []InstanceRoute, err error) {
+// Instance creates a new *Instance from the given config and options.
+// For standalone use: calls Source.Start when templatesFS is unset, and rejects
+// reload-capable sources (use Server). Server.Reload uses buildInstance instead
+// (no Start).
+func (config *Config) Instance(cfgs ...Option) (_ *Instance, _ *InstanceStats, _ []InstanceRoute, err error) {
+	cfg := *config.SetDefaults()
+	// clone onClose so Options cannot trample the caller's base config
+	cfg.onClose = slices.Clone(cfg.onClose)
+	if _, err = cfg.Options(cfgs...); err != nil {
+		// Match buildInstance: OnClose from successfully applied options still run.
+		return nil, nil, nil, errors.Join(err, invokeOnClose(cfg.onClose))
+	}
+
+	if err = cfg.resolveSourceRaw(); err != nil {
+		return nil, nil, nil, errors.Join(err, invokeOnClose(cfg.onClose))
+	}
+
+	if cfg.templatesFS == nil {
+		if cfg.Source == nil {
+			return nil, nil, nil, errors.Join(fmt.Errorf("xtemplate: no Source and no templates FS"), invokeOnClose(cfg.onClose))
+		}
+		log := cfg.Logger
+		if log == nil {
+			log = slog.Default()
+		}
+		initial, reloads, startErr := cfg.Source.Start(cfg.Ctx, log.WithGroup("source"))
+		if startErr != nil {
+			return nil, nil, nil, errors.Join(startErr, invokeOnClose(cfg.onClose))
+		}
+		if reloads != nil {
+			return nil, nil, nil, errors.Join(
+				fmt.Errorf("xtemplate: source returns a reload channel; use Server, not Instance"),
+				invokeOnClose(cfg.onClose),
+			)
+		}
+		if initial == nil {
+			cfg.templatesFS = notReadyTemplatesFS
+		} else {
+			cfg.templatesFS = initial
+		}
+	}
+
+	// Options already applied; buildInstance must not re-apply them.
+	return cfg.buildInstance()
+}
+
+// invokeOnClose runs onClose callbacks in reverse order (same as Instance.Close).
+func invokeOnClose(fns []func() error) error {
+	var err error
+	for _, fn := range slices.Backward(fns) {
+		err = errors.Join(err, fn())
+	}
+	return err
+}
+
+// invokeOnCloseFromOptions applies opts to a scratch Config and runs any
+// WithOnClose callbacks. Used when Reload fails before adopting the option set
+// so sources can free temps (e.g. git clones).
+func invokeOnCloseFromOptions(opts []Option) error {
+	var c Config
+	for _, o := range opts {
+		// Best-effort: collect OnClose even if some options error.
+		_ = o(&c)
+	}
+	return invokeOnClose(c.onClose)
+}
+
+// reloadResultFromOptions returns the WithReloadResult callback from opts, if any.
+func reloadResultFromOptions(opts []Option) func(error) {
+	var c Config
+	for _, o := range opts {
+		_ = o(&c)
+	}
+	return c.reloadResult
+}
+
+// buildInstance builds an Instance from an already-resolved config (templatesFS
+// set). Options may set templatesFS for this build. Does not call Source.Start.
+// Used by Server.Reload and by Instance after Start.
+func (config *Config) buildInstance(cfgs ...Option) (_ *Instance, _ *InstanceStats, _ []InstanceRoute, err error) {
 	start := time.Now()
 
-	build := &builder{
-		Instance: &Instance{
-			config: *config.SetDefaults(),
-			id:     nextInstanceIdentity.Add(1),
-		},
-		InstanceStats: &InstanceStats{},
+	inst := &Instance{
+		config: *config,
+		id:     nextInstanceIdentity.Add(1),
 	}
-	// Reslice so Options append (and other builds) cannot share/trample the
-	// caller's or base config's onClose backing array.
-	build.config.onClose = slices.Clone(build.config.onClose)
-
+	// clone onClose so Options cannot trample the caller's base config
+	inst.config.onClose = slices.Clone(inst.config.onClose)
+	inst.closeOnce = sync.OnceValue(func() (err error) {
+		for _, fn := range slices.Backward(inst.config.onClose) {
+			err = errors.Join(err, fn())
+		}
+		return
+	})
 	defer func() {
 		if err != nil {
-			// Build failed: release any OnClose resources registered for this attempt.
-			if closeErr := runOnClose(build.config.onClose); closeErr != nil {
-				err = errors.Join(err, closeErr)
-			}
-			return
-		}
-		if inst != nil {
-			inst.onClose = build.config.onClose
-			inst.config.onClose = nil
+			err = errors.Join(err, inst.closeOnce())
 		}
 	}()
 
-	if _, err = build.config.Options(cfgs...); err != nil {
+	inst.config.Source = nil
+	if _, err = inst.config.Options(cfgs...); err != nil {
 		return nil, nil, nil, err
 	}
-
-	build.config.Logger = build.config.Logger.With(slog.Int64("instance", build.id))
-	build.config.Logger.Info("initializing")
-
-	if build.config.TemplatesFS == nil {
-		build.config.TemplatesFS = afero.NewBasePathFs(afero.NewOsFs(), build.config.TemplatesDir)
+	if inst.config.Source != nil {
+		return nil, nil, nil, fmt.Errorf("setting Source is not allowed during Reload")
 	}
 
-	if len(build.config.Precompress) > 0 {
-		for _, encoding := range build.config.Precompress {
+	inst.config.Logger = inst.config.Logger.With(slog.Int64("instance", inst.id))
+	inst.config.Logger.Info("initializing")
+	inst.files = make(map[string]*fileInfo)
+
+	if inst.config.templatesFS == nil {
+		return nil, nil, nil, fmt.Errorf("xtemplate: templates FS is not set")
+	}
+
+	if len(inst.config.Precompress) > 0 {
+		for _, encoding := range inst.config.Precompress {
 			if _, ok := encodingExts[encoding]; !ok {
 				return nil, nil, nil, fmt.Errorf("unsupported encoding: %s", encoding)
 			}
@@ -117,25 +189,29 @@ func (config *Config) Instance(cfgs ...Option) (inst *Instance, stats *InstanceS
 			return nil, nil, nil, fmt.Errorf("failed to create temp dir for pre-compressed files: %w", err)
 		}
 		go func() {
-			<-build.config.Ctx.Done()
+			<-inst.config.Ctx.Done()
 			_ = os.RemoveAll(tempdir)
 		}()
 		overlay := afero.NewBasePathFs(afero.NewOsFs(), tempdir)
-		build.config.TemplatesFS = afero.NewCopyOnWriteFs(build.config.TemplatesFS, overlay)
+		inst.config.templatesFS = afero.NewCopyOnWriteFs(inst.config.templatesFS, overlay)
 	}
 
 	{
-		build.funcs = template.FuncMap{}
-		maps.Copy(build.funcs, xtemplateFuncs)
-		maps.Copy(build.funcs, sprig.HtmlFuncMap())
-		for _, extra := range build.config.FuncMaps {
-			maps.Copy(build.funcs, extra)
+		inst.funcs = template.FuncMap{}
+		maps.Copy(inst.funcs, xtemplateFuncs)
+		maps.Copy(inst.funcs, sprig.HtmlFuncMap())
+		for _, extra := range inst.config.FuncMaps {
+			maps.Copy(inst.funcs, extra)
 		}
 	}
+	// Funcs must be installed before any parse trees are added to the set.
+	inst.templates = template.New(".").Delims(inst.config.LDelim, inst.config.RDelim).Funcs(inst.funcs)
 
-	build.files = make(map[string]*fileInfo)
-	build.router = http.NewServeMux()
-	build.templates = template.New(".").Delims(build.config.LDelim, build.config.RDelim).Funcs(build.funcs)
+	build := &builder{
+		Instance:      inst,
+		InstanceStats: &InstanceStats{},
+		router:        http.NewServeMux(),
+	}
 
 	if build.config.Minify != nil && *build.config.Minify {
 		m := minify.New()
@@ -148,7 +224,7 @@ func (config *Config) Instance(cfgs ...Option) (inst *Instance, stats *InstanceS
 		build.m = m
 	}
 
-	if err := afero.Walk(build.config.TemplatesFS, ".", func(path_ string, d fs.FileInfo, err error) error {
+	if err := afero.Walk(build.config.templatesFS, ".", func(path_ string, d fs.FileInfo, err error) error {
 		path_ = strings.ReplaceAll(path_, "\\", "/")
 		if err != nil {
 			return err
@@ -200,35 +276,44 @@ func (config *Config) Instance(cfgs ...Option) (inst *Instance, stats *InstanceS
 			}
 			seen[name] = true
 		}
-		// Init user/core providers and any builtin that implements Initializer
-		// (e.g. Flush stores instance ctx for Sleep/WaitForServerStop).
-		toInit := slices.Concat([]Provider{dcInstance, dcReq, dcResp, dcFlush}, dot)
-		var opened []Provider
-		for _, d := range toInit {
-			idp, ok := d.(Initializer)
-			if !ok {
-				continue
+
+		// Process all providers for initialization and closing
+		for _, d := range slices.Concat([]Provider{dcInstance, dcReq, dcResp, dcFlush}, dot) {
+			if di, ok := d.(Initializer); ok {
+				start := time.Now()
+				err := di.Init(build.config.Ctx)
+				build.config.Logger.Debug("initialized provider", "name", d.FieldName(), "type", reflect.TypeOf(d).String(), "duration", time.Since(start))
+				if err != nil {
+					return nil, nil, nil, fmt.Errorf("failed to initialize dot field '%s': %w", d.FieldName(), err)
+				}
 			}
-			start := time.Now()
-			err := idp.Init(build.config.Ctx)
-			build.config.Logger.Debug("initialized provider", "name", d.FieldName(), "type", reflect.TypeOf(d).String(), "duration", time.Since(start))
-			if err != nil {
-				_ = closeProviders(opened)
-				return nil, nil, nil, fmt.Errorf("failed to initialize dot field '%s': %w", d.FieldName(), err)
+			// Any provider that implements Closer is added to the close list after initialization
+			if dc, ok := d.(Closer); ok {
+				inst.config.onClose = append(inst.config.onClose, func() error {
+					err := dc.Close()
+					if err != nil {
+						err = fmt.Errorf("failed to close provider. type=%T, field=%s: %w", d, d.FieldName(), err)
+					}
+					return err
+				})
 			}
-			opened = append(opened, d)
 		}
-		// Only user/core providers are closed on instance retire (builtins have
-		// no owned resources beyond the instance itself).
-		build.providers = dot
 	}
 
+	inst.config.onClose = append(inst.config.onClose, func() error {
+		if n := inst.inflight.Load(); n > 0 {
+			inst.config.Logger.Warn("closing instance with unresolved requests",
+				slog.Int64("instance", inst.id),
+				slog.Int64("inflight", n),
+			)
+		}
+		return nil
+	})
+
 	if build.bufferDot, err = makeDot(slices.Concat([]Provider{dcInstance, dcReq}, dot, []Provider{dcResp})); err != nil {
-		_ = closeProviders(dot)
 		return nil, nil, nil, fmt.Errorf("failed to build buffer dot: %w", err)
 	}
 	if build.flusherDot, err = makeDot(slices.Concat([]Provider{dcInstance, dcReq}, dot, []Provider{dcFlush})); err != nil {
-		_ = closeProviders(dot)
 		return nil, nil, nil, fmt.Errorf("failed to build flusher dot: %w", err)
 	}
 
@@ -300,54 +385,22 @@ func (x *Instance) Id() int64 {
 }
 
 // Close releases instance-scoped provider resources ([Closer]), then runs
-// [WithOnClose] callbacks. It is safe to call more than once. [Server] calls
-// Close when retiring an instance on reload or stop; callers of
-// [Config.Instance] should call Close when the instance is no longer needed if
-// providers own connections or OnClose was used.
+// [WithOnClose] callbacks. Invocations after the first return a memoized result
+// and do not call [Closer.Close] or [WithOnClose] callbacks again.
+//
+// If requests are still in flight (grace period expired or Stop skipped drain),
+// Close logs this as a warning.
 func (x *Instance) Close() error {
 	if x == nil {
 		return nil
 	}
-	err := closeProviders(x.providers)
-	x.providers = nil
-	err = errors.Join(err, runOnClose(x.onClose))
-	x.onClose = nil
-	return err
-}
-
-func closeProviders(providers []Provider) error {
-	var errs []error
-	// Close in reverse init order so dependents shut down before dependencies.
-	for i := len(providers) - 1; i >= 0; i-- {
-		if c, ok := providers[i].(Closer); ok {
-			if err := c.Close(); err != nil {
-				errs = append(errs, fmt.Errorf("close %s: %w", providers[i].FieldName(), err))
-			}
-		}
-	}
-	return errors.Join(errs...)
-}
-
-// runOnClose runs callbacks in reverse registration order (destructor-like).
-func runOnClose(fns []func() error) error {
-	var errs []error
-	for i := len(fns) - 1; i >= 0; i-- {
-		if fns[i] == nil {
-			continue
-		}
-		if err := fns[i](); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	return errors.Join(errs...)
+	return x.closeOnce()
 }
 
 var levelDebug2 slog.Level = slog.LevelDebug + 2
 
 func (instance *Instance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Add before checking cancel so waitInFlight cannot observe 0 while a
-	// request is still between "not cancelled" and the increment (WaitGroup
-	// would panic on Add-after-Wait; an atomic counter does not).
+	// Add before cancel check ensures waitInFlight cannot observe inflight=0.
 	instance.inflight.Add(1)
 	if instance.config.Ctx.Err() != nil {
 		instance.inflight.Add(-1)

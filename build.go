@@ -73,7 +73,7 @@ var extensionContentTypes = map[string]string{
 
 func (b *builder) addStaticFileHandler(path_ string) error {
 	// Open and stat the file
-	fsfile, err := b.config.TemplatesFS.Open(path_)
+	fsfile, err := b.config.templatesFS.Open(path_)
 	if err != nil {
 		return fmt.Errorf("failed to open static file '%s': %w", path_, err)
 	}
@@ -152,7 +152,7 @@ func (b *builder) addStaticFileHandler(path_ string) error {
 		file.encodings = []encodingInfo{{encoding: encoding, path: path_, size: size, modtime: stat.ModTime()}}
 
 		pattern := "GET " + identityPath
-		handler := staticFileHandler(b.config.TemplatesFS, file)
+		handler := staticFileHandler(b.config.templatesFS, file)
 		if err = catch(fmt.Sprintf("add handler to servemux '%s'", pattern), func() { b.router.HandleFunc(pattern, handler) }); err != nil {
 			return err
 		}
@@ -165,12 +165,12 @@ func (b *builder) addStaticFileHandler(path_ string) error {
 
 		for _, enc := range b.config.Precompress {
 			compressedPath := path_ + encodingExts[enc]
-			if _, statErr := b.config.TemplatesFS.Stat(compressedPath); statErr == nil {
+			if _, statErr := b.config.templatesFS.Stat(compressedPath); statErr == nil {
 				b.config.Logger.Debug("skipping precompression, file already exists", slog.String("path", compressedPath))
 				continue
 			}
 			b.config.Logger.Debug("precompressing static file", slog.String("src", path_), slog.String("dst", compressedPath), slog.String("encoding", enc))
-			if err = precompressFile(b.config.TemplatesFS, path_, enc); err != nil {
+			if err = precompressFile(b.config.templatesFS, path_, enc); err != nil {
 				return fmt.Errorf("failed to precompress '%s' as %s: %w", path_, enc, err)
 			}
 			if err = b.addStaticFileHandler(compressedPath); err != nil {
@@ -199,10 +199,13 @@ func catch(description string, fn func()) (err error) {
 	return
 }
 
-var routeMatcher *regexp.Regexp = regexp.MustCompile("^(GET|POST|PUT|PATCH|DELETE|SSE) (.*)$")
+// routeMatcher recognizes define names that register HTTP routes.
+// SSE is a pseudo-method (flushing handler, registered as GET).
+// ANY is a pseudo-method (buffered handler, registered with no method so ServeMux matches every method).
+var routeMatcher *regexp.Regexp = regexp.MustCompile("^(GET|POST|PUT|PATCH|DELETE|SSE|ANY) (.*)$")
 
 func (b *builder) addTemplateHandler(path_ string) error {
-	content, err := afero.ReadFile(b.config.TemplatesFS, path_)
+	content, err := afero.ReadFile(b.config.templatesFS, path_)
 	if err != nil {
 		return fmt.Errorf("could not read template file '%s': %v", path_, err)
 	}
@@ -262,12 +265,18 @@ func (b *builder) addTemplateHandler(path_ string) error {
 			pattern = "GET " + routePath
 			handler = bufferingTemplateHandler(b.Instance, tmpl)
 		} else if matches := routeMatcher.FindStringSubmatch(name); len(matches) == 3 {
-			method, path_ := matches[1], matches[2]
-			if method == "SSE" {
-				pattern = "GET " + path_
+			method, routePath := matches[1], matches[2]
+			switch method {
+			case "SSE":
+				// Pseudo-method: flushing handler registered as GET.
+				pattern = "GET " + routePath
 				handler = flushingTemplateHandler(b.Instance, tmpl)
-			} else {
-				pattern = method + " " + path_
+			case "ANY":
+				// Pseudo-method: no method prefix so ServeMux matches every HTTP method.
+				pattern = routePath
+				handler = bufferingTemplateHandler(b.Instance, tmpl)
+			default:
+				pattern = method + " " + routePath
 				handler = bufferingTemplateHandler(b.Instance, tmpl)
 			}
 		} else {
@@ -279,7 +288,7 @@ func (b *builder) addTemplateHandler(path_ string) error {
 		}
 		b.routes = append(b.routes, InstanceRoute{pattern, handler})
 		b.Routes += 1
-		b.config.Logger.Debug("added template handler", "method", "GET", "pattern", pattern, "template_path", path_)
+		b.config.Logger.Debug("added template handler", "pattern", pattern, "template_path", path_)
 	}
 	return nil
 }

@@ -5,7 +5,9 @@
 :0 {
 	route {
 		xtemplate {
-			templates_dir templates
+			source os {
+				path templates
+			}
 			minify true
 
 			provider sql DB {

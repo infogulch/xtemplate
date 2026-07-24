@@ -1,6 +1,4 @@
 {
-  "templates_dir": "templates",
-  "watch_dirs": ["posts"],
   "providers": [
     {
       "type": "fs",
@@ -14,5 +12,12 @@
       "connstr": ":memory:",
       "max_open_conns": 1
     }
-  ]
+  ],
+  "source": {
+    "type": "watchfs",
+    "path": "templates",
+    "watch_dirs": [
+      "posts"
+    ]
+  }
 }

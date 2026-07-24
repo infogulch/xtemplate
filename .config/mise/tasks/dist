@@ -26,7 +26,7 @@ for os in [linux darwin windows] {
         rm -rf $dir
         mkdir $dir
         with-env { GOOS: $os, GOARCH: $arch } {
-            ^go build -ldflags $ldflags -o ($dir | path join $exe) ./cmd/watchfs
+            ^go build -ldflags $ldflags -o ($dir | path join $exe) ./cmd/xtemplate
         }
         ^cp README.md LICENSE $dir
         do { cd $env.DIST_DIR; ^zip -jqr6 $"($name)_($ver).zip" $name }

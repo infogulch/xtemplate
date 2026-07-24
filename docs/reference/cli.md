@@ -1,113 +1,86 @@
 # CLI reference
 
-Flag inventory for the standalone binaries, and how the `app` package lets you extend that surface.
+Flag inventory for the standalone binary, and how the `app` package loads config.
 
 Related:
 
-- When to use each variant and how to install or run them: [Deployment modes](deployment-modes.md).
+- When to use each source type and how to install or run: [Deployment modes](deployment-modes.md).
 - Field meanings, providers, and JSON/Caddyfile/library shapes: [Configuration](configuration.md).
 - Custom binaries: [Custom build](../how-to/custom-build.md).
 
-## Binaries
+## Binary
 
-Three thin entries share most flags; they differ in template source and reload:
+One entrypoint: [`cmd/xtemplate`](../../cmd/xtemplate). It blank-imports core providers and optional sources (`watchfs`, `git`). Choose the template source with `--source-type` or JSON `"source": {"type":…}`.
 
-| Entry | Reload |
+| Build | Default `--source-type` |
 |---|---|
-| [`cmd/watchfs`](../../cmd/watchfs) | Filesystem watch (default for local work) |
-| [`cmd`](../../cmd) | None |
-| [`cmd/git`](../../cmd/git) | Git poll (`--git-repo`, `--git-ref`, `--git-interval`) |
+| `cmd/xtemplate` / release | `watchfs` |
+| Docker | `os` (ldflag `defaultSourceType`) |
+| Library / Caddy (no source block) | `os` |
 
 ```shell
-go build -o xtemplate ./cmd/watchfs
+go install github.com/infogulch/xtemplate/cmd/xtemplate@latest
+# or
+go build -o xtemplate ./cmd/xtemplate
 ```
 
-## Extending the app config
+## Config loading
 
-The published CLIs are not three separate flag parsers. They share [`app.LoadConfig`](../../app/app.go), which loads **any** struct that implements `app.Configurable` - typically by **embedding** `app.Config` and adding fields.
+[`app.LoadConfig`](../../app/app.go) scans argv (pass 0) for `--source-type`, `-f`/`--config-file`, `-c`/`--config`, then loads JSON (with a ban-list for legacy keys), picks the effective source type, and parses CLI flags into the app config plus the effective source dest (pass B). After load, `Source` is materialized and `SourceRaw` is cleared.
 
-`app.Config` itself embeds `xtemplate.Config` and adds listen, log level, and the `-c` / `-f` config sources:
+Precedence (later wins): defaults → `-f` files → `-c` fragments → CLI flags.
 
-```go
-type Config struct {
-	xtemplate.Config
-	Listen      string   `json:"listen" arg:"-l"`
-	LogLevel    int      `json:"log_level" default:"-2"`
-	Configs     []string `json:"-" arg:"-c,--config,separate"`
-	ConfigFiles []string `json:"-" arg:"-f,--config-file,separate"`
-}
-```
-
-A variant adds options by embedding that type and tagging new fields for both JSON and [go-arg](https://github.com/alexflint/go-arg). watchfs adds extra watch dirs:
-
-```go
-// app/watchfs - simplified
-type Config struct {
-	app.Config
-	Watch []string `json:"watch_dirs" arg:",separate"`
-}
-
-var _ app.Configurable = (*Config)(nil)
-
-func Main(options ...xtemplate.Option) {
-	config, err := app.LoadConfig(&Config{}, nil)
-	// … wire Reload from config.Watch, then:
-	app.Serve(&config.Config, options...)
-}
-```
-
-git does the same with `--git-repo`, `--git-ref`, and `--git-interval` (see [`app/git`](../../app/git/gitapp.go)). Override `SetDefaults` on your outer struct when new fields need defaults; call the embedded `Config.SetDefaults()` so listen/logger still initialize.
-
-Because `LoadConfig` parses and unmarshals into **your** struct value:
-
-- New fields appear as CLI flags and JSON keys automatically (via `arg` / `json` tags).
-- Existing xtemplate and app fields keep working without redeclaring them.
-- Help (`Epilogue`) and `Version` can be overridden the same way when needed.
-
-For a one-off binary that only needs extra providers or FuncMaps, prefer `watchfs.Main(xtemplate.With…)` or `app.Main(…)` from [Custom build](../how-to/custom-build.md). Embed a new `Configurable` when you need **new flags or JSON keys** of your own (another reload policy, a required remote, etc.).
-
-### Config source precedence
-
-Whatever the outer struct is, `LoadConfig` fills it in this order (later wins): defaults → `-f` files in order → `-c` fragments in order → CLI flags. Flags are parsed twice so they still override JSON after files load. Details live in `app.LoadConfig`.
+JSON `"source"."type"` must match `--source-type` when both are set.
 
 ## Flags
 
-Flags map onto the embedded config fields above (plus variant-only fields). Verified against the current `watchfs` / `cmd` help output:
+### App-level
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `-t`, `--templates-dir`, `--template-dir` | `templates` | Template root path (relative to working directory / FS) |
-| `--template-ext` | `.html` | Extension for path-template sources |
-| `-m`, `--minify` | `true` | Minify HTML templates at load time (`--minify=false` to disable) |
-| `--precompress` | (none) | Pre-compress static files at load (`gzip`, `zstd`, `br`; repeatable) |
-| `--ldelim` | `{{` | Left template delimiter |
-| `--rdelim` | `}}` | Right template delimiter |
-| `-l`, `--listen` | `0.0.0.0:8080` | Listen address (Docker image defaults to `:80`) |
+| `-l`, `--listen` | `0.0.0.0:8080` | Listen address (Docker often `:80` via ldflag) |
 | `--loglevel` | `-2` | `slog` level (numeric; lower is more verbose) |
-| `-c`, `--config` | | Inline JSON config (repeatable); later fragments win |
-| `-f`, `--config-file` | | JSON config file path (repeatable); later files win |
-| `--watch` | | watchfs only: extra directory to watch (repeatable). The templates dir is always watched |
-| `--git-repo` | | git only: remote URL (required) |
-| `--git-ref` | | git only: branch / tag / commit-ish |
-| `--git-interval` | `15s` | git only: poll interval |
-| `-h`, `--help` | | Help |
+| `-c`, `--config` | | Inline JSON (repeatable); later wins |
+| `-f`, `--config-file` | | JSON config file (repeatable); later wins |
+| `--source-type` | build default (table above) | Active source type; must match JSON `source.type` if both set |
+| `-h`, `--help` | | Help (lists registered source types) |
 | `--version` | | Version string |
+
+### Core / shared template options
+
+| Flag | Applies when | Default | Meaning |
+|---|---|---|---|
+| `-t`, `--templates-dir`, `--template-dir` | `os`, `watchfs`, `git` (subdir) | `templates` | Path on that source |
+| `--template-ext` | always | `.html` | Extension for path-template sources |
+| `-m`, `--minify` | always | `true` | Minify HTML templates at load (`--minify=false` to disable) |
+| `--precompress` | always | none | Pre-compress static files (`gzip`, `zstd`, `br`; repeatable) |
+| `--ldelim` / `--rdelim` | always | `{{` / `}}` | Template delimiters |
+
+### Source-specific (only for the effective type)
+
+| Flag | Type | Default | Meaning |
+|---|---|---|---|
+| `--watch` | `watchfs` | none | Extra watch dirs (repeatable); templates `Path` always watched |
+| `--debounce` | `watchfs` | `200ms` | FS event debounce |
+| `--git-repo` | `git` | required | Repository URL or path |
+| `--git-ref` | `git` | (remote default) | Branch / tag / ref |
+| `--git-interval` | `git` | `15s` | Poll interval |
 
 ## Examples
 
 ```shell
-# Listen on port 80
+# Listen on port 80 (default source watchfs in release builds)
 ./xtemplate --listen :80
 
-# Custom templates directory (watchfs always reloads when it changes)
-./xtemplate --templates-dir public
+# Explicit os source (no reload)
+./xtemplate --source-type os --templates-dir public
 
-# Also reload when ./data changes
-./xtemplate --watch data
+# watchfs: also reload when ./data changes
+./xtemplate --source-type watchfs --watch data
 
-# Custom extension and keep minify on
-./xtemplate --template-ext ".go.html" --minify
+# git source
+./xtemplate --source-type git --git-repo https://example.com/site.git --git-ref main
 
-# Pre-compress static files at startup
-./xtemplate --precompress gzip --precompress br
+# Config file
+./xtemplate -f config.json
 ```

@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	xtemplate.Register("flags", func() xtemplate.Provider { return &DotFlagsConfig{} })
+	xtemplate.RegisterProvider("flags", func() xtemplate.Provider { return &DotFlagsConfig{} })
 }
 
 // DotFlags provides template access to a static key/value map.

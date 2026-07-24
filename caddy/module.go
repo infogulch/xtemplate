@@ -2,14 +2,13 @@ package xtemplate_caddy
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
-	"time"
 
 	"log/slog"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
-	"github.com/infogulch/watch"
 	"github.com/infogulch/xtemplate"
 	"go.uber.org/zap/exp/zapslog"
 )
@@ -29,12 +28,34 @@ func (XTemplateModule) CaddyModule() caddy.ModuleInfo {
 type XTemplateModule struct {
 	xtemplate.Config
 
-	WatchTemplatePath bool `json:"watch_template_path"`
-
 	FuncsModules []string `json:"funcs_modules,omitempty"`
 
 	handler *xtemplate.Server
 	cancel  func()
+}
+
+// UnmarshalJSON applies the ban-list probe then unmarshals into the module.
+// REMOVE BEFORE 1.0: temporary hard-rejects for renamed Caddy knobs.
+//
+// Uses a method-less alias of Config so Config.UnmarshalJSON (ban-list) is not
+// invoked on the full object as an embedded Unmarshaler — that would swallow
+// module-only fields like funcs_modules.
+func (m *XTemplateModule) UnmarshalJSON(data []byte) error {
+	if err := xtemplate.CheckLegacyTemplateKeys(data); err != nil {
+		return err
+	}
+	type plainConfig xtemplate.Config
+	type moduleAlias struct {
+		plainConfig
+		FuncsModules []string `json:"funcs_modules,omitempty"`
+	}
+	var a moduleAlias
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	m.Config = xtemplate.Config(a.plainConfig)
+	m.FuncsModules = a.FuncsModules
+	return nil
 }
 
 // Validate ensures t has a valid configuration. Implements caddy.Validator.
@@ -44,6 +65,7 @@ func (m *XTemplateModule) Validate() error {
 }
 
 // Provision provisions t. Implements caddy.Provisioner.
+// Default without a source block is os path templates (no ad-hoc watch).
 func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 	// Wrap zap logger into a slog logger for xtemplate
 	log := slog.New(zapslog.NewHandler(ctx.Logger().Core())).WithGroup("xtemplate-caddy")
@@ -75,26 +97,6 @@ func (m *XTemplateModule) Provision(ctx caddy.Context) error {
 		return err
 	}
 	m.handler = server
-
-	if m.WatchTemplatePath {
-		halt, err := watch.Watch([]string{m.TemplatesDir}, 200*time.Millisecond, log.WithGroup("fswatch"), func() bool {
-			err := server.Reload()
-			if err != nil {
-				log.Error("failed to reload xtemplate server", slog.Any("reload_error", err))
-			}
-			return true
-		})
-		if err != nil {
-			return err
-		}
-		cancel := m.cancel
-		m.cancel = func() {
-			close(halt)
-			if cancel != nil {
-				cancel()
-			}
-		}
-	}
 	return nil
 }
 
@@ -122,4 +124,5 @@ var (
 	_ caddy.Provisioner           = (*XTemplateModule)(nil)
 	_ caddyhttp.MiddlewareHandler = (*XTemplateModule)(nil)
 	_ caddy.CleanerUpper          = (*XTemplateModule)(nil)
+	_ json.Unmarshaler            = (*XTemplateModule)(nil)
 )

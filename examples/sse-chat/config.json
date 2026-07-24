@@ -1,9 +1,12 @@
 {
-  "templates_dir": "templates",
   "providers": [
     {
       "type": "bus",
       "name": "Bus"
     }
-  ]
+  ],
+  "source": {
+    "type": "os",
+    "path": "templates"
+  }
 }

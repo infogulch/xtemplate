@@ -24,7 +24,7 @@ func parse(t *testing.T, body string) (json.RawMessage, error) {
 	if err != nil {
 		t.Fatalf("GetModule: %v", err)
 	}
-	return mi.New().(xtc.CaddyfileProvider).ParseCaddyfile(h)
+	return mi.New().(xtc.CaddyfileBlockParser).ParseCaddyfile(h)
 }
 
 func TestFsCaddyfile_HappyPath(t *testing.T) {

@@ -115,6 +115,24 @@ func TestServeHTTP_HiddenFileNotRouted(t *testing.T) {
 	}
 }
 
+func TestServeHTTP_ANY_MethodMatchesEveryHTTPMethod(t *testing.T) {
+	inst := buildInstance(t, map[string]string{
+		"routes.html": `{{define "ANY /api"}}{{.Resp.ReturnStatus 204}}{{end}}`,
+	})
+
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete} {
+		w := doRequest(inst, method, "/api")
+		if w.Code != http.StatusNoContent {
+			t.Errorf("%s /api status = %d, want 204", method, w.Code)
+		}
+	}
+	// Unrelated path still 404.
+	w := doRequest(inst, http.MethodGet, "/other")
+	if w.Code != http.StatusNotFound {
+		t.Errorf("GET /other status = %d, want 404", w.Code)
+	}
+}
+
 func TestServeHTTP_StaticFileAndHash(t *testing.T) {
 	const css = "body { color: red; }\n"
 	inst := buildInstance(t, map[string]string{
@@ -210,8 +228,7 @@ func TestServer_ReloadChannel(t *testing.T) {
 
 	reload := make(chan []Option)
 	cfg := New()
-	cfg.Reload = reload
-	server, err := cfg.Server(WithTemplateFS(fs1))
+	server, err := cfg.Server(WithSource(&testSource{initial: fs1, reloads: reload}))
 	if err != nil {
 		t.Fatalf("failed to build server: %v", err)
 	}
@@ -227,8 +244,8 @@ func TestServer_ReloadChannel(t *testing.T) {
 		t.Fatalf("before reload body = %q, want it to contain V1", body)
 	}
 
-	// Send options through the channel to swap the templates FS, then wait for
-	// the consumer goroutine to apply the reload by polling for the new content.
+	// Send options through the source channel to swap the templates FS, then
+	// wait for the consumer goroutine to apply the reload.
 	reload <- []Option{WithTemplateFS(fs2)}
 
 	deadline := time.Now().Add(2 * time.Second)

@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Template sources** (pluggable, mirror providers): `TemplateSource` +
+  `RegisterSource` / `ResolveSource`. Config holds one required `Source` and a
+  private build-root FS. Built-ins: `os`, `fs`. Optional packages:
+  `sources/watchfs`, `sources/git`. JSON: `"source": {"type":"…", …}`.
+  Nil `initial` from Start → placeholder MemMapFs (`.any.html` with
+  `{{define "ANY /"}}` → 503) until a reload brings content (git). When initial
+  is nil, every `Server.Reload` must include `WithTemplateFS`/`WithTemplateDir`
+  (options are not sticky). Git emits `WithTemplateFS` + `WithOnClose(RemoveAll)`
+  per clone.
+- Define-route pseudo-method `ANY` (methodless ServeMux pattern: every HTTP
+  method). `ANY /` is a full-tree catch-all.
+- Unified CLI: single `cmd/xtemplate` + `app.LoadConfig` with pass-0
+  `--source-type` scan. Defaults: library/Caddy → `os`, release CLI → `watchfs`,
+  Docker → `os` (`defaultSourceType` ldflag).
+- Caddyfile `source <type> { … }` via shared `CaddyfileBlockParser`
+  (was `CaddyfileProvider`); in-tree `xtemplate.source.os`;
+  `sources/*/caddyfile`; `caddy/standard` blank-imports sources + providers.
 - `Server.Shutdown(ctx)` for graceful stop: cancel server-owned context first
   (so SSE `WaitForServerStop` / Flush helpers observe stop), wait for
   in-flight instance requests up to `ctx`, then close providers. `Stop` is
@@ -19,6 +36,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-Reload options for one-shot / per-build resources (e.g. temp dirs).
 
 ### Changed
+
+- **Breaking: template Config surface**
+  - Drop public `TemplatesDir`, `TemplatesFS`, `Config.Reload`
+  - Use `Source` / `WithSource` / `WithTemplateFS` / `WithTemplateDir`
+  - `Register` → `RegisterProvider` (no alias)
+  - `CaddyfileProvider` → `CaddyfileBlockParser`
+  - CLI: only `cmd/xtemplate` (removed `cmd/watchfs`, `cmd/git`, plain `cmd`,
+    `app/watchfs`, `app/git`)
+  - **Caddy no longer watches by default** (default source is `os`). Use
+    `source watchfs { … }` for reload-on-change.
+  - Legacy JSON/Caddy keys `templates_dir`, `templates_path`, `watch_dirs`,
+    `watch_template_path`, `git_repo`, `git_ref`, `git_interval` hard-reject
+    with migrate messages (remove ban-list before 1.0). Other unknown JSON keys
+    still ignored. Ban-list runs on `Config` JSON decode (library, CLI, Caddy).
 
 - **Server lifecycle:** `Server` owns a `serverCtx` (child of `Config.Ctx`).
   Instance contexts parent on `serverCtx`. Reload retires the old instance by

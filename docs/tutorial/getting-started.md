@@ -58,18 +58,18 @@ Create `templates/index.html`:
 Download a release, or build the default live-reload binary:
 
 ```bash
-go install github.com/infogulch/xtemplate/cmd/watchfs@latest
+go install github.com/infogulch/xtemplate/cmd/xtemplate@latest
 # or from a checkout of the repo:
-go build -o xtemplate ./cmd/watchfs
+go build -o xtemplate ./cmd/xtemplate
 ```
 
 Run it from your project directory (so `./templates` resolves):
 
 ```bash
-# if installed via go install, the binary is named watchfs
-watchfs --listen :8080
+# go install installs as "xtemplate"
+xtemplate --listen :8080
 
-# if you built -o xtemplate:
+# if you built -o xtemplate from a checkout:
 ./xtemplate --listen :8080
 ```
 

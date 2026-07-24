@@ -1,5 +1,4 @@
 {
-  "templates_dir": "templates",
   "providers": [
     {
       "type": "sql",
@@ -7,5 +6,9 @@
       "driver": "sqlite3",
       "connstr": "file:./contacts.sqlite"
     }
-  ]
+  ],
+  "source": {
+    "type": "os",
+    "path": "templates"
+  }
 }
