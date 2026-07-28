@@ -8,7 +8,7 @@ The quickest way to explore them is to start everything at once:
 mise run examples
 ```
 
-This launches all six examples plus a landing page at
+This launches all seven examples plus a landing page at
 <http://localhost:9000> with links to each one. Press Ctrl+C to stop them all.
 
 If one of those ports is already taken, pass a different base port; everything
@@ -30,12 +30,13 @@ the listed URL.
 | [`filebrowser`](./filebrowser/) | Filesystem dot provider (`.FS` list/read + `ReceiveFiles` upload) | `mise run example-filebrowser` | 9004 | <http://localhost:9004/> |
 | [`embedded`](./embedded/) | Single-binary deployment with `//go:embed` (custom build) | `mise run example-embedded` | 9005 | <http://localhost:9005/> |
 | [`dotprovider`](./dotprovider/) | Custom dot provider exposing Go code to templates (custom build) | `mise run example-dotprovider` | 9006 | <http://localhost:9006/> |
+| [`datastar`](./datastar/) | Datastar client + SSE `datastar-patch-elements` (shared SQLite counter) | `mise run example-datastar` | 9007 | <http://localhost:9007/> |
 
 ## How these are wired
 
-- **Examples 1-4** (`contacts`, `sse-chat`, `blog`, `filebrowser`) run the
-  default CLI binary built by `mise run build-cli` (`dist/xtemplate`) against a
-  `config.json` in the example directory.
+- **Examples 1-4 and 7** (`contacts`, `sse-chat`, `blog`, `filebrowser`,
+  `datastar`) run the default CLI binary built by `mise run build-cli`
+  (`dist/xtemplate`) against a `config.json` in the example directory.
 - **Examples 5-6** (`embedded`, `dotprovider`) are custom Go programs (their own
   `main.go` calling `app.Main(...)`) and have their own `build-example-<name>`
   task.

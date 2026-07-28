@@ -1,0 +1,121 @@
+/* Shared classless theme for the xtemplate examples. Styles bare HTML elements
+   so templates need only a single <link>, no class soup. */
+:root {
+    --accent: #2a5db0;
+    --bg: #fafbfc;
+    --fg: #1b1f24;
+    --muted: #6a737d;
+    --border: #e1e4e8;
+    --card: #ffffff;
+}
+* {
+    box-sizing: border-box;
+}
+body {
+    max-width: 44rem;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem 4rem;
+    font-family:
+        system-ui,
+        -apple-system,
+        "Segoe UI",
+        Roboto,
+        sans-serif;
+    line-height: 1.6;
+    color: var(--fg);
+    background: var(--bg);
+}
+h1,
+h2,
+h3 {
+    line-height: 1.25;
+}
+h1 {
+    color: var(--accent);
+    margin: 0 0 1.5rem;
+}
+h2 {
+    margin-top: 2rem;
+}
+a {
+    color: var(--accent);
+    text-decoration: none;
+}
+a:hover {
+    text-decoration: underline;
+}
+p {
+    margin: 1rem 0;
+}
+hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 2rem 0;
+}
+code {
+    background: #eef1f6;
+    padding: 0.12em 0.4em;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+pre {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-x: auto;
+}
+pre code {
+    background: none;
+    padding: 0;
+}
+ul {
+    padding-left: 1.1rem;
+}
+li {
+    margin: 0.4rem 0;
+}
+input,
+button {
+    font: inherit;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+input {
+    background: var(--card);
+}
+input:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+button {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    cursor: pointer;
+}
+button:hover {
+    filter: brightness(1.08);
+}
+form {
+    margin: 1.25rem 0;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+th,
+td {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+}
+th {
+    color: var(--muted);
+    font-weight: 600;
+}
