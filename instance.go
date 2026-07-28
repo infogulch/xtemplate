@@ -225,6 +225,9 @@ func (config *Config) buildInstance() (_ *Instance, err error) {
 		seen := map[string]bool{}
 		for _, d := range dot {
 			name := d.FieldName()
+			if err := validateProviderFieldName(name); err != nil {
+				return nil, fmt.Errorf("dot provider %T: %w", d, err)
+			}
 			if seen[name] {
 				return nil, fmt.Errorf("dot field name '%s' is used more than once", name)
 			}

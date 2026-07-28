@@ -33,7 +33,7 @@ func (shopProvider) Prototype() any                            { return Shop{} }
 func (shopProvider) Value(http.ResponseWriter, *http.Request) (any, error) { return Shop{}, nil }
 ```
 
-- `FieldName` chooses the dot field on the dot context. Two providers on one instance must not share a field name.
+- `FieldName` chooses the dot field on the dot context. It must be a unique, non-empty, exported, valid Go identifier (e.g. `Shop`, not `shop` or `""` or `1Shop` or `Shop-Data`).
 - `Prototype` must return a non-nil value of the same concrete type that `Value` returns. It is discarded after type inference.
 - Methods on the value returned by `Value` are callable from templates (`{{.Shop.Product 1}}`).
 
