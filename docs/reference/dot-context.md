@@ -145,4 +145,4 @@ Typical field name: `.Email`. Config requires `host` and `from` (default sender)
 
 ## Custom providers
 
-Implement `xtemplate.Provider` and attach with `WithProvider` (or register a provider type for JSON/Caddyfile). See [How to create a custom dot provider](../how-to/create-a-provider.md) and [`examples/dotprovider`](../../examples/dotprovider/).
+Implement `xtemplate.Provider` and attach with a `WithProvider` factory (or register a provider type for JSON/Caddyfile). See [How to create a custom dot provider](../how-to/create-a-provider.md) and [`examples/dotprovider`](../../examples/dotprovider/).

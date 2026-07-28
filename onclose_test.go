@@ -49,7 +49,9 @@ func TestWithOnClose_ReverseOrderAfterProviders(t *testing.T) {
 	}
 
 	inst := buildInstance(t, map[string]string{"index.html": "ok"},
-		WithProvider(&closeOrderProvider{name: "P", onClose: func() { add("provider") }}),
+		WithProvider(func() Provider {
+			return &closeOrderProvider{name: "P", onClose: func() { add("provider") }}
+		}),
 		WithOnClose(func() error { add("onClose1"); return nil }),
 		WithOnClose(func() error { add("onClose2"); return nil }),
 	)
@@ -312,13 +314,17 @@ func TestWithOnClose_InitFailureClosesOpenedProviders(t *testing.T) {
 
 	cfg, err := New().Options(
 		WithTemplateFS(newMemFS(t, map[string]string{"index.html": "ok"})),
-		WithProvider(&initCloseProvider{
-			name:    "OK",
-			onClose: func() { add("provider-ok") },
+		WithProvider(func() Provider {
+			return &initCloseProvider{
+				name:    "OK",
+				onClose: func() { add("provider-ok") },
+			}
 		}),
-		WithProvider(&initCloseProvider{
-			name:    "Fail",
-			initErr: errors.New("init-fail"),
+		WithProvider(func() Provider {
+			return &initCloseProvider{
+				name:    "Fail",
+				initErr: errors.New("init-fail"),
+			}
 		}),
 		WithOnClose(func() error { add("onClose"); return nil }),
 	)

@@ -3,6 +3,7 @@ package xtemplate
 import (
 	"context"
 	"fmt"
+	"go/token"
 	"net/http"
 	"reflect"
 	"sync"
@@ -59,17 +60,37 @@ type Closer interface {
 	Close() error
 }
 
+// validateProviderFieldName checks that name is a non-empty exported Go
+// identifier suitable for reflect.StructOf. Invalid names panic inside
+// StructOf; callers should return a config error instead.
+func validateProviderFieldName(name string) error {
+	if name == "" {
+		return fmt.Errorf("provider field name is empty")
+	}
+	if !token.IsIdentifier(name) {
+		return fmt.Errorf("provider field name %q is not a valid Go identifier", name)
+	}
+	if !token.IsExported(name) {
+		return fmt.Errorf("provider field name %q must be exported (start with an uppercase letter)", name)
+	}
+	return nil
+}
+
 func makeDot(dps []Provider) (dot, error) {
 	fields := make([]reflect.StructField, 0, len(dps))
 	finalizers := []finalizer{}
 	for i, dp := range dps {
+		name := dp.FieldName()
+		if err := validateProviderFieldName(name); err != nil {
+			return dot{}, fmt.Errorf("dot provider %T: %w", dp, err)
+		}
 		a := dp.Prototype()
 		t := reflect.TypeOf(a)
 		if t == nil {
-			return dot{}, fmt.Errorf("dot provider %q (%T) Prototype returned nil; Prototype must return a non-nil typed value", dp.FieldName(), dp)
+			return dot{}, fmt.Errorf("dot provider %q (%T) Prototype returned nil; Prototype must return a non-nil typed value", name, dp)
 		}
 		f := reflect.StructField{
-			Name:      dp.FieldName(),
+			Name:      name,
 			Type:      t,
 			Anonymous: false, // alas
 		}

@@ -149,7 +149,7 @@ func TestDotBusConfig_Init(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timeout")
 	}
-	cancel() // shuts down bus via Init's ctx watcher
+	cancel() // Kick via Init's ctx watcher closes subscriber channels
 	select {
 	case _, ok := <-ch:
 		if ok {
@@ -158,7 +158,17 @@ func TestDotBusConfig_Init(t *testing.T) {
 			}
 		}
 	case <-time.After(time.Second):
-		t.Fatal("timeout waiting for close after Shutdown")
+		t.Fatal("timeout waiting for channel close after Kick")
+	}
+	// Kick leaves the bus open for Publish.
+	if err := dot.Publish("t", "after-kick"); err != nil {
+		t.Fatalf("Publish after Kick: %v", err)
+	}
+	if err := cfg.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if err := dot.Publish("t", "x"); err == nil {
+		t.Fatal("Publish after Close should fail")
 	}
 }
 
@@ -183,6 +193,47 @@ func TestDotBus_WithBusOption(t *testing.T) {
 	if w.Code != http.StatusOK || w.Body.String() != "ok" {
 		t.Fatalf("status=%d body=%q", w.Code, w.Body.String())
 	}
+}
+
+// TestDotBus_ReloadIsolatesInstances ensures sticky WithBus factories produce
+// a new bus per Reload, so retiring the previous instance does not Close the
+// live bus (the sticky-provider Init/Close bug).
+func TestDotBus_ReloadIsolatesInstances(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	if err := afero.WriteFile(fs, "pub.html", []byte(`{{.Bus.Publish "t" "hi"}}ok`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := xtemplate.New().Options(
+		xtemplate.WithTemplateFS(fs),
+		dotbus.WithBus("Bus", 8),
+	)
+	if err != nil {
+		t.Fatalf("Options: %v", err)
+	}
+	srv, err := cfg.Server()
+	if err != nil {
+		t.Fatalf("Server: %v", err)
+	}
+	t.Cleanup(func() { srv.Stop() })
+
+	publishOK := func(label string) {
+		t.Helper()
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/pub", nil))
+		if w.Code != http.StatusOK || w.Body.String() != "ok" {
+			t.Fatalf("%s: status=%d body=%q (bus may have been closed by prior instance)", label, w.Code, w.Body.String())
+		}
+	}
+
+	publishOK("initial")
+	if err := srv.Reload(); err != nil {
+		t.Fatalf("Reload 1: %v", err)
+	}
+	publishOK("after reload 1")
+	if err := srv.Reload(); err != nil {
+		t.Fatalf("Reload 2: %v", err)
+	}
+	publishOK("after reload 2")
 }
 
 func TestDotBus_RequestCancelUnsubscribes(t *testing.T) {

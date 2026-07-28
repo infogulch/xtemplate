@@ -47,7 +47,9 @@ type Config struct {
 	CrossOrigin CrossOriginConfig `json:"crossorigin" arg:"-"`
 
 	ProvidersRaw []json.RawMessage `json:"providers,omitempty" arg:"-"`
-	Providers    []Provider        `json:"-" arg:"-"`
+	// Providers holds factories that produce a fresh [Provider] per Instance
+	// build / Reload (same isolation as JSON ProvidersRaw → resolveProviders).
+	Providers []ProviderFactory `json:"-" arg:"-"`
 
 	// Encodings to pre-compress static files into at load time. Supported values:
 	// "gzip", "zstd", "br". Default empty (no pre-compression).
@@ -128,7 +130,8 @@ func (config *Config) SetDefaults() *Config {
 
 // cloneSlices replaces every append-owned slice with a copy so later Options
 // or builds cannot mutate the caller's (or sticky Server's) backing arrays.
-// Maps inside FuncMaps are cloned; Provider values and Handler refs are not deep-copied.
+// Maps inside FuncMaps are cloned; ProviderFactory funcs and Handler refs are
+// not deep-copied (factories are invoked per build to produce fresh Providers).
 func (c *Config) cloneSlices() {
 	c.ControllerRaw = slices.Clone(c.ControllerRaw)
 	if c.ProvidersRaw != nil {
@@ -272,9 +275,14 @@ func WithHandler(pattern string, h http.Handler) Option {
 	}
 }
 
-func WithProvider(p Provider) Option {
+// WithProvider appends a factory that produces a provider on each Instance
+// build. The factory must not return nil. Rejects a nil factory.
+func WithProvider(f ProviderFactory) Option {
 	return func(c *Config) error {
-		c.Providers = append(c.Providers, p)
+		if f == nil {
+			return fmt.Errorf("nil provider factory")
+		}
+		c.Providers = append(c.Providers, f)
 		return nil
 	}
 }

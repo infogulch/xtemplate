@@ -8,7 +8,7 @@ A complete runnable example: [`examples/dotprovider`](../../examples/dotprovider
 
 Every path implements the same `Provider` interface. Pick by how the provider is configured:
 
-- **Custom provider** - construct it in Go and pass `WithProvider` (or put it on `Config.Providers`). Best for app-specific code next to `main`. Not selectable from JSON or Caddyfile.
+- **Custom provider** - implement `Provider` and pass a **factory** via `WithProvider` (or append to `Config.Providers`). Best for app-specific code next to `main`. Not selectable from JSON or Caddyfile.
 - **Provider package** - self-register a type from `init()` so JSON can decode `"type"`. Required when the binary must resolve providers from config (CLI or Caddy JSON).
 - **Caddyfile provider** - a Caddy module under `xtemplate.providers.*` that parses `provider <type> <field> { }` into JSON.
 
@@ -33,11 +33,11 @@ func (shopProvider) Prototype() any                            { return Shop{} }
 func (shopProvider) Value(http.ResponseWriter, *http.Request) (any, error) { return Shop{}, nil }
 ```
 
-- `FieldName` chooses the dot field on the dot context. Two providers on one instance must not share a field name.
+- `FieldName` chooses the dot field on the dot context. It must be a unique, non-empty, exported, valid Go identifier (e.g. `Shop`, not `shop` or `""` or `1Shop` or `Shop-Data`).
 - `Prototype` must return a non-nil value of the same concrete type that `Value` returns. It is discarded after type inference.
 - Methods on the value returned by `Value` are callable from templates (`{{.Shop.Product 1}}`).
 
-Optional: implement `Initializer` for instance-scoped setup (open connections, validate config). The instance context is cancelled on reload/stop; retain it on the provider if request-time code must observe reload/stop (do not expect it on `Value`).
+Optional: implement `Initializer` for instance-scoped setup (open connections, validate config). The instance context is cancelled on reload/stop; retain it on the provider if request-time code must observe reload/stop (do not expect it on `Value`). Prefer cooperative stop on cancel; destroy owned resources in `Closer.Close` after drain when possible.
 
 ```go
 type Initializer interface {
@@ -63,17 +63,19 @@ type Closer interface {
 
 ## 2a. Custom provider: `WithProvider`
 
-A custom provider is user Go code attached to the config without appearing in the type registry:
+A custom provider is user Go code attached to the config without appearing in the type registry. `WithProvider` takes a **factory** (`func() Provider`) so each Instance / Reload build gets a fresh provider value (same isolation as JSON `providers` decoding). Do not stick a single live `Provider` pointer across reloads.
 
 ```go
-app.Main(xtemplate.WithProvider(shopProvider{}))
+app.Main(xtemplate.WithProvider(func() xtemplate.Provider {
+	return shopProvider{}
+}))
 // or: cfg.Options(xtemplate.WithProvider(...)); cfg.Server() / cfg.Instance()
-// or append to Config.Providers
+// or append factories to Config.Providers
 ```
 
-On instance load, xtemplate builds the dot context struct to include your field. On every request, `Value` runs before the template executes.
+On instance load, xtemplate invokes each factory, builds the dot context struct to include your field, and runs optional `Init`. On every request, `Value` runs before the template executes.
 
-No JSON `"type"` is involved: the provider is already a constructed `Provider` value.
+No JSON `"type"` is involved: the factory produces a `Provider` directly.
 
 ## 2b. Provider package: xtemplate registry (`providers.go`)
 
@@ -171,7 +173,9 @@ func (shopProvider) Value(http.ResponseWriter, *http.Request) (any, error) {
 }
 
 func main() {
-	app.Main(xtemplate.WithProvider(shopProvider{}))
+	app.Main(xtemplate.WithProvider(func() xtemplate.Provider {
+		return shopProvider{}
+	}))
 }
 ```
 

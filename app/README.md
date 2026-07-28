@@ -31,7 +31,7 @@ import (
 func main() {
 	xtemplate.DefaultControllerType = "watchfs"
 	app.Main(
-		// xtemplate.WithProvider(...),
+		// xtemplate.WithProvider(func() xtemplate.Provider { return myProvider{} }),
 		// xtemplate.WithFuncMaps(...),
 	)
 }

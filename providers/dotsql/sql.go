@@ -18,13 +18,17 @@ func init() {
 	xtemplate.RegisterProvider("sql", func() xtemplate.Provider { return &DotSqlConfig{} })
 }
 
+// WithSql adds a SQL provider that uses the injected *sql.DB (not closed by
+// the provider). Each Instance / Reload build gets a fresh [DotSqlConfig];
+// the DB handle is shared intentionally.
 func WithSql(name string, db *sql.DB, opt *sql.TxOptions) xtemplate.Option {
 	return func(c *xtemplate.Config) error {
 		if db == nil {
 			return fmt.Errorf("cannot create database provider with nil sql.DB. name: %s", name)
 		}
-		c.Providers = append(c.Providers, &DotSqlConfig{Name: name, DB: db, TxOptions: opt})
-		return nil
+		return xtemplate.WithProvider(func() xtemplate.Provider {
+			return &DotSqlConfig{Name: name, DB: db, TxOptions: opt}
+		})(c)
 	}
 }
 

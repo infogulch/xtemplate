@@ -5,8 +5,60 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 )
+
+func TestValidateProviderFieldName(t *testing.T) {
+	cases := []struct {
+		name    string
+		wantErr bool
+	}{
+		{"Bus", false},
+		{"DB", false},
+		{"X1", false},
+		{"", true},
+		{"db", true},       // not exported
+		{"1Bus", true},     // not an identifier
+		{"Bus-Name", true}, // invalid character
+		{"bus", true},
+	}
+	for _, tc := range cases {
+		err := validateProviderFieldName(tc.name)
+		if tc.wantErr && err == nil {
+			t.Errorf("validateProviderFieldName(%q) = nil, want error", tc.name)
+		}
+		if !tc.wantErr && err != nil {
+			t.Errorf("validateProviderFieldName(%q) = %v, want nil", tc.name, err)
+		}
+	}
+}
+
+func TestMakeDot_RejectsInvalidFieldNames(t *testing.T) {
+	for _, name := range []string{"", "db", "1x"} {
+		_, err := makeDot([]Provider{&testProvider{Name: name, Val: "x"}})
+		if err == nil {
+			t.Errorf("makeDot with FieldName %q: want error, got nil", name)
+		}
+	}
+}
+
+func TestInstance_RejectsInvalidProviderFieldName(t *testing.T) {
+	cfg, err := New().Options(
+		WithTemplateFS(newMemFS(t, map[string]string{"index.html": "ok"})),
+		WithProvider(func() Provider { return &testProvider{Name: "db", Val: "x"} }),
+	)
+	if err != nil {
+		t.Fatalf("Options: %v", err)
+	}
+	_, err = cfg.Instance()
+	if err == nil {
+		t.Fatal("Instance with lowercase field name: want error, got nil")
+	}
+	if !strings.Contains(err.Error(), "exported") && !strings.Contains(err.Error(), "db") {
+		t.Errorf("error = %v, want mention of exported/db", err)
+	}
+}
 
 func TestMakeDotHappyPath(t *testing.T) {
 	// Reuse testProvider from providers_test.go (same package).

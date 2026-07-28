@@ -39,8 +39,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Duration` type that allows for human-readable duration parsing and formatting
   in config files.
 
+### Fixed
+
+- Bus: instance cancel `Kick`s subscribers (closes ranges for SSE) without
+  rejecting further Publish; full `Shutdown` only in provider `Close` after
+  drain.
+- NATS: destroy in-process server only in `Close` after Conn drain (not on
+  cancel); clean up partial Init failures; `Subscribe` teardown is race-safe.
+
 ### Changed
 
+- **Breaking: sticky Go providers are factories**
+  - `Config.Providers` is `[]ProviderFactory` (`func() Provider`);
+    `WithProvider` takes a factory, not a live value
+  - Each Instance / Reload materializes fresh providers (parity with JSON
+    `providers` decode). Package helpers (`WithBus`, `WithSql`, …) wrap
+    `WithProvider`
+  - `dotsmtp.WithSMTP` takes `DotSMTPConfig` by value (frozen at option
+    construction; each build clears runtime client state)
 - **Breaking: template Config surface**
   - Drop public `TemplatesDir` & `Config.Reload`
   - Use `Controller` / `WithController` / `WithTemplateFS` / `WithTemplateDir`

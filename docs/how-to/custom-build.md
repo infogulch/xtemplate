@@ -54,7 +54,7 @@ Pass overrides:
 ```go
 app.Main(
 	xtemplate.WithFuncMaps(myFuncs),
-	xtemplate.WithProvider(...),
+	xtemplate.WithProvider(func() xtemplate.Provider { return myProvider{} }),
 )
 ```
 

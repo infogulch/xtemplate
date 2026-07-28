@@ -114,6 +114,43 @@ func TestPrecompress_DoesNotServeUnconfiguredVariant(t *testing.T) {
 	}
 }
 
+// TestPrecompress_ReloadKeepsServing ensures precompressed files remain
+// servable after Reload (tempdir cleanup is on Close after drain, not cancel).
+func TestPrecompress_ReloadKeepsServing(t *testing.T) {
+	const css = "body { color: blue; }\n"
+	srv := buildServer(t, map[string]string{"style.css": css}, func(c *Config) error {
+		c.Precompress = []string{"gzip"}
+		return nil
+	})
+	defer srv.Stop()
+
+	if err := srv.Reload(WithTemplateFS(newMemFS(t, map[string]string{"style.css": css}))); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/style.css", nil)
+	r.Header.Set("Accept-Encoding", "gzip")
+	srv.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if ce := w.Header().Get("Content-Encoding"); ce != "gzip" {
+		t.Errorf("Content-Encoding = %q, want gzip", ce)
+	}
+	gr, err := gzip.NewReader(w.Body)
+	if err != nil {
+		t.Fatalf("gzip reader: %v", err)
+	}
+	got, err := io.ReadAll(gr)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(got) != css {
+		t.Errorf("body = %q, want %q", got, css)
+	}
+}
+
 func TestPrecompress_SkipsExistingCompressedFile(t *testing.T) {
 	const css = "body { color: red; }\n"
 

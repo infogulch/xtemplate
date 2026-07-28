@@ -58,8 +58,8 @@ Domain terms for xtemplate. Behavior and APIs live in the rest of the [docs](../
 
 **Provider package**: Go package that self-registers a provider type in `init()`.
 
-**Custom provider**: User Go code via `Config.Providers` / `WithProvider`, not via the type registry.
+**Custom provider**: User Go code attached via `Config.Providers` / `WithProvider` as a factory (`func() Provider`), not via the type registry. Factories run on each Instance / Reload so Init/Close stay per-instance.
 
-**Provider config**: Type, field name, and type-specific settings (JSON via the registry, or a constructed `Provider`).
+**Provider config**: Type, field name, and type-specific settings (JSON via the registry, or produced by a factory / package helper).
 
 **Caddyfile provider**: Caddy module `xtemplate.providers.*` that parses `provider <type> <field> { }` into config JSON.

@@ -182,6 +182,40 @@ func TestShutdown(t *testing.T) {
 	b.Shutdown() // idempotent
 }
 
+func TestKick(t *testing.T) {
+	b := New(2)
+	ch, err := b.Subscribe("t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.Kick()
+	if _, ok := <-ch; ok {
+		t.Fatal("expected closed channel after Kick")
+	}
+	// Bus still accepts Publish/Subscribe after Kick.
+	if err := b.Publish("t", "x"); err != nil {
+		t.Fatalf("Publish after Kick: %v", err)
+	}
+	ch2, err := b.Subscribe("t")
+	if err != nil {
+		t.Fatalf("Subscribe after Kick: %v", err)
+	}
+	if err := b.Publish("t", "y"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-ch2:
+		if got != "y" {
+			t.Fatalf("got %q, want y", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout after Kick")
+	}
+	b.Kick() // idempotent while open
+	b.Shutdown()
+	b.Kick() // no-op after Shutdown
+}
+
 func TestEmptyTopic(t *testing.T) {
 	b := New(1)
 	defer b.Shutdown()

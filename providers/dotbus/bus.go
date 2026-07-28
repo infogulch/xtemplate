@@ -107,6 +107,19 @@ func (b *Bus) removeLocked(ch <-chan string) {
 	}
 }
 
+// Kick closes every subscriber channel and clears topic maps, but leaves the
+// bus open for further Publish/Subscribe. Used on instance context cancel so
+// in-flight SSE ranges end while grace-period handlers can still publish.
+// No-op after Shutdown. Safe to call more than once.
+func (b *Bus) Kick() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		return
+	}
+	b.closeSubscribersLocked()
+}
+
 // Shutdown closes every subscriber channel and rejects further Publish/Subscribe.
 // Safe to call more than once.
 func (b *Bus) Shutdown() {
@@ -116,6 +129,10 @@ func (b *Bus) Shutdown() {
 		return
 	}
 	b.closed = true
+	b.closeSubscribersLocked()
+}
+
+func (b *Bus) closeSubscribersLocked() {
 	for c := range b.reverse {
 		close(c)
 	}

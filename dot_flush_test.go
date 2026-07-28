@@ -271,6 +271,27 @@ func TestServeHTTP_SSE_RequiresEventStreamAccept(t *testing.T) {
 	}
 }
 
+// TestServeHTTP_SSE_ErrorAfterStreamDoesNotWrite500 ensures cleanup does not
+// call http.Error after the SSE stream has started (would corrupt the body).
+func TestServeHTTP_SSE_ErrorAfterStreamDoesNotWrite500(t *testing.T) {
+	inst := buildInstance(t, map[string]string{
+		"feed.html": `{{define "SSE /events"}}data: hi{{printf "\n\n"}}{{$.Flush.Flush}}{{failf "boom"}}{{end}}`,
+	})
+
+	fr := newFlushRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/events", nil)
+	r.Header.Set("Accept", "text/event-stream")
+	inst.ServeHTTP(fr, r)
+
+	body := fr.Body.String()
+	if !strings.Contains(body, "data: hi") {
+		t.Errorf("body = %q, want streamed event", body)
+	}
+	if strings.Contains(strings.ToLower(body), "internal server error") {
+		t.Errorf("body = %q must not contain http.Error 500 text after stream start", body)
+	}
+}
+
 func TestServeHTTP_SSE_FlushesIncrementally(t *testing.T) {
 	inst := buildInstance(t, map[string]string{
 		"feed.html": `{{define "SSE /events"}}{{range .Flush.Repeat 2}}data: {{.}}{{printf "\n\n"}}{{$.Flush.Flush}}{{$.Flush.Sleep 5}}{{end}}{{end}}`,

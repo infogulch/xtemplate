@@ -98,8 +98,9 @@ func withFs(name string, afs afero.Fs, writable bool) xtemplate.Option {
 		if afs == nil {
 			return fmt.Errorf("cannot create DotFSProvider with null FS with name %s", name)
 		}
-		c.Providers = append(c.Providers, &DotFsConfig{Name: name, FS: afs, Writable: writable})
-		return nil
+		return xtemplate.WithProvider(func() xtemplate.Provider {
+			return &DotFsConfig{Name: name, FS: afs, Writable: writable}
+		})(c)
 	}
 }
 

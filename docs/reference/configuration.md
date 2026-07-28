@@ -33,7 +33,7 @@ App-only (not on `xtemplate.Config` itself):
 | `listen` | `-l` / `--listen` | `0.0.0.0:8080` | HTTP listen address |
 | `log_level` | `--loglevel` | `-2` | slog level |
 
-Go-only options (not in JSON): `Controller`, `FuncMaps`, `Handlers`, `Ctx`, `Logger`, and providers via `WithProvider`. Dual-write: `WithTemplateFS`, `WithTemplateDir`.
+Go-only options (not in JSON): `Controller`, `FuncMaps`, `Handlers`, `Ctx`, `Logger`, and providers via `WithProvider` factories (or package helpers like `dotbus.WithBus`). Dual-write: `WithTemplateFS`, `WithTemplateDir`.
 
 ### Controller types
 

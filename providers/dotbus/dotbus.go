@@ -20,11 +20,11 @@ func init() {
 
 // WithBus creates an [xtemplate.Option] that adds a bus dot provider.
 // buffer is the per-subscriber channel capacity; 0 means [DefaultBuffer].
+// Each Instance / Reload build gets a fresh [DotBusConfig] and bus.
 func WithBus(name string, buffer int) xtemplate.Option {
-	return func(c *xtemplate.Config) error {
-		c.Providers = append(c.Providers, &DotBusConfig{Name: name, Buffer: buffer})
-		return nil
-	}
+	return xtemplate.WithProvider(func() xtemplate.Provider {
+		return &DotBusConfig{Name: name, Buffer: buffer}
+	})
 }
 
 // DotBusConfig configures an xtemplate dot field for in-process topic fan-out.
@@ -48,8 +48,8 @@ func (d *DotBusConfig) FieldName() string { return d.Name }
 // Prototype returns the per-request field type.
 func (d *DotBusConfig) Prototype() any { return &DotBus{} }
 
-// Init validates config and creates the bus. Call [Close] (or cancel the
-// instance context) to shut the bus down on reload/stop.
+// Init validates config and creates the bus. Instance context cancel [Kick]s
+// subscribers (so SSE ranges end); [Close] fully shuts the bus down after drain.
 func (d *DotBusConfig) Init(ctx context.Context) error {
 	if d.Name == "" {
 		return fmt.Errorf("bus: name is required")
@@ -61,7 +61,7 @@ func (d *DotBusConfig) Init(ctx context.Context) error {
 	if done := ctx.Done(); done != nil {
 		go func() {
 			<-done
-			d.bus.Shutdown()
+			d.bus.Kick()
 		}()
 	}
 	return nil
