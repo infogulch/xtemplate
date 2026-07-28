@@ -187,6 +187,12 @@ func (config *Config) buildInstance() (_ *Instance, err error) {
 		if strings.HasSuffix(path_, build.config.TemplateExtension) {
 			err = build.addTemplateHandler(path_)
 		} else {
+			// Do not serve hidden basenames as static routes (e.g. .env,
+			// config/.htpasswd). Aligns with path templates, which parse hidden
+			// files into the namespace but register no file-based GET route.
+			if base := filepath.Base(path_); len(base) > 0 && base[0] == '.' {
+				return nil
+			}
 			err = build.addStaticFileHandler(path_)
 		}
 		return err

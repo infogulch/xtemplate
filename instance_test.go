@@ -198,6 +198,32 @@ func TestInstance_SkipsHiddenDirs(t *testing.T) {
 	}
 }
 
+// TestInstance_SkipsHiddenStaticBasenames ensures files like .env under a
+// normal directory are not registered as public static routes.
+func TestInstance_SkipsHiddenStaticBasenames(t *testing.T) {
+	inst := buildInstance(t, map[string]string{
+		"index.html":          "ok",
+		".env":                "SECRET=1",
+		"config/.htpasswd":    "user:hash",
+		"assets/app.css":      "body{}",
+		"shared/.head.html":   `{{define "head"}}H{{end}}`,
+		"use-head.html":       `{{template "head" .}}`,
+	})
+
+	for _, target := range []string{"/.env", "/config/.htpasswd"} {
+		if w := doRequest(inst, http.MethodGet, target); w.Code != http.StatusNotFound {
+			t.Errorf("hidden static %s status = %d, want %d", target, w.Code, http.StatusNotFound)
+		}
+	}
+	if w := doRequest(inst, http.MethodGet, "/assets/app.css"); w.Code != http.StatusOK {
+		t.Errorf("visible static status = %d, want %d", w.Code, http.StatusOK)
+	}
+	// Hidden template basenames still parse into the namespace for {{template}}.
+	if w := doRequest(inst, http.MethodGet, "/use-head"); w.Code != http.StatusOK || w.Body.String() != "H" {
+		t.Errorf("hidden template define: status=%d body=%q", w.Code, w.Body.String())
+	}
+}
+
 func TestServer_ReloadSwapsContent(t *testing.T) {
 	server := buildServer(t, map[string]string{"index.html": "V1"})
 	defer server.Stop()

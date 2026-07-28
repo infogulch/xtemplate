@@ -11,7 +11,7 @@ While an instance is loading, xtemplate walks the private build-root FS. For Ser
 - Files matching `Config.TemplateExtension` (default `.html`) are parsed into the instance's template namespace: each becomes a path template (and may define additional define templates).
 - All other files are static files (served as-is), except compressed siblings of static files (`.gz`, `.zst`, `.br`) which become alternate encodings of the identity file.
 - Hidden **directories** (names starting with `.`, e.g. `.git`) are skipped when walking, so their contents are not loaded.
-- Hidden **file basenames** (e.g. `.env`, `.htaccess`) under a normal directory are still loaded: non-templates become static routes; path templates are parsed into the global namespace (so you can `{{template "/shared/.head.html" .}}`) but are not given a file-based GET route.
+- Hidden **file basenames** (e.g. `.env`, `.htaccess`) under a normal directory: non-templates are **not** registered as static routes (so secrets like `.env` are not public). Path templates with hidden basenames are still parsed into the global namespace (so you can `{{template "/shared/.head.html" .}}`) but are not given a file-based GET route. Never place secrets under the template root.
 
 ## Path templates (from disk)
 
