@@ -4,13 +4,13 @@ HTTP 200
 [Asserts]
 body contains "sse-connect"
 
-# The SSE endpoint requires the text/event-stream Accept header; without it the
-# flushing handler refuses with 406 (see flushingTemplateHandler).
+# Without an explicit text/event-stream Accept entry the flushing handler
+# refuses with 406 (missing Accept / */* alone do not count).
 GET http://localhost:8080/sse/events?count=1&delay=10
 
 HTTP 406
 
-# With the right Accept header it streams events as text/event-stream.
+# Exact EventSource-style Accept streams as text/event-stream.
 GET http://localhost:8080/sse/events?count=11&delay=10
 Accept: text/event-stream
 
@@ -19,3 +19,12 @@ Content-Type: text/event-stream
 Cache-Control: no-cache
 [Asserts]
 body contains "data: 10"
+
+# Multi-type Accept lists (e.g. Datastar) also negotiate successfully.
+GET http://localhost:8080/sse/events?count=3&delay=10
+Accept: text/event-stream, text/html, application/json
+
+HTTP 200
+Content-Type: text/event-stream
+[Asserts]
+body contains "data: 2"

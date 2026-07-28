@@ -67,7 +67,11 @@ func flushingTemplateHandler(server *Instance, tmpl *template.Template) http.Han
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := GetLogger(r.Context())
 
-		if r.Header.Get("Accept") != "text/event-stream" {
+		// SSE routes only serve text/event-stream. Negotiate Accept (RFC 7231):
+		// require an explicit text/event-stream entry with q > 0. Do not treat
+		// missing Accept or */* as enough — that would turn browser navigations
+		// into hanging streams.
+		if !acceptsEventStream(r.Header["Accept"]) {
 			http.Error(w, "SSE endpoint", http.StatusNotAcceptable)
 			return
 		}
@@ -192,6 +196,41 @@ func osFile(f afero.File) (*os.File, bool) {
 			return nil, false
 		}
 	}
+}
+
+// acceptsEventStream reports whether Accept allows text/event-stream with q > 0.
+// Media type matching is case-insensitive. Only an explicit text/event-stream
+// type counts — wildcards (*/* or text/*), missing Accept, and q=0 are rejected
+// so SSE-only routes do not hang ordinary browser navigations.
+//
+// Multiple Accept header lines are combined, same as negotiateEncoding.
+func acceptsEventStream(acceptHeaders []string) bool {
+	for _, header := range acceptHeaders {
+		for _, tok := range strings.Split(header, ",") {
+			tok = strings.TrimSpace(tok)
+			if tok == "" {
+				continue
+			}
+			parts := strings.Split(tok, ";")
+			mediaType := strings.TrimSpace(parts[0])
+			if !strings.EqualFold(mediaType, "text/event-stream") {
+				continue
+			}
+			q := 1.0
+			for _, p := range parts[1:] {
+				p = strings.TrimSpace(p)
+				// Parameter names are case-insensitive (RFC 7231).
+				if len(p) >= 2 && strings.EqualFold(p[:2], "q=") {
+					if parsed, err := strconv.ParseFloat(strings.TrimSpace(p[2:]), 64); err == nil {
+						q = parsed
+					}
+					break
+				}
+			}
+			return q > 0
+		}
+	}
+	return false
 }
 
 // negotiateEncoding selects which of the available encodings to serve based on
