@@ -4,6 +4,7 @@ package xtemplate
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -43,6 +44,16 @@ func bufferingTemplateHandler(server *Instance, tmpl *template.Template) http.Ha
 		err = tmpl.Execute(buf, *dot)
 
 		if err = server.bufferDot.cleanup(dot, err); err != nil {
+			if errors.Is(err, errResponseServed) {
+				// ServeContent already wrote the full response; do not append buffer.
+				return
+			}
+			var es ErrorStatus
+			if errors.As(err, &es) {
+				// Finalize already applied the intended status; do not overwrite with 500.
+				log.Warn("template returned error status", slog.Int("status", int(es)), slog.Any("error", err))
+				return
+			}
 			log.Warn("error executing template", slog.Any("error", err))
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
@@ -75,8 +86,15 @@ func flushingTemplateHandler(server *Instance, tmpl *template.Template) http.Han
 		err = tmpl.Execute(w, *dot)
 
 		if err = server.flusherDot.cleanup(dot, err); err != nil {
-			log.Info("error executing template", slog.Any("error", err))
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			// Stream may already have headers/body; do not call http.Error (would
+			// append a spurious 500 body). ErrorStatus cannot change SSE status
+			// after Content-Type is set; log only.
+			var es ErrorStatus
+			if errors.As(err, &es) {
+				log.Info("SSE template returned error status after stream start", slog.Int("status", int(es)), slog.Any("error", err))
+			} else {
+				log.Info("error executing template", slog.Any("error", err))
+			}
 			return
 		}
 	}

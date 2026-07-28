@@ -1,7 +1,9 @@
 package xtemplate
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"maps"
@@ -10,6 +12,11 @@ import (
 	"strings"
 	"time"
 )
+
+// errResponseServed is returned from [dotRespProvider.Finalize] when
+// [DotResp.ServeContent] already wrote the full response. Buffered handlers
+// treat it as success and must not write the template buffer or call http.Error.
+var errResponseServed = errors.New("response already served")
 
 type dotRespProvider struct{}
 
@@ -31,12 +38,13 @@ func (dotRespProvider) Finalize(v any, err error) error {
 	if d.served {
 		// The response was already fully written by ServeContent (which calls
 		// WriteHeader itself); writing headers or status again here would cause
-		// a superfluous WriteHeader call.
-		return err
+		// a superfluous WriteHeader call. Signal the handler to skip the buffer.
+		return errResponseServed
 	}
 	var errSt ErrorStatus
 	if errors.As(err, &errSt) {
-		// headers?
+		// Apply intended client status; handler must not overwrite with 500.
+		maps.Copy(d.w.Header(), d.Header)
 		d.w.WriteHeader(int(errSt))
 	} else if err == nil {
 		maps.Copy(d.w.Header(), d.Header)
@@ -59,14 +67,20 @@ type DotResp struct {
 
 // ServeContent aborts execution of the template and instead responds to the
 // request with content with any headers set by AddHeader and SetHeader so far
-// but ignoring SetStatus.
+// but ignoring SetStatus. content must be a string, []byte, or io.ReadSeeker.
 func (d *DotResp) ServeContent(path_ string, modtime time.Time, content any) (string, error) {
 	var reader io.ReadSeeker
 	switch c := content.(type) {
+	case nil:
+		return "", fmt.Errorf("ServeContent: content is nil")
 	case string:
 		reader = strings.NewReader(c)
+	case []byte:
+		reader = bytes.NewReader(c)
 	case io.ReadSeeker:
 		reader = c
+	default:
+		return "", fmt.Errorf("ServeContent: unsupported content type %T (want string, []byte, or io.ReadSeeker)", content)
 	}
 	path_ = path.Clean(path_)
 	d.log.Debug("serving content response", slog.String("path", path_))
