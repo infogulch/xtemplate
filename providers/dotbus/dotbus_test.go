@@ -149,7 +149,7 @@ func TestDotBusConfig_Init(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timeout")
 	}
-	cancel() // shuts down bus via Init's ctx watcher
+	cancel() // Kick via Init's ctx watcher closes subscriber channels
 	select {
 	case _, ok := <-ch:
 		if ok {
@@ -158,7 +158,17 @@ func TestDotBusConfig_Init(t *testing.T) {
 			}
 		}
 	case <-time.After(time.Second):
-		t.Fatal("timeout waiting for close after Shutdown")
+		t.Fatal("timeout waiting for channel close after Kick")
+	}
+	// Kick leaves the bus open for Publish.
+	if err := dot.Publish("t", "after-kick"); err != nil {
+		t.Fatalf("Publish after Kick: %v", err)
+	}
+	if err := cfg.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if err := dot.Publish("t", "x"); err == nil {
+		t.Fatal("Publish after Close should fail")
 	}
 }
 

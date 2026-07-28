@@ -48,8 +48,8 @@ func (d *DotBusConfig) FieldName() string { return d.Name }
 // Prototype returns the per-request field type.
 func (d *DotBusConfig) Prototype() any { return &DotBus{} }
 
-// Init validates config and creates the bus. Call [Close] (or cancel the
-// instance context) to shut the bus down on reload/stop.
+// Init validates config and creates the bus. Instance context cancel [Kick]s
+// subscribers (so SSE ranges end); [Close] fully shuts the bus down after drain.
 func (d *DotBusConfig) Init(ctx context.Context) error {
 	if d.Name == "" {
 		return fmt.Errorf("bus: name is required")
@@ -61,7 +61,7 @@ func (d *DotBusConfig) Init(ctx context.Context) error {
 	if done := ctx.Done(); done != nil {
 		go func() {
 			<-done
-			d.bus.Shutdown()
+			d.bus.Kick()
 		}()
 	}
 	return nil

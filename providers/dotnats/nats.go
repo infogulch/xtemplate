@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/infogulch/xtemplate"
@@ -56,7 +57,9 @@ var (
 func (d *DotNatsConfig) FieldName() string { return d.Name }
 func (d *DotNatsConfig) Prototype() any    { return &DotNats{} }
 
-func (d *DotNatsConfig) Init(ctx context.Context) error {
+// Init opens owned connections/servers. Instance context cancel does not destroy
+// them; [Close] does after in-flight drain.
+func (d *DotNatsConfig) Init(_ context.Context) error {
 	var err error
 	if d.Conn != nil {
 		if d.js == nil {
@@ -79,35 +82,48 @@ func (d *DotNatsConfig) Init(ctx context.Context) error {
 		connOpt = *d.ConnOptions
 	}
 	if d.InProcessServerOptions != nil {
-		// start an internal server for this instance
+		// start an internal server for this instance; destroyed only in Close
+		// after drain so grace-period handlers keep a live server.
 		d.server, err = server.NewServer(d.InProcessServerOptions)
 		if err != nil {
 			return fmt.Errorf("failed to start in-process nats server: %w", err)
 		}
 		d.server.Start()
 
-		// shut down the server when the instance is cancelled
-		done := ctx.Done()
-		if done != nil {
-			go func() {
-				<-done
-				d.server.Shutdown()
-			}()
-		}
-
 		_ = nats.InProcessServer(d.server)(&connOpt)
 	}
 	d.Conn, err = connOpt.Connect()
 	if err != nil {
-		return fmt.Errorf("failed to connect to in-process server: %w", err)
+		d.cleanupPartial()
+		return fmt.Errorf("failed to connect to nats server: %w", err)
 	}
 	d.owned = true
 	d.js, err = jetstream.New(d.Conn, d.JetStreamOptions...)
-	return err
+	if err != nil {
+		d.cleanupPartial()
+		return err
+	}
+	return nil
+}
+
+// cleanupPartial releases resources opened during a failed Init before Closer
+// registration. Safe if nothing was opened yet.
+func (d *DotNatsConfig) cleanupPartial() {
+	if d.Conn != nil {
+		d.Conn.Close()
+		d.Conn = nil
+	}
+	d.owned = false
+	d.js = nil
+	if d.server != nil {
+		d.server.Shutdown()
+		d.server = nil
+	}
 }
 
 // Close drains/closes a connection opened by Init and shuts down any in-process
-// server. Injected connections are left alone.
+// server. Injected connections are left alone. Call after in-flight drain so
+// grace-period handlers still see a live connection/server.
 func (d *DotNatsConfig) Close() error {
 	var err error
 	if d.owned && d.Conn != nil {
@@ -134,9 +150,25 @@ type DotNats struct {
 	jetstream.JetStream
 }
 
+// Subscribe returns a channel of messages on subject. The channel is closed
+// when the request context is cancelled. Delivery uses a buffered callback so
+// teardown cannot race with send-on-closed-channel.
 func (d *DotNats) Subscribe(subject string) (<-chan *nats.Msg, error) {
-	ch := make(chan *nats.Msg)
-	sub, err := d.ChanSubscribe(subject, ch)
+	ch := make(chan *nats.Msg, 16)
+	var mu sync.Mutex
+	open := true
+	sub, err := d.Conn.Subscribe(subject, func(m *nats.Msg) {
+		mu.Lock()
+		defer mu.Unlock()
+		if !open {
+			return
+		}
+		select {
+		case ch <- m:
+		default:
+			// drop when consumer is slow (best-effort, like bus fan-out)
+		}
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +176,12 @@ func (d *DotNats) Subscribe(subject string) (<-chan *nats.Msg, error) {
 	go func() {
 		<-done
 		_ = sub.Unsubscribe()
-		close(ch)
+		mu.Lock()
+		if open {
+			open = false
+			close(ch)
+		}
+		mu.Unlock()
 	}()
 	return ch, nil
 }

@@ -39,6 +39,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Duration` type that allows for human-readable duration parsing and formatting
   in config files.
 
+### Fixed
+
+- Bus: instance cancel `Kick`s subscribers (closes ranges for SSE) without
+  rejecting further Publish; full `Shutdown` only in provider `Close` after
+  drain.
+- NATS: destroy in-process server only in `Close` after Conn drain (not on
+  cancel); clean up partial Init failures; `Subscribe` teardown is race-safe.
+
 ### Changed
 
 - **Breaking: template Config surface**
