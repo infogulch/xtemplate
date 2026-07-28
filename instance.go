@@ -137,10 +137,10 @@ func (config *Config) buildInstance() (_ *Instance, err error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create temp dir for pre-compressed files: %w", err)
 		}
-		go func() {
-			<-inst.config.Ctx.Done()
-			_ = os.RemoveAll(tempdir)
-		}()
+		// Remove after drain/Close to avoid race with in-flight static serves
+		inst.config.onClose = append(inst.config.onClose, func() error {
+			return os.RemoveAll(tempdir)
+		})
 		overlay := afero.NewBasePathFs(afero.NewOsFs(), tempdir)
 		inst.config.TemplateFS = afero.NewCopyOnWriteFs(inst.config.TemplateFS, overlay)
 	}
