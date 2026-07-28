@@ -156,3 +156,41 @@ func TestNegotiateEncoding_NoEncodings(t *testing.T) {
 		t.Error("expected an error for empty encodings")
 	}
 }
+
+func TestAcceptsEventStream(t *testing.T) {
+	tests := []struct {
+		name   string
+		accept []string
+		want   bool
+	}{
+		// EventSource and exact match
+		{"EventSource exact", []string{"text/event-stream"}, true},
+		// Datastar default Accept list
+		{"Datastar list", []string{"text/event-stream, text/html, application/json"}, true},
+		{"list with q-values", []string{"text/event-stream;q=0.9, text/html"}, true},
+		{"event-stream after other types", []string{"text/html, text/event-stream, application/json"}, true},
+		// q=0 is not acceptable
+		{"q=0 refuses", []string{"text/event-stream;q=0"}, false},
+		{"q=0 among others", []string{"text/html, text/event-stream;q=0"}, false},
+		// HTML-only / wildcards / missing — deliberate 406 for SSE
+		{"text/html only", []string{"text/html"}, false},
+		{"browser default", []string{"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"}, false},
+		{"star only", []string{"*/*"}, false},
+		{"text/* wildcard", []string{"text/*"}, false},
+		{"missing Accept", nil, false},
+		{"empty header", []string{""}, false},
+		// Case and multi-line
+		{"case insensitive type", []string{"Text/Event-Stream"}, true},
+		{"split header lines", []string{"text/html", "text/event-stream"}, true},
+		// Media type parameters other than q
+		{"with charset param", []string{"text/event-stream;charset=utf-8"}, true},
+		{"charset then q=0", []string{"text/event-stream;charset=utf-8;q=0"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := acceptsEventStream(tt.accept); got != tt.want {
+				t.Errorf("acceptsEventStream(%q) = %v, want %v", tt.accept, got, tt.want)
+			}
+		})
+	}
+}

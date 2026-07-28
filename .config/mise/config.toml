@@ -27,7 +27,7 @@ depends = ["lint", "gotest", "test-caddy", "test-cli", "test-docker", "test-exam
 
 # Build, serve, and integration-test every app under examples/. Each
 # test-example-<name> task is a standalone Nushell script under tasks/; they run
-# in parallel on distinct ports (8090-8095). See examples/README.md.
+# in parallel on ephemeral ports. See examples/README.md.
 [tasks.test-examples]
 description = "Integration-test every example app under examples/"
 depends = [
@@ -37,6 +37,7 @@ depends = [
     "test-example-filebrowser",
     "test-example-embedded",
     "test-example-dotprovider",
+    "test-example-datastar",
 ]
 
 # The full pipeline. `depends` run first (in parallel where independent); only

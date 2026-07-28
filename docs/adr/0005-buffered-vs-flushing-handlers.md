@@ -4,7 +4,7 @@ status: accepted
 
 # Buffered vs flushing handlers (and mutually exclusive response dots)
 
-Template routes are served by one of two handler kinds. The default is a buffered template handler: execution writes into a memory buffer, then the buffer is flushed to the client only if execution succeeds. A flushing template handler streams output directly to the `ResponseWriter` and is selected by the pseudo-method `SSE` in a define-template name (registered as `GET` on the path, and rejected unless `Accept: text/event-stream`).
+Template routes are served by one of two handler kinds. The default is a buffered template handler: execution writes into a memory buffer, then the buffer is flushed to the client only if execution succeeds. A flushing template handler streams output directly to the `ResponseWriter` and is selected by the pseudo-method `SSE` in a define-template name (registered as `GET` on the path, and rejected with `406` unless `Accept` lists `text/event-stream`).
 
 Each kind gets its own dot context assembly on the instance: buffered requests get `.Resp` (and not `.Flush`); flushing requests get `.Flush` (and not `.Resp`). Builtin providers `.X` and `.Req`, plus configured core / custom providers, appear on both. Buffering is what makes mid-render status and header changes safe: nothing has been sent yet if the template errors or returns early via `.Resp`. Streaming needs the opposite contract: bytes leave as they are written, so response control is a different type (`.Flush`) rather than a half-working `.Resp` on a live stream.
 
@@ -16,7 +16,7 @@ Each kind gets its own dot context assembly on the instance: buffered requests g
 
 ## Consequences
 
-- Authors must use `{{define "SSE /path"}}` (not `GET`) for streaming routes; clients must send `Accept: text/event-stream` or get `406`.
+- Authors must use `{{define "SSE /path"}}` (not `GET`) for streaming routes; clients must include `text/event-stream` in `Accept` with q > 0 (browser `EventSource` and multi-type lists such as Datastar’s default both work) or get `406`. Missing `Accept` and bare `*/*` are rejected so a normal navigation does not hang on a stream.
 - Templates must not assume `.Resp` and `.Flush` coexist; which field is present is a property of the route’s handler kind.
 - Initialization templates run against the buffered dot (they are not streaming responses).
 - Memory cost of ordinary pages is proportional to rendered size until commit.

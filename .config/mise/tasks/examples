@@ -45,6 +45,7 @@ start blog        3 "$xt" 1
 start filebrowser 4 "$xt" 1
 start embedded    5 "$dist/example-embedded" ""
 start dotprovider 6 "$dist/example-dotprovider" 1
+start datastar    7 "$xt" 1
 
 stop() {
     kill "${pids[@]}" 2>/dev/null
@@ -62,6 +63,7 @@ xtemplate examples are starting:
   http://localhost:$((base + 4))  filebrowser
   http://localhost:$((base + 5))  embedded
   http://localhost:$((base + 6))  dotprovider
+  http://localhost:$((base + 7))  datastar
 
 Browse them all at  ->  http://localhost:$base
 Logs: $logs

@@ -1,0 +1,38 @@
+#!/usr/bin/env nu
+#MISE description="Build, serve, and integration-test the datastar example"
+#MISE depends=["build-cli"]
+use ../lib.nu *
+
+let work = (new-example-dir datastar)
+let bin = ($env.DIST_DIR | path join xtemplate)
+let log = ($work | path join server.log)
+let server = (job spawn {
+    cd $work
+    ^$bin --loglevel -4 --config-file config.json --listen :0 out+err> server.log
+})
+let port = (wait-listen-port $log)
+# Hurl: page/static/POST/406. lightpanda: data-init → /stream, @post('/inc') → bus → morph.
+let outcome = (try {
+    run-example $port $work
+    # Wait for #count, then briefly for /stream to subscribe before clicking
+    # (paint is stream-only; a click before subscribe would leave the DOM stale).
+    let js = 'setInterval(()=>{if(window.__p)return;if(!document.getElementById("count"))return;if(!window.__t){window.__t=Date.now();return}if(Date.now()-window.__t<500)return;const b=[...document.querySelectorAll("button")].find(e=>e.textContent.includes("+1"));if(!b)return;window.__p=1;b.click()},50)'
+    let wait = 'document.getElementById("count")?.textContent?.trim()==="1"'
+    let r = (^lightpanda fetch --inject-script $js --wait-script $wait --wait-ms 10000 --terminate-ms 12000 $"http://localhost:($port)/" | complete)
+    if $r.exit_code != 0 {
+        error make --unspanned { msg: $"lightpanda failed \(($r.exit_code)\): ($r.stderr)\n($r.stdout)" }
+    }
+    let logtxt = (open --raw $log)
+    if not ($logtxt | str contains "requestPath=/stream") {
+        error make --unspanned { msg: "expected a GET /stream from data-init (live fan-out never connected)" }
+    }
+    if not ($logtxt | str contains "requestPath=/inc") {
+        error make --unspanned { msg: "expected a POST /inc from the button click" }
+    }
+    "ok"
+} catch { |e| $e.msg })
+job kill $server
+if $outcome != "ok" {
+    print -e $"test-example-datastar failed: ($outcome)"
+    exit 1
+}

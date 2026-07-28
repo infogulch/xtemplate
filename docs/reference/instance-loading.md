@@ -91,7 +91,7 @@ A `{{define}}` whose name matches `METHOD path` registers that route:
 | Name prefix | Handler kind |
 |---|---|
 | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` | Buffered template handler (`.Resp` available) |
-| `SSE` | Flushing handler (`.Flush` available); registered as `GET` for the path. Clients must send `Accept: text/event-stream` (browser `EventSource` does) or the request is rejected with `406`. |
+| `SSE` | Flushing handler (`.Flush` available); registered as `GET` for the path. Clients that don't include `text/event-stream` in `Accept` are rejected with `406`. |
 
 ```html
 {{define "GET /contact/{id}"}}

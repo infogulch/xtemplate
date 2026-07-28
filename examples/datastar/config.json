@@ -1,0 +1,18 @@
+{
+  "providers": [
+    {
+      "type": "sql",
+      "name": "DB",
+      "driver": "sqlite3",
+      "connstr": "file:./counter.sqlite"
+    },
+    {
+      "type": "bus",
+      "name": "Bus"
+    }
+  ],
+  "controller": {
+    "type": "os",
+    "path": "templates"
+  }
+}

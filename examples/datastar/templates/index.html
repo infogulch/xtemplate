@@ -1,0 +1,77 @@
+{{define "INIT counter-setup"}}
+{{- $_ := .DB.Exec "CREATE TABLE IF NOT EXISTS counter (id INTEGER PRIMARY KEY CHECK (id = 1), value INTEGER NOT NULL)"}}
+{{- $_ = .DB.Exec "INSERT OR IGNORE INTO counter (id, value) VALUES (1, 0)"}}
+{{end}}
+
+{{/* Shared fragment morphed into #counter by Datastar (must stay one line for SSE data: elements …). */}}
+{{- define "counter-div" -}}
+<div id="counter">Count: <strong id="count">{{.DB.QueryVal "SELECT value FROM counter WHERE id = 1"}}</strong> <span class="muted">updated {{now | date "15:04:05"}}</span></div>
+{{- end}}
+
+{{/*
+  Mutations only update state and publish. They do not paint the UI — every tab
+  (including the clicker) morphs from SSE /stream, same pattern as sse-chat's
+  POST /messages + SSE /events.
+  Build the payload as a method arg so html/template does not re-escape the HTML.
+*/}}
+{{- define "POST /inc"}}
+{{- $_ := .DB.Exec "UPDATE counter SET value = value + 1 WHERE id = 1"}}
+{{- $_ = .Bus.Publish "counter" (print "elements " (.X.Template "counter-div" .))}}ok
+{{- end}}
+
+{{- define "POST /dec"}}
+{{- $_ := .DB.Exec "UPDATE counter SET value = value - 1 WHERE id = 1"}}
+{{- $_ = .Bus.Publish "counter" (print "elements " (.X.Template "counter-div" .))}}ok
+{{- end}}
+
+{{- define "SSE /stream"}}
+{{- range .Bus.Subscribe "counter"}}{{$.Flush.SendSSE "datastar-patch-elements" .}}{{end}}
+{{- end}}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Datastar + xtemplate</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <script type="module" src="/assets/datastar.js"></script>
+  <style>
+    .muted { color: var(--muted); font-size: 0.9rem; }
+    #counter {
+      margin: 1.25rem 0;
+      padding: 1rem 1.25rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 1.25rem;
+    }
+    #count { color: var(--accent); font-size: 1.5rem; }
+    .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  </style>
+</head>
+{{/*
+  data-init runs when Datastar applies the attribute.
+  openWhenHidden keeps the stream open in background tabs (GET default closes it).
+*/}}
+<body data-init="@get('/stream', {openWhenHidden: true})">
+  <h1>Datastar + xtemplate SSE</h1>
+  <p>
+    A shared counter: clicks only publish on the in-process <code>bus</code>;
+    every open tab morphs <code>#counter</code> from a long-lived
+    <code>SSE /stream</code> of <code>datastar-patch-elements</code> events —
+    no custom <code>EventSource</code> JavaScript.
+  </p>
+
+  {{template "counter-div" .}}
+
+  <div class="actions">
+    <button data-on:click="@post('/inc')">+1</button>
+    <button data-on:click="@post('/dec')">−1</button>
+  </div>
+
+  <p>
+    Open this page in two tabs and click in either — both update via
+    <code>/stream</code> only.
+  </p>
+</body>
+</html>
