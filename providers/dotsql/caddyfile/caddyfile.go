@@ -23,7 +23,7 @@ func (sqlCaddyfile) CaddyModule() caddy.ModuleInfo {
 	}
 }
 
-var _ xtc.CaddyfileProvider = (*sqlCaddyfile)(nil)
+var _ xtc.CaddyfileBlockParser = (*sqlCaddyfile)(nil)
 
 func (sqlCaddyfile) ParseCaddyfile(h httpcaddyfile.Helper) (json.RawMessage, error) {
 	var driver, connstr string

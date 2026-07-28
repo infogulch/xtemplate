@@ -27,9 +27,7 @@ import (
 
 type builder struct {
 	*Instance
-	*InstanceStats
 	m      *minify.M
-	routes []InstanceRoute
 	router *http.ServeMux
 }
 
@@ -73,7 +71,7 @@ var extensionContentTypes = map[string]string{
 
 func (b *builder) addStaticFileHandler(path_ string) error {
 	// Open and stat the file
-	fsfile, err := b.config.TemplatesFS.Open(path_)
+	fsfile, err := b.config.TemplateFS.Open(path_)
 	if err != nil {
 		return fmt.Errorf("failed to open static file '%s': %w", path_, err)
 	}
@@ -152,12 +150,12 @@ func (b *builder) addStaticFileHandler(path_ string) error {
 		file.encodings = []encodingInfo{{encoding: encoding, path: path_, size: size, modtime: stat.ModTime()}}
 
 		pattern := "GET " + identityPath
-		handler := staticFileHandler(b.config.TemplatesFS, file)
+		handler := staticFileHandler(b.config.TemplateFS, file)
 		if err = catch(fmt.Sprintf("add handler to servemux '%s'", pattern), func() { b.router.HandleFunc(pattern, handler) }); err != nil {
 			return err
 		}
-		b.StaticFiles += 1
-		b.Routes += 1
+		b.stats.StaticFiles += 1
+		b.stats.Routes += 1
 		b.files[identityPath] = file
 		b.routes = append(b.routes, InstanceRoute{pattern, handler})
 
@@ -165,12 +163,12 @@ func (b *builder) addStaticFileHandler(path_ string) error {
 
 		for _, enc := range b.config.Precompress {
 			compressedPath := path_ + encodingExts[enc]
-			if _, statErr := b.config.TemplatesFS.Stat(compressedPath); statErr == nil {
+			if _, statErr := b.config.TemplateFS.Stat(compressedPath); statErr == nil {
 				b.config.Logger.Debug("skipping precompression, file already exists", slog.String("path", compressedPath))
 				continue
 			}
 			b.config.Logger.Debug("precompressing static file", slog.String("src", path_), slog.String("dst", compressedPath), slog.String("encoding", enc))
-			if err = precompressFile(b.config.TemplatesFS, path_, enc); err != nil {
+			if err = precompressFile(b.config.TemplateFS, path_, enc); err != nil {
 				return fmt.Errorf("failed to precompress '%s' as %s: %w", path_, enc, err)
 			}
 			if err = b.addStaticFileHandler(compressedPath); err != nil {
@@ -183,7 +181,7 @@ func (b *builder) addStaticFileHandler(path_ string) error {
 		}
 		file.encodings = append(file.encodings, encodingInfo{encoding: encoding, path: path_, size: size, modtime: stat.ModTime()})
 		sort.Slice(file.encodings, func(i, j int) bool { return file.encodings[i].size < file.encodings[j].size })
-		b.StaticFilesAlternateEncodings += 1
+		b.stats.StaticFilesAlternateEncodings += 1
 		b.config.Logger.Debug("added static file encoding", slog.String("path", identityPath), slog.String("filepath", path_), slog.String("encoding", encoding), slog.Int64("size", size), slog.Time("modtime", stat.ModTime()))
 	}
 	return nil
@@ -199,10 +197,12 @@ func catch(description string, fn func()) (err error) {
 	return
 }
 
+// routeMatcher recognizes define names that register HTTP routes.
+// SSE is a pseudo-method (flushing handler, registered as GET).
 var routeMatcher *regexp.Regexp = regexp.MustCompile("^(GET|POST|PUT|PATCH|DELETE|SSE) (.*)$")
 
 func (b *builder) addTemplateHandler(path_ string) error {
-	content, err := afero.ReadFile(b.config.TemplatesFS, path_)
+	content, err := afero.ReadFile(b.config.TemplateFS, path_)
 	if err != nil {
 		return fmt.Errorf("could not read template file '%s': %v", path_, err)
 	}
@@ -219,7 +219,7 @@ func (b *builder) addTemplateHandler(path_ string) error {
 	if err != nil {
 		return fmt.Errorf("could not parse template file '%s': %v", path_, err)
 	}
-	b.TemplateFiles += 1
+	b.stats.TemplateFiles += 1
 
 	// add parsed templates, register handlers
 	for name, tree := range newtemplates {
@@ -230,7 +230,7 @@ func (b *builder) addTemplateHandler(path_ string) error {
 		if err != nil {
 			return fmt.Errorf("could not add template '%s' from '%s': %v", name, path_, err)
 		}
-		b.TemplateDefinitions += 1
+		b.stats.TemplateDefinitions += 1
 
 		var pattern string
 		var handler http.HandlerFunc
@@ -262,12 +262,13 @@ func (b *builder) addTemplateHandler(path_ string) error {
 			pattern = "GET " + routePath
 			handler = bufferingTemplateHandler(b.Instance, tmpl)
 		} else if matches := routeMatcher.FindStringSubmatch(name); len(matches) == 3 {
-			method, path_ := matches[1], matches[2]
+			method, routePath := matches[1], matches[2]
 			if method == "SSE" {
-				pattern = "GET " + path_
+				// Pseudo-method: flushing handler registered as GET.
+				pattern = "GET " + routePath
 				handler = flushingTemplateHandler(b.Instance, tmpl)
 			} else {
-				pattern = method + " " + path_
+				pattern = method + " " + routePath
 				handler = bufferingTemplateHandler(b.Instance, tmpl)
 			}
 		} else {
@@ -278,8 +279,8 @@ func (b *builder) addTemplateHandler(path_ string) error {
 			return err
 		}
 		b.routes = append(b.routes, InstanceRoute{pattern, handler})
-		b.Routes += 1
-		b.config.Logger.Debug("added template handler", "method", "GET", "pattern", pattern, "template_path", path_)
+		b.stats.Routes += 1
+		b.config.Logger.Debug("added template handler", "pattern", pattern, "template_path", path_)
 	}
 	return nil
 }

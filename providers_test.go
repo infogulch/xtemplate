@@ -20,7 +20,7 @@ func (p *testProvider) Value(http.ResponseWriter, *http.Request) (any, error) {
 }
 
 func init() {
-	Register("_test", func() Provider { return &testProvider{} })
+	RegisterProvider("_test", func() Provider { return &testProvider{} })
 }
 
 func TestResolveProviders_roundtrip(t *testing.T) {
@@ -64,12 +64,12 @@ func TestResolveProviders_unknownGeneric(t *testing.T) {
 	}
 }
 
-func TestRegister_duplicatePanics(t *testing.T) {
+func TestRegisterProvider_duplicatePanics(t *testing.T) {
 	defer func() {
 		r := recover()
 		if r == nil {
 			t.Fatal("expected panic on duplicate registration")
 		}
 	}()
-	Register("_test", func() Provider { return &testProvider{} })
+	RegisterProvider("_test", func() Provider { return &testProvider{} })
 }

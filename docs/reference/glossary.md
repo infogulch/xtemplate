@@ -6,11 +6,15 @@ Domain terms for xtemplate. Behavior and APIs live in the rest of the [docs](../
 
 ## Lifecycle
 
-**Server**: Long-lived request handler that owns the current instance and can reload it.
+**Server**: Long-lived request handler that owns an optional immutable sticky template root, the current instance (or nil), and serializes reload. When no instance is loaded yet (or after stop), `ServeHTTP` returns HTTP 503.
 
-**Instance**: Immutable snapshot of a loaded template root (exposed as `.X`). Built at startup or on reload; never mutated in place.
+**Instance**: Immutable snapshot of a loaded template root (exposed as `.X`). Built at startup or on reload; never mutated in place. Controllers never attach to Instance—only a resolved template FS.
 
-**Reload**: Build a new instance from the same config and swap it in atomically. In-flight requests finish on the old instance.
+**Reload**: Build a new instance from the sticky base plus per-call options and swap it in atomically. Every successful instance (including the first when sticky is set) is adopted only through Reload. In-flight requests finish on the old instance. Ephemeral `WithTemplateFS`/`WithTemplateDir` apply only to that build; empty Reload rebuilds from sticky.
+
+**Sticky base**: Base Server config after construction (including options returned from `ServerController.Init`, typically a sticky template root via `WithTemplateFS`/`Dir`). Never updated by later Reloads; ephemeral Reload options apply only to that build.
+
+**ServerController**: Optional component attached once per Server (`Config.Controller`, JSON `"controller"`). `Init` returns sticky options; `Start` may call `server.Reload`. Built-ins: `os`; optional: `watchfs`, `git`. When unset, Server uses **`DefaultControllerType`** (core `"os"`; CLI/standard builds often `"watchfs"`).
 
 **Template root**: Directory (`fs.FS`) of templates and static files that defines the app.
 

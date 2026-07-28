@@ -11,10 +11,10 @@ import (
 // Add a sync.RWMutex if runtime registration becomes supported.
 var registry = map[string]func() Provider{}
 
-// Register makes a provider type available to resolveProviders. Call from init().
+// RegisterProvider makes a provider type available to resolveProviders. Call from init().
 // Panics on duplicate registration (names the type in the message; the registering
 // package is identified by the runtime's stack trace).
-func Register(name string, ctor func() Provider) {
+func RegisterProvider(name string, ctor func() Provider) {
 	if _, exists := registry[name]; exists {
 		panic(fmt.Sprintf("xtemplate: provider type %q already registered", name))
 	}

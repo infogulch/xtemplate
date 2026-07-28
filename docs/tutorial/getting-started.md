@@ -16,7 +16,7 @@ By the end you will have:
 You need one of:
 
 - A pre-built `xtemplate` binary from the [releases page](https://github.com/infogulch/xtemplate/releases)
-- Go 1.25+ (to build from source)
+- Go 1.25+ (to build from controller)
 
 ## 1. Create your project
 
@@ -58,31 +58,37 @@ Create `templates/index.html`:
 Download a release, or build the default live-reload binary:
 
 ```bash
-go install github.com/infogulch/xtemplate/cmd/watchfs@latest
+go install github.com/infogulch/xtemplate/cmd/xtemplate@latest
 # or from a checkout of the repo:
-go build -o xtemplate ./cmd/watchfs
+go build -o xtemplate ./cmd/xtemplate
 ```
 
 Run it from your project directory (so `./templates` resolves):
 
 ```bash
-# if installed via go install, the binary is named watchfs
-watchfs --listen :8080
+# go install installs as "xtemplate"
+xtemplate --listen :8080
 
-# if you built -o xtemplate:
+# if you built -o xtemplate from a checkout:
 ./xtemplate --listen :8080
 ```
 
 Open http://localhost:8080 - you should see your page. The file `templates/index.html` handles `GET /`.
 
+The release CLI sets `DefaultControllerType` to **`watchfs`**, so the plain command above already live-reloads. For no auto-reload:
+
+```shell
+xtemplate --listen :8080 --controller-type os
+```
+
 ## 3. Experience live reload
 
-1. Keep the server running.
+1. Keep the server from step 2 running (default is already `watchfs`).
 2. Edit `templates/index.html` (change the heading or add text).
 3. Save the file.
 4. Refresh the browser.
 
-The change appears without restarting. The watchfs build watches the template root and reloads the instance automatically. A failed load keeps the previous instance serving and logs the error.
+The change appears without restarting. `watchfs` watches the template root and reloads the instance automatically. A failed load keeps the previous instance serving and logs the error.
 
 ## 4. Add a define-based route
 

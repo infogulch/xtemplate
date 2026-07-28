@@ -55,6 +55,9 @@ type Instance struct {
 	bufferDot  dot
 	flusherDot dot
 
+	stats  InstanceStats
+	routes []InstanceRoute
+
 	closeOnce func() error
 
 	// inflight counts requests that have entered ServeHTTP and not yet returned.
@@ -62,56 +65,84 @@ type Instance struct {
 	inflight atomic.Int64
 }
 
-// Instance creates a new *Instance from the given config and options.
-func (config *Config) Instance(cfgs ...Option) (_ *Instance, _ *InstanceStats, _ []InstanceRoute, err error) {
-	start := time.Now()
+// Instance creates a new *Instance from the given config.
+// Requires a resolved template FS ([WithTemplateFS] / [WithTemplateDir]).
+// Controller and ControllerRaw must be nil. Owned slices are cloned.
+func (config Config) Instance() (_ *Instance, err error) {
+	config.SetDefaults()
+	config.cloneSlices()
 
-	inst := &Instance{
-		config: *config.SetDefaults(),
-		id:     nextInstanceIdentity.Add(1),
+	if config.Controller != nil || len(config.ControllerRaw) != 0 {
+		return nil, errors.Join(
+			fmt.Errorf("xtemplate: Instance does not accept Controller/ControllerRaw; use Server, or clear them and set WithTemplateFS/WithTemplateDir"),
+			onCloseFunc(&config.onClose)(),
+		)
 	}
-	// clone onClose so Options cannot trample the caller's base config
-	inst.config.onClose = slices.Clone(inst.config.onClose)
-	inst.closeOnce = sync.OnceValue(func() (err error) {
-		for _, fn := range slices.Backward(inst.config.onClose) {
+	if config.TemplateFS == nil {
+		return nil, errors.Join(
+			fmt.Errorf("xtemplate: Instance requires a template FS (WithTemplateFS or WithTemplateDir); use Server for controllers"),
+			onCloseFunc(&config.onClose)(),
+		)
+	}
+
+	return config.buildInstance()
+}
+
+// invokeOnClose runs onClose callbacks in reverse order (same as Instance.Close).
+func onCloseFunc(fns *[]func() error) func() error {
+	return func() (err error) {
+		for _, fn := range slices.Backward(*fns) {
 			err = errors.Join(err, fn())
 		}
 		return
-	})
+	}
+}
+
+// buildInstance builds an Instance from an already-resolved config.
+// Callers must ensure TemplateFS is set and Controller / ControllerRaw are nil.
+func (config *Config) buildInstance() (_ *Instance, err error) {
+	start := time.Now()
+
+	inst := &Instance{
+		config: *config,
+		id:     nextInstanceIdentity.Add(1),
+	}
+	// Clone onClose so provider Closer appends during this build stay on this instance.
+	inst.config.onClose = slices.Clone(inst.config.onClose)
+	inst.closeOnce = sync.OnceValue(onCloseFunc(&inst.config.onClose))
 	defer func() {
 		if err != nil {
 			err = errors.Join(err, inst.closeOnce())
 		}
 	}()
 
-	if _, err = inst.config.Options(cfgs...); err != nil {
-		return nil, nil, nil, err
+	if inst.config.Controller != nil || len(inst.config.ControllerRaw) != 0 {
+		return nil, fmt.Errorf("xtemplate: Controller cannot be set when building an instance (WithController is rejected on Reload)")
+	}
+	if inst.config.TemplateFS == nil {
+		return nil, fmt.Errorf("xtemplate: internal: buildInstance called without TemplateFS")
 	}
 
 	inst.config.Logger = inst.config.Logger.With(slog.Int64("instance", inst.id))
 	inst.config.Logger.Info("initializing")
 	inst.files = make(map[string]*fileInfo)
 
-	if inst.config.TemplatesFS == nil {
-		inst.config.TemplatesFS = afero.NewBasePathFs(afero.NewOsFs(), inst.config.TemplatesDir)
-	}
-
 	if len(inst.config.Precompress) > 0 {
 		for _, encoding := range inst.config.Precompress {
 			if _, ok := encodingExts[encoding]; !ok {
-				return nil, nil, nil, fmt.Errorf("unsupported encoding: %s", encoding)
+				return nil, fmt.Errorf("unsupported encoding: %s", encoding)
 			}
 		}
 		tempdir, err := os.MkdirTemp("", "xtemplate-precompress-*")
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to create temp dir for pre-compressed files: %w", err)
+			return nil, fmt.Errorf("failed to create temp dir for pre-compressed files: %w", err)
 		}
 		go func() {
 			<-inst.config.Ctx.Done()
 			_ = os.RemoveAll(tempdir)
 		}()
 		overlay := afero.NewBasePathFs(afero.NewOsFs(), tempdir)
-		inst.config.TemplatesFS = afero.NewCopyOnWriteFs(inst.config.TemplatesFS, overlay)
+		inst.config.TemplateFS = afero.NewCopyOnWriteFs(inst.config.TemplateFS, overlay)
 	}
 
 	{
@@ -126,9 +157,8 @@ func (config *Config) Instance(cfgs ...Option) (_ *Instance, _ *InstanceStats, _
 	inst.templates = template.New(".").Delims(inst.config.LDelim, inst.config.RDelim).Funcs(inst.funcs)
 
 	build := &builder{
-		Instance:      inst,
-		InstanceStats: &InstanceStats{},
-		router:        http.NewServeMux(),
+		Instance: inst,
+		router:   http.NewServeMux(),
 	}
 
 	if build.config.Minify != nil && *build.config.Minify {
@@ -142,7 +172,7 @@ func (config *Config) Instance(cfgs ...Option) (_ *Instance, _ *InstanceStats, _
 		build.m = m
 	}
 
-	if err := afero.Walk(build.config.TemplatesFS, ".", func(path_ string, d fs.FileInfo, err error) error {
+	if err := afero.Walk(build.config.TemplateFS, ".", func(path_ string, d fs.FileInfo, err error) error {
 		path_ = strings.ReplaceAll(path_, "\\", "/")
 		if err != nil {
 			return err
@@ -161,16 +191,16 @@ func (config *Config) Instance(cfgs ...Option) (_ *Instance, _ *InstanceStats, _
 		}
 		return err
 	}); err != nil {
-		return nil, nil, nil, fmt.Errorf("error scanning files: %w", err)
+		return nil, fmt.Errorf("error scanning files: %w", err)
 	}
 
 	for _, route := range build.config.Handlers {
 		pattern, handler := route.Pattern, route.Handler
 		if err := catch(fmt.Sprintf("add custom handler to servemux '%s'", pattern), func() { build.router.Handle(pattern, handler) }); err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
 		build.routes = append(build.routes, InstanceRoute{pattern, handler})
-		build.Routes += 1
+		build.stats.Routes += 1
 	}
 
 	dcInstance := dotXProvider{build.Instance}
@@ -183,14 +213,14 @@ func (config *Config) Instance(cfgs ...Option) (_ *Instance, _ *InstanceStats, _
 	{
 		var err error
 		if dot, err = resolveProviders(build.config.ProvidersRaw); err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
 		dot = append(dot, build.config.Providers...)
 		seen := map[string]bool{}
 		for _, d := range dot {
 			name := d.FieldName()
 			if seen[name] {
-				return nil, nil, nil, fmt.Errorf("dot field name '%s' is used more than once", name)
+				return nil, fmt.Errorf("dot field name '%s' is used more than once", name)
 			}
 			seen[name] = true
 		}
@@ -202,7 +232,7 @@ func (config *Config) Instance(cfgs ...Option) (_ *Instance, _ *InstanceStats, _
 				err := di.Init(build.config.Ctx)
 				build.config.Logger.Debug("initialized provider", "name", d.FieldName(), "type", reflect.TypeOf(d).String(), "duration", time.Since(start))
 				if err != nil {
-					return nil, nil, nil, fmt.Errorf("failed to initialize dot field '%s': %w", d.FieldName(), err)
+					return nil, fmt.Errorf("failed to initialize dot field '%s': %w", d.FieldName(), err)
 				}
 			}
 			// Any provider that implements Closer is added to the close list after initialization
@@ -229,10 +259,10 @@ func (config *Config) Instance(cfgs ...Option) (_ *Instance, _ *InstanceStats, _
 	})
 
 	if build.bufferDot, err = makeDot(slices.Concat([]Provider{dcInstance, dcReq}, dot, []Provider{dcResp})); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to build buffer dot: %w", err)
+		return nil, fmt.Errorf("failed to build buffer dot: %w", err)
 	}
 	if build.flusherDot, err = makeDot(slices.Concat([]Provider{dcInstance, dcReq}, dot, []Provider{dcFlush})); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to build flusher dot: %w", err)
+		return nil, fmt.Errorf("failed to build flusher dot: %w", err)
 	}
 
 	{
@@ -249,15 +279,15 @@ func (config *Config) Instance(cfgs ...Option) (_ *Instance, _ *InstanceStats, _
 			if strings.HasPrefix(tmpl.Name(), "INIT ") {
 				val, err := makeDot()
 				if err != nil {
-					return nil, nil, nil, fmt.Errorf("failed to initialize dot value: %w", err)
+					return nil, fmt.Errorf("failed to initialize dot value: %w", err)
 				}
 				err = tmpl.Execute(buf, *val)
 				if err = cleanup(val, err); err != nil {
-					return nil, nil, nil, fmt.Errorf("initialization template '%s' failed: %w", tmpl.Name(), err)
+					return nil, fmt.Errorf("initialization template '%s' failed: %w", tmpl.Name(), err)
 				}
 				// TODO: output buffer somewhere?
 				build.config.Logger.Debug("executed initialization template", slog.String("template_name", tmpl.Name()), slog.Int("rendered_len", buf.Len()))
-				build.InitializationTemplates += 1
+				build.stats.InitializationTemplates += 1
 			}
 		}
 	}
@@ -265,12 +295,12 @@ func (config *Config) Instance(cfgs ...Option) (_ *Instance, _ *InstanceStats, _
 	build.config.Logger.Info("instance loaded",
 		slog.Duration("load_time", time.Since(start)),
 		slog.Group("stats",
-			slog.Int("routes", build.Routes),
-			slog.Int("templateFiles", build.TemplateFiles),
-			slog.Int("templateDefinitions", build.TemplateDefinitions),
-			slog.Int("initializationTemplates", build.InitializationTemplates),
-			slog.Int("staticFiles", build.StaticFiles),
-			slog.Int("staticFilesAlternateEncodings", build.StaticFilesAlternateEncodings),
+			slog.Int("routes", build.stats.Routes),
+			slog.Int("templateFiles", build.stats.TemplateFiles),
+			slog.Int("templateDefinitions", build.stats.TemplateDefinitions),
+			slog.Int("initializationTemplates", build.stats.InitializationTemplates),
+			slog.Int("staticFiles", build.stats.StaticFiles),
+			slog.Int("staticFilesAlternateEncodings", build.stats.StaticFilesAlternateEncodings),
 		))
 
 	if config.CrossOrigin.Disabled {
@@ -286,7 +316,7 @@ func (config *Config) Instance(cfgs ...Option) (_ *Instance, _ *InstanceStats, _
 		build.handler = handler.Handler(build.router)
 	}
 
-	return build.Instance, build.InstanceStats, build.routes, nil
+	return build.Instance, nil
 }
 
 // Counter to assign a unique id to each instance of xtemplate created when
@@ -313,6 +343,16 @@ func (x *Instance) Close() error {
 		return nil
 	}
 	return x.closeOnce()
+}
+
+// Routes returns a copy of all the routes registered with this instance.
+func (x *Instance) Routes() []InstanceRoute {
+	return slices.Clone(x.routes)
+}
+
+// Stats returns the instance build stats.
+func (x *Instance) Stats() InstanceStats {
+	return x.stats
 }
 
 var levelDebug2 slog.Level = slog.LevelDebug + 2

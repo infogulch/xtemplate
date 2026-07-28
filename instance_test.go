@@ -5,7 +5,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/spf13/afero"
 )
@@ -28,9 +27,11 @@ func newMemFS(t *testing.T, files map[string]string) afero.Fs {
 func buildInstance(t *testing.T, files map[string]string, opts ...Option) *Instance {
 	t.Helper()
 	fs := newMemFS(t, files)
-	cfg := New()
-	allOpts := append([]Option{WithTemplateFS(fs)}, opts...)
-	inst, _, _, err := cfg.Instance(allOpts...)
+	cfg, err := New().Options(append([]Option{WithTemplateFS(fs)}, opts...)...)
+	if err != nil {
+		t.Fatalf("failed to apply options: %v", err)
+	}
+	inst, err := cfg.Instance()
 	if err != nil {
 		t.Fatalf("failed to build instance: %v", err)
 	}
@@ -162,14 +163,7 @@ func TestServer_EmptyFSWithHandler(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	cfg := New()
-	server, err := cfg.Server(
-		WithTemplateFS(afero.NewMemMapFs()),
-		WithHandler("POST /hook", handler),
-	)
-	if err != nil {
-		t.Fatalf("failed to build server from empty FS: %v", err)
-	}
+	server := buildServer(t, map[string]string{}, WithHandler("POST /hook", handler))
 	defer server.Stop()
 
 	w := httptest.NewRecorder()
@@ -204,17 +198,8 @@ func TestInstance_SkipsHiddenDirs(t *testing.T) {
 	}
 }
 
-func TestServer_ReloadChannel(t *testing.T) {
-	fs1 := newMemFS(t, map[string]string{"index.html": "V1"})
-	fs2 := newMemFS(t, map[string]string{"index.html": "V2"})
-
-	reload := make(chan []Option)
-	cfg := New()
-	cfg.Reload = reload
-	server, err := cfg.Server(WithTemplateFS(fs1))
-	if err != nil {
-		t.Fatalf("failed to build server: %v", err)
-	}
+func TestServer_ReloadSwapsContent(t *testing.T) {
+	server := buildServer(t, map[string]string{"index.html": "V1"})
 	defer server.Stop()
 
 	get := func() string {
@@ -227,28 +212,18 @@ func TestServer_ReloadChannel(t *testing.T) {
 		t.Fatalf("before reload body = %q, want it to contain V1", body)
 	}
 
-	// Send options through the channel to swap the templates FS, then wait for
-	// the consumer goroutine to apply the reload by polling for the new content.
-	reload <- []Option{WithTemplateFS(fs2)}
-
-	deadline := time.Now().Add(2 * time.Second)
-	for !strings.Contains(get(), "V2") {
-		if time.Now().After(deadline) {
-			t.Fatalf("after reload body = %q, want it to contain V2", get())
-		}
-		time.Sleep(5 * time.Millisecond)
+	if err := server.Reload(WithTemplateFS(newMemFS(t, map[string]string{"index.html": "V2"}))); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	if body := get(); !strings.Contains(body, "V2") {
+		t.Fatalf("after reload body = %q, want it to contain V2", body)
 	}
 }
 
 func TestServer_Lifecycle(t *testing.T) {
-	fs := newMemFS(t, map[string]string{
+	server := buildServer(t, map[string]string{
 		"index.html": "INDEX-MARKER",
 	})
-	cfg := New()
-	server, err := cfg.Server(WithTemplateFS(fs))
-	if err != nil {
-		t.Fatalf("failed to build server: %v", err)
-	}
 
 	inst := server.Instance()
 	if inst == nil {
@@ -279,14 +254,9 @@ func TestServer_Lifecycle(t *testing.T) {
 }
 
 func TestServer_HandlerAfterStop(t *testing.T) {
-	fs := newMemFS(t, map[string]string{
+	server := buildServer(t, map[string]string{
 		"index.html": "INDEX-MARKER",
 	})
-	cfg := New()
-	server, err := cfg.Server(WithTemplateFS(fs))
-	if err != nil {
-		t.Fatalf("failed to build server: %v", err)
-	}
 
 	server.Stop()
 

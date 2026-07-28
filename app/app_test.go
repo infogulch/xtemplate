@@ -3,13 +3,17 @@ package app
 import (
 	"os"
 	"testing"
+
+	"github.com/infogulch/xtemplate"
+	_ "github.com/infogulch/xtemplate"
+	"github.com/infogulch/xtemplate/controllers/watchfs"
 )
 
 func TestLoadConfig_GetsArgsFromOSArgs(t *testing.T) {
 	savedArgs := os.Args
 	defer func() { os.Args = savedArgs }()
 	os.Args = []string{"xtemplate", "--listen", ":7777"}
-	config, err := LoadConfig(&Config{}, nil)
+	config, err := LoadConfig(nil)
 	if err != nil {
 		t.Fatalf("LoadConfig error: %v", err)
 	}
@@ -19,8 +23,8 @@ func TestLoadConfig_GetsArgsFromOSArgs(t *testing.T) {
 }
 
 func TestArgsMinifyDefault(t *testing.T) {
-	// No --minify flag: the default:"true" tag makes Minify a non-nil true.
-	config, err := LoadConfig(&Config{}, []string{})
+	// Empty slice (not nil): nil would use os.Args and pick up go test flags.
+	config, err := LoadConfig([]string{})
 	if err != nil {
 		t.Fatalf("LoadConfig error: %v", err)
 	}
@@ -28,8 +32,7 @@ func TestArgsMinifyDefault(t *testing.T) {
 		t.Errorf("Minify = %v, want non-nil true by default", config.Minify)
 	}
 
-	// --minify=false explicitly disables it.
-	config, err = LoadConfig(&Config{}, []string{"--minify=false"})
+	config, err = LoadConfig([]string{"--minify=false"})
 	if err != nil {
 		t.Fatalf("LoadConfig error: %v", err)
 	}
@@ -38,10 +41,10 @@ func TestArgsMinifyDefault(t *testing.T) {
 	}
 }
 
-func TestLoadConfig_NoSources(t *testing.T) {
-	config, err := LoadConfig(&Config{}, []string{"--listen", ":5555"})
+func TestLoadConfig_NoControllers(t *testing.T) {
+	config, err := LoadConfig([]string{"--listen", ":5555"})
 	if err != nil {
-		t.Fatalf("mergeConfig error: %v", err)
+		t.Fatalf("LoadConfig error: %v", err)
 	}
 	if config.Listen != ":5555" {
 		t.Errorf("Listen = %q, want %q", config.Listen, ":5555")
@@ -49,9 +52,9 @@ func TestLoadConfig_NoSources(t *testing.T) {
 }
 
 func TestLoadConfig_JSONApplied(t *testing.T) {
-	config, err := LoadConfig(&Config{}, []string{"-c", `{"minify":false,"listen":":9999"}`})
+	config, err := LoadConfig([]string{"-c", `{"minify":false,"listen":":9999"}`})
 	if err != nil {
-		t.Fatalf("mergeConfig error: %v", err)
+		t.Fatalf("LoadConfig error: %v", err)
 	}
 	if config.Listen != ":9999" {
 		t.Errorf("Listen = %q, want %q (from JSON arg)", config.Listen, ":9999")
@@ -61,29 +64,67 @@ func TestLoadConfig_JSONApplied(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_JSONOmittingListenKeepsDefault(t *testing.T) {
+	// Config files often omit listen; Docker relies on SetDefaults / ldflags.
+	config, err := LoadConfig([]string{"-c", `{"minify":false,"controller":{"type":"os","path":"templates"}}`})
+	if err != nil {
+		t.Fatalf("LoadConfig error: %v", err)
+	}
+	if config.Listen != defaultListenAddress {
+		t.Errorf("Listen = %q, want default %q when JSON omits listen", config.Listen, defaultListenAddress)
+	}
+}
+
 func TestLoadConfig_CLIOverridesJSON(t *testing.T) {
 	argv := []string{"-c", `{"listen":":9999"}`, "--listen", ":7777"}
-	config, err := LoadConfig(&Config{}, argv)
+	config, err := LoadConfig(argv)
 	if err != nil {
-		t.Fatalf("mergeConfig error: %v", err)
+		t.Fatalf("LoadConfig error: %v", err)
 	}
 	if config.Listen != ":7777" {
 		t.Errorf("Listen = %q, want %q (CLI must override JSON)", config.Listen, ":7777")
 	}
 }
 
-func TestLoadConfig_FileSource(t *testing.T) {
-	tmpFileName, cleanup := mkTemp(t, "conf-*.json", `{"listen":":1234"}`)
+func TestLoadConfig_FileController(t *testing.T) {
+	tmpFileName, cleanup := mkTemp(t, "conf-*.json", `{"listen":":1234","controller":{"type":"os","path":"hello"}}`)
 	defer cleanup()
-	config, err := LoadConfig(&Config{}, []string{"-f", tmpFileName, "--templates-dir", "hello"})
+	config, err := LoadConfig([]string{"-f", tmpFileName})
 	if err != nil {
-		t.Fatalf("mergeConfig error: %v", err)
+		t.Fatalf("LoadConfig error: %v", err)
 	}
 	if config.Listen != ":1234" {
 		t.Errorf("Listen = %q, want %q (from config file)", config.Listen, ":1234")
 	}
-	if config.TemplatesDir != "hello" {
-		t.Errorf("TemplatesDir = %q, want %q (json must not clobber unnamed cli arg)", config.TemplatesDir, "hello")
+	if _, ok := config.Controller.(*xtemplate.OsFsController); !ok {
+		t.Errorf("Controller = %T, want *OsFsController", config.Controller)
+	}
+	if config.ControllerRaw != nil {
+		t.Error("ControllerRaw should be cleared after materialize")
+	}
+}
+
+func TestLoadConfig_BannedKey(t *testing.T) {
+	_, err := LoadConfig([]string{"-c", `{"templates_dir":"x"}`})
+	if err == nil {
+		t.Fatal("expected error for banned templates_dir key")
+	}
+}
+
+func TestLoadConfig_CLIControllerTypeWinsOverJSON(t *testing.T) {
+	// CLI --controller-type overrides JSON controller.type (CLI > JSON).
+	config, err := LoadConfig([]string{
+		"-c", `{"controller":{"type":"os","path":"templates"}}`,
+		"--controller-type", "watchfs",
+	})
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if _, ok := config.Controller.(*watchfs.Controller); !ok {
+		t.Errorf("Controller = %T, want *watchfs.Controller (CLI wins)", config.Controller)
+	}
+	if config.ControllerRaw != nil {
+		t.Error("ControllerRaw should be cleared after materialize")
 	}
 }
 
@@ -109,40 +150,57 @@ func mkTemp(t *testing.T, name, content string) (string, func()) {
 	}
 }
 
-func TestLoadConfig_LoggerSetWithConfigSource(t *testing.T) {
-	config, err := LoadConfig(&Config{}, []string{"-c", `{"listen":":9999"}`})
+func TestLoadConfig_LoggerSetWithConfig(t *testing.T) {
+	config, err := LoadConfig([]string{"-c", `{"listen":":9999"}`})
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
 	}
 	if config.Logger == nil {
-		t.Fatal("LoadConfig returned config with nil Logger after decoding a config source")
+		t.Fatal("LoadConfig returned config with nil Logger after decoding config")
 	}
 }
 
 func TestLoadConfig_BadJSON(t *testing.T) {
-	config, err := LoadConfig(&Config{}, []string{"-c", `{not valid json`})
+	config, err := LoadConfig([]string{"-c", `{not valid json`})
 	if err == nil {
 		t.Error("expected an error for malformed JSON, got nil")
 	}
-	if config.Logger == nil {
+	if config == nil || config.Logger == nil {
 		t.Error("expected Logger to be set after loading config even with bad JSON, got nil")
 	}
 }
 
-type testConfigDoesNotCallSetDefaults struct {
-	Config
-}
+func TestLoadConfig_DefaultFollowsDefaultControllerType(t *testing.T) {
+	prev := xtemplate.DefaultControllerType
+	xtemplate.DefaultControllerType = "watchfs"
+	t.Cleanup(func() { xtemplate.DefaultControllerType = prev })
 
-func (c *testConfigDoesNotCallSetDefaults) SetDefaults() {
-	// Test what happens when we don't call the embedded SetDefaults
-}
-
-func TestLoadConfig_SetsLoggerWhenOverriding(t *testing.T) {
-	config, err := LoadConfig(&testConfigDoesNotCallSetDefaults{}, []string{"-c", `{"listen":":9999"}`})
+	config, err := LoadConfig([]string{"--listen", ":0"})
 	if err != nil {
-		t.Fatalf("Parse error: %v", err)
+		t.Fatalf("LoadConfig: %v", err)
 	}
-	if config.Logger == nil {
-		t.Errorf("LoadConfig returned config with nil Logger")
+	if _, ok := config.Controller.(*watchfs.Controller); !ok {
+		t.Errorf("Controller = %T, want *watchfs.Controller (DefaultControllerType)", config.Controller)
+	}
+}
+
+func TestLoadConfig_CoreDefaultIsOS(t *testing.T) {
+	prev := xtemplate.DefaultControllerType
+	xtemplate.DefaultControllerType = "os"
+	t.Cleanup(func() { xtemplate.DefaultControllerType = prev })
+
+	config, err := LoadConfig([]string{"--listen", ":0"})
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if _, ok := config.Controller.(*xtemplate.OsFsController); !ok {
+		t.Errorf("Controller = %T, want *OsFsController", config.Controller)
+	}
+}
+
+func TestLoadConfig_ExplicitUnregisteredControllerErrors(t *testing.T) {
+	_, err := LoadConfig([]string{"--controller-type", "not_a_linked_controller"})
+	if err == nil {
+		t.Fatal("expected error for explicit unregistered --controller-type")
 	}
 }

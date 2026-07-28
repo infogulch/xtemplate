@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	xtemplate.Register("nats", func() xtemplate.Provider { return &DotNatsConfig{} })
+	xtemplate.RegisterProvider("nats", func() xtemplate.Provider { return &DotNatsConfig{} })
 }
 
 // WithNats creates an [xtemplate.Option] that adds a nats dot provider to the

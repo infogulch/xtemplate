@@ -17,18 +17,27 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// buildServer builds a Server from an in-memory template fs and any extra
+// options, failing the test if construction fails.
+func buildServer(t *testing.T, files map[string]string, opts ...Option) *Server {
+	t.Helper()
+	fs := newMemFS(t, files)
+	cfg, err := New().Options(append([]Option{WithTemplateFS(fs)}, opts...)...)
+	if err != nil {
+		t.Fatalf("failed to apply options: %v", err)
+	}
+	server, err := cfg.Server()
+	if err != nil {
+		t.Fatalf("failed to build server: %v", err)
+	}
+	return server
+}
+
 // TestServe_ReturnsOnCtxCancel verifies that cancelling Config.Ctx shuts down
 // the running server so Serve returns instead of blocking forever.
 func TestServe_ReturnsOnCtxCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	cfg := New()
-	cfg.Ctx = ctx
-	cfg.TemplatesFS = newMemFS(t, map[string]string{"index.html": "ok"})
-
-	srv, err := cfg.Server()
-	if err != nil {
-		t.Fatalf("Server: %v", err)
-	}
+	srv := buildServer(t, map[string]string{"index.html": "ok"}, WithContext(ctx))
 
 	done := make(chan error, 1)
 	go func() { done <- srv.Serve("127.0.0.1:0") }()
@@ -52,11 +61,7 @@ func TestServe_ReturnsOnCtxCancel(t *testing.T) {
 }
 
 func TestShutdown_IdempotentAnd503(t *testing.T) {
-	cfg := New()
-	srv, err := cfg.Server(WithTemplateFS(newMemFS(t, map[string]string{"index.html": "ok"})))
-	if err != nil {
-		t.Fatalf("Server: %v", err)
-	}
+	srv := buildServer(t, map[string]string{"index.html": "ok"})
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -77,26 +82,23 @@ func TestShutdown_IdempotentAnd503(t *testing.T) {
 
 func TestStop_CancelsInstanceCtxWithoutParentCancel(t *testing.T) {
 	// Embedder leaves Config.Ctx live; Stop must still cancel instance work.
-	cfg := New()
-	srv, err := cfg.Server(WithTemplateFS(newMemFS(t, map[string]string{
+	parent := context.Background()
+	srv := buildServer(t, map[string]string{
 		"index.html": "ok",
 		// Initial Flush signals the test that WaitForServerStop is about to block.
 		"sse.html": `{{define "SSE /wait"}}{{.Flush.Flush}}{{.Flush.WaitForServerStop}}data: bye{{printf "\n\n"}}{{end}}`,
-	})))
-	if err != nil {
-		t.Fatalf("Server: %v", err)
-	}
+	}, WithContext(parent))
 
 	// Parent Config.Ctx must still be live after Stop for this test's point.
 	select {
-	case <-cfg.Ctx.Done():
+	case <-parent.Done():
 		t.Fatal("Config.Ctx should still be live before Stop")
 	default:
 	}
 
 	body := runSSEUntilStop(t, srv.Instance(), "/wait", func() {
 		select {
-		case <-cfg.Ctx.Done():
+		case <-parent.Done():
 			t.Error("Config.Ctx was cancelled; Stop should not require parent cancel")
 		default:
 		}
@@ -107,18 +109,14 @@ func TestStop_CancelsInstanceCtxWithoutParentCancel(t *testing.T) {
 	}
 
 	select {
-	case <-cfg.Ctx.Done():
+	case <-parent.Done():
 		t.Error("Config.Ctx should remain live after Stop")
 	default:
 	}
 }
 
 func TestReload_RetiresOldInstanceEarlyWhenIdle(t *testing.T) {
-	cfg := New()
-	srv, err := cfg.Server(WithTemplateFS(newMemFS(t, map[string]string{"index.html": "V1"})))
-	if err != nil {
-		t.Fatalf("Server: %v", err)
-	}
+	srv := buildServer(t, map[string]string{"index.html": "V1"})
 	defer srv.Stop()
 
 	start := time.Now()
@@ -145,10 +143,7 @@ func TestReload_AllowsInFlightSSEFinalWrite(t *testing.T) {
 			"sse.html":   `{{define "SSE /wait"}}{{.Flush.Flush}}{{.Flush.WaitForServerStop}}data: done{{printf "\n\n"}}{{end}}`,
 		}
 	}
-	srv, err := New().Server(WithTemplateFS(newMemFS(t, fs("before"))))
-	if err != nil {
-		t.Fatalf("Server: %v", err)
-	}
+	srv := buildServer(t, fs("before"))
 	defer srv.Stop()
 
 	body := runSSEUntilStop(t, srv.Instance(), "/wait", func() {
@@ -168,13 +163,10 @@ func TestReload_AllowsInFlightSSEFinalWrite(t *testing.T) {
 }
 
 func TestShutdown_DrainsInFlightHandler(t *testing.T) {
-	srv, err := New().Server(WithTemplateFS(newMemFS(t, map[string]string{
+	srv := buildServer(t, map[string]string{
 		"index.html": "ok",
 		"sse.html":   `{{define "SSE /wait"}}{{.Flush.Flush}}{{.Flush.WaitForServerStop}}data: drained{{printf "\n\n"}}{{end}}`,
-	})))
-	if err != nil {
-		t.Fatalf("Server: %v", err)
-	}
+	})
 
 	body := runSSEUntilStop(t, srv.Instance(), "/wait", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -195,10 +187,7 @@ func TestShutdown_DrainsInFlightHandler(t *testing.T) {
 }
 
 func TestReload_AfterStopFails(t *testing.T) {
-	srv, err := New().Server(WithTemplateFS(newMemFS(t, map[string]string{"index.html": "ok"})))
-	if err != nil {
-		t.Fatalf("Server: %v", err)
-	}
+	srv := buildServer(t, map[string]string{"index.html": "ok"})
 	srv.Stop()
 	if err := srv.Reload(); err == nil {
 		t.Fatal("Reload after Stop: want error")

@@ -5,10 +5,13 @@ package xtemplate
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"log/slog"
+	"maps"
 	"net/http"
+	"slices"
 
 	"github.com/spf13/afero"
 )
@@ -20,11 +23,18 @@ func New() (c *Config) {
 }
 
 type Config struct {
-	// The path to the templates directory within the filesystem. Default `templates`.
-	TemplatesDir string `json:"templates_dir,omitempty" arg:"-t,--template-dir,--templates-dir" default:"templates"`
+	// Controller is the optional ServerController (JSON key "controller").
+	// Resolved from ControllerRaw by [Config.MaterializeController] (LoadConfig /
+	// Server.construct). Instance requires TemplateFS instead and rejects
+	// Controller / ControllerRaw.
+	Controller ServerController `json:"-" arg:"-"`
 
-	// The FS to load templates from. Default: a FS made from the current working directory.
-	TemplatesFS afero.Fs `json:"-" arg:"-"`
+	// ControllerRaw is the JSON "controller" object until MaterializeController.
+	ControllerRaw json.RawMessage `json:"controller,omitempty" arg:"-"`
+
+	// TemplateFS is the private build-root FS (not JSON). Sticky after controller
+	// Init or WithTemplateFS/Dir; also the per-Reload root when set via options.
+	TemplateFS afero.Fs `json:"-" arg:"-"`
 
 	// File extension to search for to find template files. Default `.html`.
 	TemplateExtension string `json:"template_extension,omitempty" arg:"--template-ext" default:".html"`
@@ -68,16 +78,6 @@ type Config struct {
 	// The default logger. Defaults to `slog.Default()`.
 	Logger *slog.Logger `json:"-" arg:"-"`
 
-	// Reload, when non-nil, triggers server.Reload(opts...) on each receive.
-	// Send options to mutate the config for that reload (e.g. WithTemplateFS to
-	// swap the templates source). Send nil to reload in place. Close the channel
-	// to stop the consumer. The caller owns the source and any debounce.
-	//
-	// Options apply to a copy of the config per reload, so they are not sticky:
-	// the next reload starts from the original config again. Use a single reload
-	// source per server unless you persist options into the base config yourself.
-	Reload <-chan []Option `json:"-" arg:"-"`
-
 	// onClose callbacks for the next Instance built from this config.
 	// See [WithOnClose]. Not JSON. Each Instance takes a reslice at build time.
 	onClose []func() error
@@ -96,12 +96,8 @@ type CrossOriginConfig struct {
 	InsecureBypassPatterns []string `json:"insecure_bypass_patterns" arg:"--insecure-bypass-pattern,separate"`
 }
 
-// FillDefaults sets default values for unset fields
+// SetDefaults fills unset fields. Does not choose a Controller or clone slices.
 func (config *Config) SetDefaults() *Config {
-	if config.TemplatesDir == "" {
-		config.TemplatesDir = "templates"
-	}
-
 	if config.TemplateExtension == "" {
 		config.TemplateExtension = ".html"
 	}
@@ -130,23 +126,116 @@ func (config *Config) SetDefaults() *Config {
 	return config
 }
 
-func (c *Config) Options(options ...Option) (*Config, error) {
-	for _, o := range options {
-		if err := o(c); err != nil {
-			return nil, fmt.Errorf("failed to apply xtemplate config option: %w", err)
+// cloneSlices replaces every append-owned slice with a copy so later Options
+// or builds cannot mutate the caller's (or sticky Server's) backing arrays.
+// Maps inside FuncMaps are cloned; Provider values and Handler refs are not deep-copied.
+func (c *Config) cloneSlices() {
+	c.ControllerRaw = slices.Clone(c.ControllerRaw)
+	if c.ProvidersRaw != nil {
+		out := make([]json.RawMessage, len(c.ProvidersRaw))
+		for i, raw := range c.ProvidersRaw {
+			out[i] = slices.Clone(raw)
+		}
+		c.ProvidersRaw = out
+	}
+	c.Providers = slices.Clone(c.Providers)
+	c.Precompress = slices.Clone(c.Precompress)
+	if c.FuncMaps != nil {
+		out := make([]template.FuncMap, len(c.FuncMaps))
+		for i, fm := range c.FuncMaps {
+			out[i] = maps.Clone(fm)
+		}
+		c.FuncMaps = out
+	}
+	c.Handlers = slices.Clone(c.Handlers)
+	c.onClose = slices.Clone(c.onClose)
+	c.CrossOrigin.TrustedOrigins = slices.Clone(c.CrossOrigin.TrustedOrigins)
+	c.CrossOrigin.InsecureBypassPatterns = slices.Clone(c.CrossOrigin.InsecureBypassPatterns)
+}
+
+// bannedTemplateKeys hard-reject renamed top-level JSON keys with migrate text.
+// REMOVE BEFORE 1.0.
+var bannedTemplateKeys = map[string]string{
+	"templates_dir":       `templates_dir is no longer supported; use "controller": {"type":"os","path":"…"} (or watchfs/git as appropriate)`,
+	"templates_path":      `templates_path is no longer supported; use "controller": {"type":"os","path":"…"} (or watchfs/git as appropriate)`,
+	"watch_dirs":          `watch_dirs is no longer supported; use "controller": {"type":"watchfs","path":"…","watch_dirs":[…]}`,
+	"watch_template_path": `watch_template_path is no longer supported; use controller os or watchfs to control reload behavior`,
+	"git_repo":            `git_repo is no longer supported; use "controller": {"type":"git","repo":"…"}`,
+	"git_ref":             `git_ref is no longer supported; use "controller": {"type":"git","ref":"…"}`,
+	"git_interval":        `git_interval is no longer supported; use "controller": {"type":"git","interval":"…"}`,
+}
+
+// CheckLegacyTemplateKeys returns a migrate error if banned top-level keys are present.
+func CheckLegacyTemplateKeys(data []byte) error {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil
+	}
+	for key, msg := range bannedTemplateKeys {
+		if _, ok := m[key]; ok {
+			return fmt.Errorf("xtemplate: %s", msg)
 		}
 	}
-	return c, nil
+	return nil
+}
+
+// UnmarshalJSON applies the ban-list then unmarshals into Config.
+func (c *Config) UnmarshalJSON(data []byte) error {
+	if err := CheckLegacyTemplateKeys(data); err != nil {
+		return err
+	}
+	type alias Config
+	var a alias
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	*c = Config(a)
+	return nil
 }
 
 type Option func(*Config) error
 
+// Options applies the given options to the Config, returning the updated Config
+// or the first error.
+func (c *Config) Options(options ...Option) (*Config, error) {
+	var errs error
+	for _, o := range options {
+		if err := o(c); err != nil {
+			errs = errors.Join(errs, fmt.Errorf("failed to apply xtemplate config option: %w", err))
+		}
+	}
+	return c, errs
+}
+
+// WithController sets the ServerController. Rejected when building an Instance / Reload.
+func WithController(s ServerController) Option {
+	return func(c *Config) error {
+		if s == nil {
+			return fmt.Errorf("nil controller")
+		}
+		c.Controller = s
+		return nil
+	}
+}
+
+// WithTemplateFS sets the private build-root FS for the next Instance.
 func WithTemplateFS(fs afero.Fs) Option {
 	return func(c *Config) error {
 		if fs == nil {
 			return fmt.Errorf("nil fs")
 		}
-		c.TemplatesFS = fs
+		c.TemplateFS = fs
+		return nil
+	}
+}
+
+// WithTemplateDir sets the private build-root FS to an OS directory.
+func WithTemplateDir(dir string) Option {
+	return func(c *Config) error {
+		if dir == "" {
+			return fmt.Errorf("empty template dir")
+		}
+		c.TemplateFS = afero.NewBasePathFs(afero.NewOsFs(), dir)
 		return nil
 	}
 }
@@ -191,26 +280,32 @@ func WithProvider(p Provider) Option {
 }
 
 // WithOnClose registers fn to run when the [Instance] built with this option
-// is [Instance.Close]d (reload retire or [Server.Stop]/[Server.Shutdown]).
-// Multiple WithOnClose options append; they run after provider [Closer]s, in
-// reverse registration order. Nil fns are ignored.
+// is [Instance.Close]d (reload retire or stop). Multiple callbacks append; they
+// run after provider [Closer]s, reverse registration order. Nil fns ignored.
 //
-// Callbacks are per instance, not once per Server: if set on the Server base
-// config (e.g. Server(WithOnClose(fn))), fn runs once for every retired
-// instance after each successful Reload and on final stop. That is intentional
-// for hooks like metrics; for one-shot process cleanup wrap with sync.Once.
-// For per-build resources (e.g. a git clone directory), pass WithOnClose only
-// on the Reload options that install that build—not on the base config—so each
-// clone is released with the instance that adopted it.
-//
-// Each Instance stores its own reslice of handlers so Options appends during
-// one build cannot trample another instance's list or the base config slice.
+// Per instance, not once per Server: on the sticky base, fn runs for every
+// retired instance. Use sync.Once for process-wide cleanup, or pass WithOnClose
+// only on the Reload that owns a per-build resource (e.g. a temp clone dir).
 func WithOnClose(fn func() error) Option {
 	return func(c *Config) error {
 		if fn == nil {
 			return nil
 		}
 		c.onClose = append(c.onClose, fn)
+		return nil
+	}
+}
+
+func WithContext(ctx context.Context) Option {
+	return func(c *Config) error {
+		c.Ctx = ctx
+		return nil
+	}
+}
+
+func WithMinify(minify bool) Option {
+	return func(c *Config) error {
+		c.Minify = &minify
 		return nil
 	}
 }

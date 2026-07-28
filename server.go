@@ -15,21 +15,17 @@ import (
 // on instance retire after Reload. Not a fixed sleep: wait returns early when idle.
 const defaultGrace = 5 * time.Second
 
-// Server is a configured, *reloadable*, xtemplate request handler ready to
-// execute templates and serve static files in response to http requests. It
-// implements [http.Handler] by always routing to the current [Instance].
+// Server is a reloadable http.Handler that always routes to the current
+// [Instance], or responds 503 when none is loaded or the server has stopped.
 //
-// Call [Server.Reload] to rebuild from the same config (or with options). If
-// successful, Reload atomically swaps the old Instance for the new one so
-// subsequent requests use the new instance; outstanding requests on the old
-// Instance are given a grace period to finish after the old instance context
-// is cancelled, then providers are closed.
+// Optional [ServerController]: Init supplies sticky base options, then Start
+// may drive reloads. The sticky base is fixed at construction.
 //
-// Call [Server.Shutdown] for a graceful stop or [Server.Stop] for immediate
-// teardown. When using [Server.Serve], cancelling the server context also
-// drains the local [http.Server] (Serve owns that; Server does not store it).
+// [Server.Reload] rebuilds from sticky plus ephemeral options. [Server.Shutdown]
+// / [Server.Stop] tear down; with [Server.Serve], cancelling the server context
+// also drains the local http.Server (not stored on Server).
 //
-// The only way to create a valid *Server is to call [Config.Server].
+// Create only via [Config.Server].
 type Server struct {
 	instance atomic.Pointer[Instance]
 	cancel   context.CancelFunc // cancels current instance ctx
@@ -43,54 +39,142 @@ type Server struct {
 
 var _ http.Handler = (*Server)(nil)
 
-// Server creates a new Server from an xtemplate.Config.
-func (config Config) Server(cfgs ...Option) (*Server, error) {
-	if _, err := config.SetDefaults().Options(cfgs...); err != nil {
-		return nil, err
-	}
+// Context is cancelled on Stop/Shutdown. Controllers use it to halt background work.
+func (server *Server) Context() context.Context {
+	return server.serverCtx
+}
 
+// Logger returns the server logger (xtemplate group applied at construction).
+func (server *Server) Logger() *slog.Logger {
+	return server.config.Logger
+}
+
+// Server creates a Server from Config. Apply Options on the Config first; this
+// method does not take Option args. Owned slices are cloned so the caller's
+// Config is not mutated by sticky Options or later Reloads.
+func (config Config) Server() (*Server, error) {
+	config.SetDefaults()
+	config.cloneSlices()
 	config.Logger = config.Logger.WithGroup("xtemplate")
 
 	serverCtx, serverCancel := context.WithCancel(config.Ctx)
-
 	server := &Server{
 		config:       config,
 		serverCtx:    serverCtx,
 		serverCancel: serverCancel,
 	}
-	err := server.Reload()
 
-	if err != nil {
+	if err := server.construct(); err != nil {
 		serverCancel()
 		return nil, err
 	}
 
-	if config.Reload != nil {
-		go func() {
-			log := config.Logger.WithGroup("reload")
-			for {
-				select {
-				case <-server.serverCtx.Done():
-					return
-				case opts, ok := <-config.Reload:
-					if !ok {
-						return
-					}
-					if err := server.Reload(opts...); err != nil {
-						log.Error("reload failed", slog.Any("error", err))
-					}
-				}
-			}
-		}()
+	if server.config.Controller != nil {
+		if err := server.config.Controller.Start(server); err != nil {
+			server.Stop()
+			return nil, err
+		}
 	}
 
 	return server, nil
 }
 
+// construct resolves the controller, applies Init sticky options, and loads the
+// first Instance when TemplateFS is set. No mutex: Server is not published yet.
+// Caller owns serverCancel on error.
+func (server *Server) construct() error {
+	// Materialize when already set, from Raw, or default when no TemplateFS.
+	// Leave Controller nil when TemplateFS is set and no controller was configured
+	// (in-process FS / deferred controllers that only Reload).
+	if server.config.Controller != nil || len(server.config.ControllerRaw) != 0 || server.config.TemplateFS == nil {
+		if _, err := server.config.MaterializeController(""); err != nil {
+			return err
+		}
+	}
+
+	if server.config.Controller != nil {
+		log := server.config.Logger.WithGroup("controller")
+		sticky, err := server.config.Controller.Init(server.serverCtx, log)
+		if err != nil {
+			return err
+		}
+		if _, err = server.config.Options(sticky...); err != nil {
+			return err
+		}
+	}
+
+	if server.config.TemplateFS != nil {
+		return server.Reload()
+	}
+	server.config.Logger.Info("TemplateFS not set, server will respond with 503 until the first successful reload")
+	return nil
+}
+
+// Reload builds a new Instance from the sticky base plus options and swaps it
+// in on success. Previous instance is cancelled, drained up to [defaultGrace],
+// then closed (outside the mutex so concurrent Reload/Shutdown are not blocked).
+// Ephemeral WithTemplateFS/Dir apply only to this build; empty Reload rebuilds
+// from sticky. Fails if the final template root is nil. WithController is rejected.
+func (server *Server) Reload(options ...Option) error {
+	start := time.Now()
+
+	server.mutex.Lock()
+
+	if server.serverCtx.Err() != nil {
+		server.mutex.Unlock()
+		config, optErr := New().Options(options...)
+		return errors.Join(errors.New("server stopped"), optErr, onCloseFunc(&config.onClose)())
+	}
+
+	log := server.config.Logger.WithGroup("reload")
+	if prev := server.instance.Load(); prev != nil {
+		log = log.With(slog.Int64("old_id", prev.id))
+	}
+
+	config := server.config
+	config.cloneSlices()
+	config.Controller = nil
+	config.ControllerRaw = nil
+	if _, err := config.Options(options...); err != nil {
+		server.mutex.Unlock()
+		return err
+	}
+	if config.TemplateFS == nil {
+		server.mutex.Unlock()
+		return errors.Join(
+			errors.New("xtemplate: no template root (sticky unset and Reload options did not set WithTemplateFS/WithTemplateDir)"),
+			onCloseFunc(&config.onClose)(),
+		)
+	}
+	var newcancel context.CancelFunc
+	config.Ctx, newcancel = context.WithCancel(server.serverCtx)
+	new_, err := config.buildInstance()
+	if err != nil {
+		newcancel()
+		server.mutex.Unlock()
+		log.Info("failed to load", slog.Any("error", err), slog.Duration("rebuild_time", time.Since(start)))
+		return err
+	}
+
+	old := server.instance.Swap(new_)
+	oldCancel := server.cancel
+	server.cancel = newcancel
+	server.mutex.Unlock()
+
+	log.Info("rebuild succeeded", slog.Int64("new_id", new_.id), slog.Duration("rebuild_time", time.Since(start)))
+
+	if old != nil {
+		graceCtx, graceCancel := context.WithTimeout(context.Background(), defaultGrace)
+		server.retire(old, oldCancel, graceCtx)
+		graceCancel()
+	}
+	return nil
+}
+
 // Instance returns the current [Instance]. After calling Reload, previous calls
-// to Instance may be stale. After Stop/Shutdown, returns nil.
-func (x *Server) Instance() *Instance {
-	return x.instance.Load()
+// to Instance may be stale. When not ready yet or after Stop/Shutdown, returns nil.
+func (server *Server) Instance() *Instance {
+	return server.instance.Load()
 }
 
 // Serve opens a net listener on `listen_addr` and serves requests from it.
@@ -98,7 +182,7 @@ func (x *Server) Instance() *Instance {
 // (parent [Config.Ctx] or [Server.Shutdown]/[Server.Stop]), in which case the
 // local [http.Server] is drained (default grace [defaultGrace]), the instance
 // is retired, and Serve returns nil.
-func (x *Server) Serve(listen_addr string) error {
+func (server *Server) Serve(listen_addr string) error {
 	ln, err := net.Listen("tcp", listen_addr)
 	if err != nil {
 		return err
@@ -106,23 +190,22 @@ func (x *Server) Serve(listen_addr string) error {
 	// Log the actual bound address (resolved from listen_addr) so the port is
 	// visible in the logs, including when listen_addr requests an ephemeral
 	// port like ":0".
-	x.config.Logger.Info("starting server", slog.String("address", ln.Addr().String()))
+	server.config.Logger.Info("starting server", slog.String("address", ln.Addr().String()))
 
 	srv := &http.Server{
-		Handler:           x,
+		Handler:           server,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       120 * time.Second,
-		// ponytail: no WriteTimeout; it would cap streaming/SSE responses. Add a per-handler deadline if slow writers become a problem.
 	}
 
 	go func() {
-		<-x.serverCtx.Done()
+		<-server.serverCtx.Done()
 		drainCtx, cancel := context.WithTimeout(context.Background(), defaultGrace)
 		defer cancel()
 		// Retire instance first (serverCtx already cancelled → SSE unblocks),
 		// then drain this Serve-local http.Server. Server does not own *http.Server.
-		_ = x.Shutdown(drainCtx)
+		_ = server.Shutdown(drainCtx)
 		_ = srv.Shutdown(drainCtx)
 	}()
 
@@ -133,64 +216,14 @@ func (x *Server) Serve(listen_addr string) error {
 }
 
 // ServeHTTP routes the request to the current [Instance], or responds 503 if
-// the server has been stopped.
-func (x *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	instance := x.Instance()
+// no instance is loaded yet or the server has been stopped.
+func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	instance := server.Instance()
 	if instance == nil {
-		http.Error(w, "server stopped", http.StatusServiceUnavailable)
+		http.Error(w, "service unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	instance.ServeHTTP(w, r)
-}
-
-// Reload creates a new Instance from the config and swaps it with the
-// current instance if successful, otherwise returns the error. The previous
-// instance context is cancelled, in-flight requests are waited on up to
-// [defaultGrace], then providers are closed.
-func (x *Server) Reload(cfgs ...Option) error {
-	start := time.Now()
-
-	x.mutex.Lock()
-
-	if err := x.serverCtx.Err(); err != nil {
-		x.mutex.Unlock()
-		return errors.New("server stopped")
-	}
-
-	log := x.config.Logger.WithGroup("reload")
-	old := x.instance.Load()
-	if old != nil {
-		log = log.With(slog.Int64("old_id", old.id))
-	}
-
-	var newcancel context.CancelFunc
-	var new_ *Instance
-	{
-		var err error
-		config := x.config
-		config.Ctx, newcancel = context.WithCancel(x.serverCtx)
-		new_, _, _, err = config.Instance(cfgs...)
-		if err != nil {
-			newcancel()
-			x.mutex.Unlock()
-			log.Info("failed to load", slog.Any("error", err), slog.Duration("rebuild_time", time.Since(start)))
-			return err
-		}
-	}
-
-	old = x.instance.Swap(new_)
-	oldCancel := x.cancel
-	x.cancel = newcancel
-	x.mutex.Unlock()
-
-	if old != nil {
-		graceCtx, graceCancel := context.WithTimeout(context.Background(), defaultGrace)
-		x.retire(old, oldCancel, graceCtx)
-		graceCancel()
-	}
-
-	log.Info("rebuild succeeded", slog.Int64("new_id", new_.id), slog.Duration("rebuild_time", time.Since(start)))
-	return nil
 }
 
 // Shutdown stops the server gracefully.
@@ -204,20 +237,20 @@ func (x *Server) Reload(cfgs ...Option) error {
 //
 // ctx bounds only the in-flight wait; teardown always runs. Safe if Serve never
 // ran (handler-only / Caddy). Idempotent.
-func (x *Server) Shutdown(ctx context.Context) error {
+func (server *Server) Shutdown(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	x.mutex.Lock()
-	old := x.instance.Swap(nil)
-	oldCancel := x.cancel
-	x.cancel = nil
+	server.mutex.Lock()
+	old := server.instance.Swap(nil)
+	oldCancel := server.cancel
+	server.cancel = nil
 
-	if x.serverCancel != nil {
-		x.serverCancel()
+	if server.serverCancel != nil {
+		server.serverCancel()
 	}
-	x.mutex.Unlock()
+	server.mutex.Unlock()
 
 	// Cancel instance explicitly as well (no-op if already cancelled via serverCtx).
 	if oldCancel != nil {
@@ -227,7 +260,7 @@ func (x *Server) Shutdown(ctx context.Context) error {
 	if old != nil {
 		old.waitInFlight(ctx)
 		if err := old.Close(); err != nil {
-			x.config.Logger.Warn("error closing instance providers on shutdown", slog.Any("error", err))
+			server.config.Logger.Warn("error closing instance providers on shutdown", slog.Any("error", err))
 		}
 	}
 
@@ -235,15 +268,15 @@ func (x *Server) Shutdown(ctx context.Context) error {
 }
 
 // Stop is immediate teardown: no drain wait, then the same path as [Shutdown].
-func (x *Server) Stop() {
+func (server *Server) Stop() {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_ = x.Shutdown(ctx)
+	_ = server.Shutdown(ctx)
 }
 
 // retire cancels an instance, waits for in-flight requests (or grace), then Closes.
-// Must not be called under x.mutex (wait can take up to grace).
-func (x *Server) retire(old *Instance, oldCancel context.CancelFunc, graceCtx context.Context) {
+// Caller must not hold server.mutex.
+func (server *Server) retire(old *Instance, oldCancel context.CancelFunc, graceCtx context.Context) {
 	if old == nil {
 		return
 	}
@@ -252,6 +285,6 @@ func (x *Server) retire(old *Instance, oldCancel context.CancelFunc, graceCtx co
 	}
 	old.waitInFlight(graceCtx)
 	if err := old.Close(); err != nil {
-		x.config.Logger.Warn("error closing previous instance providers", slog.Any("error", err))
+		server.config.Logger.Warn("error closing previous instance providers", slog.Any("error", err))
 	}
 }

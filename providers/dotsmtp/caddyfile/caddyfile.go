@@ -29,7 +29,7 @@ func (smtpCaddyfile) CaddyModule() caddy.ModuleInfo {
 	}
 }
 
-var _ xtc.CaddyfileProvider = (*smtpCaddyfile)(nil)
+var _ xtc.CaddyfileBlockParser = (*smtpCaddyfile)(nil)
 
 func (smtpCaddyfile) ParseCaddyfile(h httpcaddyfile.Helper) (json.RawMessage, error) {
 	// Local struct mirrors only the curated JSON subset of DotSMTPConfig.

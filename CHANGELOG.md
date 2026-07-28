@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **ServerController** (pluggable like providers):
+  `Init(ctx, log) (sticky []Option, err)` then `Start(*Server) error` +
+  `RegisterController` / `ResolveController` / `NewController`. Config holds
+  optional `Controller` (JSON key `"controller"`) and a private per-build FS.
+  Built-in: `os`. Optional packages: `controllers/watchfs`, `controllers/git`.
+  Sticky options from Init apply to the base config; every Instance (including
+  the first) is adopted only via `Server.Reload`. Nil instance → HTTP 503.
+  `Start` runs after construction unlock and may call `Reload` freely.
+  `watchfs` returns sticky FS opts from Init and calls empty `Reload()` on
+  change from Start; `git` returns nil sticky, reloads with `WithTemplateFS` +
+  `WithOnClose(RemoveAll)`, and advances last-SHA only when Reload returns nil.
+- Unified CLI: single `cmd/xtemplate` + `app.LoadConfig` with pass-0
+  `--controller-type` scan. Process default is `DefaultControllerType` (core
+  `"os"`). Composition roots (`cmd/xtemplate`, `caddy/standard`) set it to
+  `"watchfs"` for live reload; use `--controller-type os` (or an explicit
+  controller block) for no watch. Optional packages only register types.
+- Caddyfile `controller <type> { … }` via shared `CaddyfileBlockParser`
+  (was `CaddyfileProvider`); in-tree `xtemplate.controller.os`;
+  `controllers/*/caddyfile`; `caddy/standard` blank-imports controllers + providers.
 - `Server.Shutdown(ctx)` for graceful stop: cancel server-owned context first
   (so SSE `WaitForServerStop` / Flush helpers observe stop), wait for in-flight
   instance requests up to `ctx`, then close providers. `Stop` is immediate
@@ -21,6 +40,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in config files.
 
 ### Changed
+
+- **Breaking: template Config surface**
+  - Drop public `TemplatesDir` & `Config.Reload`
+  - Use `Controller` / `WithController` / `WithTemplateFS` / `WithTemplateDir`
+  - `Register` → `RegisterProvider` (no alias)
+  - `CaddyfileProvider` → `CaddyfileBlockParser`
+  - CLI: only `cmd/xtemplate` (removed `cmd/watchfs`, `cmd/git`, plain `cmd`,
+    `app/watchfs`, `app/git`)
+  - Default controller is `DefaultControllerType` (not a fixed type). Full CLI
+    and `caddy/standard` set it to `watchfs`; core-only builds stay `os`.
+    Explicit `controller os { … }` / `--controller-type os` for no watch.
+    Linking `controllers/watchfs` alone does not change the process default.
+  - Legacy JSON/Caddy keys `templates_dir`, `templates_path`, `watch_dirs`,
+    `watch_template_path`, `git_repo`, `git_ref`, `git_interval` hard-reject
+    with migrate messages (remove ban-list before 1.0). Other unknown JSON keys
+    still ignored. Ban-list runs on `Config` JSON decode (library, CLI, Caddy).
 
 - **Server lifecycle:** `Server` owns a `serverCtx` (child of `Config.Ctx`).
   Instance contexts parent on `serverCtx`. Reload retires the old instance by

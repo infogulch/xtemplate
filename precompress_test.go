@@ -14,10 +14,17 @@ import (
 )
 
 func TestPrecompress_BadEncoding(t *testing.T) {
-	fs := newMemFS(t, map[string]string{"style.css": "body{}"})
-	cfg := New()
-	cfg.Precompress = []string{"lzma"} // unsupported
-	_, _, _, err := cfg.Instance(WithTemplateFS(fs))
+	cfg, err := New().Options(
+		WithTemplateFS(newMemFS(t, map[string]string{"style.css": "body{}"})),
+		func(c *Config) error {
+			c.Precompress = []string{"lzma"} // unsupported
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("Options: %v", err)
+	}
+	_, err = cfg.Instance()
 	if err == nil {
 		t.Fatal("expected error for unsupported encoding, got nil")
 	}
@@ -25,14 +32,12 @@ func TestPrecompress_BadEncoding(t *testing.T) {
 
 func TestPrecompress_ServesCompressedVariants(t *testing.T) {
 	const css = "body { color: red; font-size: 16px; }\n"
-	fs := newMemFS(t, map[string]string{"style.css": css})
-
-	cfg := New()
-	cfg.Precompress = []string{"gzip", "br", "zstd"}
-	inst, _, _, err := cfg.Instance(WithTemplateFS(fs))
-	if err != nil {
-		t.Fatalf("failed to build instance: %v", err)
-	}
+	inst := buildInstance(t, map[string]string{"style.css": css},
+		func(c *Config) error {
+			c.Precompress = []string{"gzip", "br", "zstd"}
+			return nil
+		},
+	)
 
 	cases := []struct {
 		encoding string
@@ -80,14 +85,12 @@ func TestPrecompress_ServesCompressedVariants(t *testing.T) {
 
 func TestPrecompress_DoesNotServeUnconfiguredVariant(t *testing.T) {
 	const css = "body { color: red; font-size: 16px; }\n"
-	fs := newMemFS(t, map[string]string{"style.css": css})
-
-	cfg := New()
-	cfg.Precompress = []string{"gzip"}
-	inst, _, _, err := cfg.Instance(WithTemplateFS(fs))
-	if err != nil {
-		t.Fatalf("failed to build instance: %v", err)
-	}
+	inst := buildInstance(t, map[string]string{"style.css": css},
+		func(c *Config) error {
+			c.Precompress = []string{"gzip"}
+			return nil
+		},
+	)
 
 	// Accept-Encoding: br → identity encoding when brotli is not configured.
 	{
@@ -124,17 +127,13 @@ func TestPrecompress_SkipsExistingCompressedFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fs := newMemFS(t, map[string]string{
+	inst := buildInstance(t, map[string]string{
 		"style.css":    css,
 		"style.css.gz": gzBuf.String(),
+	}, func(c *Config) error {
+		c.Precompress = []string{"gzip"}
+		return nil
 	})
-
-	cfg := New()
-	cfg.Precompress = []string{"gzip"}
-	inst, _, _, err := cfg.Instance(WithTemplateFS(fs))
-	if err != nil {
-		t.Fatalf("failed to build instance: %v", err)
-	}
 
 	// The pre-existing .gz is served, not a newly generated one.
 	w := httptest.NewRecorder()
@@ -149,13 +148,13 @@ func TestPrecompress_SkipsExistingCompressedFile(t *testing.T) {
 	}
 	gr, err := gzip.NewReader(w.Body)
 	if err != nil {
-		t.Fatalf("failed to create gzip reader: %v", err)
+		t.Fatalf("gzip reader: %v", err)
 	}
 	got, err := io.ReadAll(gr)
 	if err != nil {
-		t.Fatalf("decompress failed: %v", err)
+		t.Fatalf("read: %v", err)
 	}
 	if string(got) != css {
-		t.Errorf("decompressed body = %q, want %q", got, css)
+		t.Errorf("body = %q, want %q", got, css)
 	}
 }
