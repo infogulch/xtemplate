@@ -20,11 +20,11 @@ func init() {
 
 // WithBus creates an [xtemplate.Option] that adds a bus dot provider.
 // buffer is the per-subscriber channel capacity; 0 means [DefaultBuffer].
+// Each Instance / Reload build gets a fresh [DotBusConfig] and bus.
 func WithBus(name string, buffer int) xtemplate.Option {
-	return func(c *xtemplate.Config) error {
-		c.Providers = append(c.Providers, &DotBusConfig{Name: name, Buffer: buffer})
-		return nil
-	}
+	return xtemplate.WithProvider(func() xtemplate.Provider {
+		return &DotBusConfig{Name: name, Buffer: buffer}
+	})
 }
 
 // DotBusConfig configures an xtemplate dot field for in-process topic fan-out.

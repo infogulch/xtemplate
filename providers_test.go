@@ -73,3 +73,26 @@ func TestRegisterProvider_duplicatePanics(t *testing.T) {
 	}()
 	RegisterProvider("_test", func() Provider { return &testProvider{} })
 }
+
+func TestMaterializeFactories(t *testing.T) {
+	got, err := materializeFactories([]ProviderFactory{
+		func() Provider { return &testProvider{Name: "A", Val: "1"} },
+		func() Provider { return &testProvider{Name: "B", Val: "2"} },
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 2 || got[0].FieldName() != "A" || got[1].FieldName() != "B" {
+		t.Fatalf("unexpected providers: %+v", got)
+	}
+
+	if _, err := materializeFactories([]ProviderFactory{nil}); err == nil {
+		t.Fatal("expected error for nil factory")
+	}
+	if _, err := materializeFactories([]ProviderFactory{func() Provider { return nil }}); err == nil {
+		t.Fatal("expected error for factory returning nil")
+	}
+	if got, err := materializeFactories(nil); err != nil || got != nil {
+		t.Fatalf("empty: got %v err %v", got, err)
+	}
+}

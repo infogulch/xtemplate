@@ -25,11 +25,16 @@ func init() {
 // WithSMTP creates an [xtemplate.Option] that adds an smtp dot provider to the
 // config. It is a thin convenience over [xtemplate.WithProvider] for Go-API
 // users; Caddyfile/JSON users configure the provider via its struct fields.
-func WithSMTP(cfg *DotSMTPConfig) xtemplate.Option {
-	return func(c *xtemplate.Config) error {
-		c.Providers = append(c.Providers, cfg)
-		return nil
-	}
+//
+// cfg is copied by value when WithSMTP is called (frozen at option construction).
+// Each Instance / Reload build gets another field-copy with the runtime client
+// cleared so Init does not re-initialize sticky state.
+func WithSMTP(cfg DotSMTPConfig) xtemplate.Option {
+	return xtemplate.WithProvider(func() xtemplate.Provider {
+		cp := cfg
+		cp.client = nil
+		return &cp
+	})
 }
 
 // DotSMTPConfig configures an xtemplate dot field that provides SMTP mail

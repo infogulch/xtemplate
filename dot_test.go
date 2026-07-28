@@ -46,7 +46,7 @@ func TestMakeDot_RejectsInvalidFieldNames(t *testing.T) {
 func TestInstance_RejectsInvalidProviderFieldName(t *testing.T) {
 	cfg, err := New().Options(
 		WithTemplateFS(newMemFS(t, map[string]string{"index.html": "ok"})),
-		WithProvider(&testProvider{Name: "db", Val: "x"}),
+		WithProvider(func() Provider { return &testProvider{Name: "db", Val: "x"} }),
 	)
 	if err != nil {
 		t.Fatalf("Options: %v", err)

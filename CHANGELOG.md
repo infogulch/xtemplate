@@ -49,6 +49,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: sticky Go providers are factories**
+  - `Config.Providers` is `[]ProviderFactory` (`func() Provider`);
+    `WithProvider` takes a factory, not a live value
+  - Each Instance / Reload materializes fresh providers (parity with JSON
+    `providers` decode). Package helpers (`WithBus`, `WithSql`, …) wrap
+    `WithProvider`
+  - `dotsmtp.WithSMTP` takes `DotSMTPConfig` by value (frozen at option
+    construction; each build clears runtime client state)
 - **Breaking: template Config surface**
   - Drop public `TemplatesDir` & `Config.Reload`
   - Use `Controller` / `WithController` / `WithTemplateFS` / `WithTemplateDir`

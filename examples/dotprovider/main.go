@@ -3,7 +3,7 @@
 // over products and look one up by id.
 //
 // To write a dot provider: implement xtemplate.Provider (FieldName,
-// Prototype, Value), then register the instance with xtemplate.WithProvider
+// Prototype, Value), then register a factory with xtemplate.WithProvider
 // passed to app.Main. FieldName is the dot field name; Prototype is a typed
 // zero value for reflection; Value returns the value assigned to that field
 // for each request. Init is optional (Initializer).
@@ -53,5 +53,7 @@ func (shopProvider) Value(http.ResponseWriter, *http.Request) (any, error) {
 }
 
 func main() {
-	app.Main(xtemplate.WithProvider(shopProvider{}))
+	app.Main(xtemplate.WithProvider(func() xtemplate.Provider {
+		return shopProvider{}
+	}))
 }

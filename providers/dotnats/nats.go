@@ -18,12 +18,12 @@ func init() {
 }
 
 // WithNats creates an [xtemplate.Option] that adds a nats dot provider to the
-// config.
+// config. Each Instance / Reload build gets a fresh [DotNatsConfig]; options
+// pointers are shared via the factory closure.
 func WithNats(name string, serverOpts *server.Options, connOpts *nats.Options, jsOpts []jetstream.JetStreamOpt) xtemplate.Option {
-	return func(c *xtemplate.Config) error {
-		c.Providers = append(c.Providers, &DotNatsConfig{Name: name, NatsConfig: &NatsConfig{serverOpts, connOpts, jsOpts}})
-		return nil
-	}
+	return xtemplate.WithProvider(func() xtemplate.Provider {
+		return &DotNatsConfig{Name: name, NatsConfig: &NatsConfig{serverOpts, connOpts, jsOpts}}
+	})
 }
 
 // NatsConfig holds the configuration needed to connect to a NATS server.

@@ -15,9 +15,10 @@ Then open http://localhost:9006/.
 ## Writing a dot provider
 
 Implement `xtemplate.Provider` (`FieldName() string`, `Prototype() any`,
-`Value(http.ResponseWriter, *http.Request) (any, error)`), then register the
-instance via `xtemplate.WithProvider(p)` passed to `app.Main`. `FieldName` is
-the dot field name (`Shop` here); `Prototype` is a typed zero for reflection;
-`Value` returns the value assigned to `{{.Shop}}` for each request. `Init` is
-optional (save the instance context there if request-time code needs it). See
-`main.go`.
+`Value(http.ResponseWriter, *http.Request) (any, error)`), then register a
+factory via `xtemplate.WithProvider(func() xtemplate.Provider { return p })`
+passed to `app.Main`. Each Instance / Reload invokes the factory for a fresh
+provider value. `FieldName` is the dot field name (`Shop` here); `Prototype` is
+a typed zero for reflection; `Value` returns the value assigned to `{{.Shop}}`
+for each request. `Init` is optional (save the instance context there if
+request-time code needs it). See `main.go`.

@@ -77,7 +77,9 @@ func TestDotNats_Request(t *testing.T) {
 		map[string]string{
 			"req.html": `{{$m := .Nats.Request "echo" "ping"}}{{printf "%s" $m.Data}}`,
 		},
-		xtemplate.WithProvider(&dotnats.DotNatsConfig{Name: "Nats", Conn: nc}),
+		xtemplate.WithProvider(func() xtemplate.Provider {
+			return &dotnats.DotNatsConfig{Name: "Nats", Conn: nc}
+		}),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/req")
@@ -104,7 +106,9 @@ func TestDotNats_Publish(t *testing.T) {
 		map[string]string{
 			"pub.html": `{{$_ := .Nats.Publish "events" "hello"}}ok`,
 		},
-		xtemplate.WithProvider(&dotnats.DotNatsConfig{Name: "Nats", Conn: nc}),
+		xtemplate.WithProvider(func() xtemplate.Provider {
+			return &dotnats.DotNatsConfig{Name: "Nats", Conn: nc}
+		}),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/pub")
@@ -120,4 +124,45 @@ func TestDotNats_Publish(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for published message")
 	}
+}
+
+// TestDotNats_ReloadIsolatesInstances ensures sticky WithNats factories produce
+// a fresh owned Conn/server per Reload, so retiring the previous instance does
+// not Close resources still used by the live instance.
+func TestDotNats_ReloadIsolatesInstances(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	if err := afero.WriteFile(fs, "pub.html", []byte(`{{$_ := .Nats.Publish "events" "hi"}}ok`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := xtemplate.New().Options(
+		xtemplate.WithTemplateFS(fs),
+		dotnats.WithNats("Nats", &server.Options{DontListen: true}, nil, nil),
+	)
+	if err != nil {
+		t.Fatalf("Options: %v", err)
+	}
+	srv, err := cfg.Server()
+	if err != nil {
+		t.Fatalf("Server: %v", err)
+	}
+	t.Cleanup(func() { srv.Stop() })
+
+	publishOK := func(label string) {
+		t.Helper()
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/pub", nil))
+		if w.Code != http.StatusOK || w.Body.String() != "ok" {
+			t.Fatalf("%s: status=%d body=%q (nats may have been closed by prior instance)", label, w.Code, w.Body.String())
+		}
+	}
+
+	publishOK("initial")
+	if err := srv.Reload(); err != nil {
+		t.Fatalf("Reload 1: %v", err)
+	}
+	publishOK("after reload 1")
+	if err := srv.Reload(); err != nil {
+		t.Fatalf("Reload 2: %v", err)
+	}
+	publishOK("after reload 2")
 }

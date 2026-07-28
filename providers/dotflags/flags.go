@@ -21,14 +21,16 @@ func (d DotFlags) Value(key string) string {
 }
 
 // WithFlags creates an [xtemplate.Option] that adds a flags dot provider to
-// the config.
+// the config. The map is shared across builds (read-only config); each build
+// gets a fresh [DotFlagsConfig].
 func WithFlags(name string, flags map[string]string) xtemplate.Option {
 	return func(c *xtemplate.Config) error {
 		if flags == nil {
 			return fmt.Errorf("cannot create DotFlagsProvider with null map with name %s", name)
 		}
-		c.Providers = append(c.Providers, &DotFlagsConfig{name, flags})
-		return nil
+		return xtemplate.WithProvider(func() xtemplate.Provider {
+			return &DotFlagsConfig{name, flags}
+		})(c)
 	}
 }
 

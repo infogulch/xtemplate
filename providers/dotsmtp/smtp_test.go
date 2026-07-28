@@ -263,23 +263,18 @@ func TestRecipientShapes(t *testing.T) {
 func TestDotSMTP_Send_Integration(t *testing.T) {
 	srv := newMockSMTP(t)
 
-	cfg := &DotSMTPConfig{
-		Name: "Email",
-		Host: "127.0.0.1",
-		Port: srv.PortNumber(),
-		From: "noreply@example.com",
-		TLS:  "none",
-		Helo: "localhost",
-	}
-	if err := cfg.Init(context.Background()); err != nil {
-		t.Fatalf("Init: %v", err)
-	}
-
 	inst := buildInstance(t,
 		map[string]string{
 			"send.html": `{{ $id := .Email.Send "test@example.com" "Hello" "<p>World</p>" }}{{ $id }}`,
 		},
-		xtemplate.WithProvider(cfg),
+		WithSMTP(DotSMTPConfig{
+			Name: "Email",
+			Host: "127.0.0.1",
+			Port: srv.PortNumber(),
+			From: "noreply@example.com",
+			TLS:  "none",
+			Helo: "localhost",
+		}),
 	)
 
 	w := doRequest(inst, http.MethodGet, "/send")

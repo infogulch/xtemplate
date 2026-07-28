@@ -221,7 +221,11 @@ func (config *Config) buildInstance() (_ *Instance, err error) {
 		if dot, err = resolveProviders(build.config.ProvidersRaw); err != nil {
 			return nil, err
 		}
-		dot = append(dot, build.config.Providers...)
+		goDot, err := materializeFactories(build.config.Providers)
+		if err != nil {
+			return nil, err
+		}
+		dot = append(dot, goDot...)
 		seen := map[string]bool{}
 		for _, d := range dot {
 			name := d.FieldName()
