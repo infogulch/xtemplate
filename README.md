@@ -101,11 +101,10 @@ Full integration map and configs: **[docs/reference/deployment-modes.md](docs/re
 
 All documentation (tutorial, how-tos, reference, design): **[docs/](docs/)**.
 
-## Users
+## Public users
 
-- [PixyBlue/lazy-lob-web](https://github.com/PixyBlue/lazy-lob-web) - fullstack web lob framework
-- [infogulch/xrss](https://github.com/infogulch/xrss) - RSS reader with htmx
-- [infogulch/todos](https://github.com/infogulch/todos) - TodoMVC demo
+- [infogulch/todoxt](https://github.com/infogulch/todoxt) - Todos app built with xtemplate and htmx
+- [infogulch/rssxt](https://github.com/infogulch/rssxt) - RSS reader
 
 ## Contributing
 
