@@ -39,6 +39,7 @@ Reference the [glossary](reference/glossary.md) for xtemplate terminology.
 - [`dot.go`](/dot.go) - `Provider` and extension interfaces
 - [`dot_instance.go`](/dot_instance.go) - `.X` (instance)
 - [`dot_req.go`](/dot_req.go) - `.Req`
+- [`dot_vars.go`](/dot_vars.go) - `.Vars` (request scratch map)
 - [`dot_resp.go`](/dot_resp.go) - `.Resp` (buffered handlers)
 - [`dot_flush.go`](/dot_flush.go) - `.Flush` (flushing handlers)
 

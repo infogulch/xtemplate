@@ -52,7 +52,9 @@ Domain terms for xtemplate. Behavior and APIs live in the rest of the [docs](../
 
 **Provider type**: Registry key / JSON `"type"` that selects the constructor.
 
-**Builtin provider**: Supplied by xtemplate: `.X` and `.Req` always; `.Resp` on buffered handlers; `.Flush` on flushing handlers.
+**Builtin provider**: Supplied by xtemplate: `.X`, `.Req`, and `.Vars` always; `.Resp` on buffered handlers; `.Flush` on flushing handlers.
+
+**Request vars** (`.Vars`): Per-request scratch `map[string]any` for out-params between define-templates. Not a session or flash store.
 
 **Core provider**: Package under `xtemplate/providers` (`sql`, `fs`, `flags`, `bus`, `nats`, `smtp`).
 

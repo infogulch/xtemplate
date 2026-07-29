@@ -104,6 +104,29 @@ Handlers treat the internal sentinel as normal completion (not a failure). Use `
 {{if eq (.Req.FormValue "name") ""}}{{failf "name is required"}}{{end}}
 ```
 
+### Load a resource or respond 404
+
+Define-templates cannot return values to the caller. Use request-scoped [`.Vars`](dot-context.md#request-scratch-in-vars) as out-params and [`.Resp.RespondWith`](dot-context.md#replace-the-response-with-respondwith) when the resource is missing so partial output is not sent:
+
+```html
+{{define "require-list"}}
+  {{- $id := .Req.PathValue "id"}}
+  {{- $r := try .DB "QueryRow" `SELECT id, name FROM lists WHERE id=?` $id}}
+  {{- if not $r.OK}}
+    {{.Resp.RespondWith 404 (.X.Template "/shared/.404.html" .)}}
+  {{- end}}
+  {{- .Vars.Set "list" $r.Value -}}
+{{end}}
+
+{{define "GET /list/{id}"}}
+  {{- template "require-list" .}}
+  {{- $list := .Vars.Get "list"}}
+  <h1>{{index $list "name"}}</h1>
+{{end}}
+```
+
+Load defines should avoid writing output; they set vars or call `RespondWith`. Prefer `.Vars.Get` / `.Vars.Has` over Sprig `get` (which returns `""` on missing keys).
+
 Contrast:
 
 | Helper | Buffer | Typical use |
@@ -113,10 +136,8 @@ Contrast:
 | `ServeContent` | replaced | file-like payload |
 | `failf` | discarded | real failures → 500 |
 
-See [Dot context - RespondWith](dot-context.md#replace-the-response-with-respondwith) for body types, Content-Type defaults, and headers.
-
 ## Related
 
 - [Instance loading](instance-loading.md)
-- [Dot context](dot-context.md) - `.Resp.RespondWith`
+- [Dot context](dot-context.md) - `.Vars`, `.Resp.RespondWith`
 - [Glossary](glossary.md) - path template, define template, early return, response replace

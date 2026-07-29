@@ -10,8 +10,11 @@ It is the sole channel for request data, response control, and backing data sour
 |---|---|---|
 | `.X` | all requests | [DotX](https://pkg.go.dev/github.com/infogulch/xtemplate#DotX) |
 | `.Req` | all requests | [DotReq](https://pkg.go.dev/github.com/infogulch/xtemplate#DotReq) |
+| `.Vars` | all requests | [DotVars](https://pkg.go.dev/github.com/infogulch/xtemplate#DotVars) |
 | `.Resp` | buffered handlers | [DotResp](https://pkg.go.dev/github.com/infogulch/xtemplate#DotResp) |
 | `.Flush` | flushing / SSE handlers | [DotFlush](https://pkg.go.dev/github.com/infogulch/xtemplate#DotFlush) |
+
+Field assembly order is `{X, Req, Vars}` + configured providers + `{Resp | Flush}`. The names `X`, `Req`, `Vars`, `Resp`, and `Flush` are reserved.
 
 ### Instance data in `.X`
 
@@ -44,6 +47,41 @@ Call `.Req.ParseForm` before relying on `.Req.Form` / `.Req.PostForm` if you are
 <p>Id: {{.Req.PathValue "id"}}</p>
 <p>Name: {{.Req.FormValue "name"}}</p>
 ```
+
+### Request scratch in `.Vars`
+
+Per-request `map[string]any` for light composition: define-templates can act as shallow subroutines with out-params. A **non-nil empty map** is created every request; maps are not shared across requests and are not a session or flash store.
+
+Primary API:
+
+| Method | Role |
+|---|---|
+| `Set key value` | Store a value; returns `""` |
+| `Get key` | Value or **nil** if missing |
+| `Has key` | Whether the key is present |
+| `Delete key` | Remove a key; returns `""` |
+
+Keys must be non-empty strings. Prefer short noun keys (`list`, `todo`, `owner`) and set-then-get in the same handler tree. If a helper needs more than a few keys or real domain logic, use a custom provider or FuncMap instead.
+
+```html
+{{define "require-list"}}
+  {{- $r := try .DB "QueryRow" `SELECT id, name FROM lists WHERE id=?` (.Req.PathValue "id")}}
+  {{- if not $r.OK}}
+    {{.Resp.RespondWith 404 (.X.Template "/shared/.404.html" .)}}
+  {{- end}}
+  {{- .Vars.Set "list" $r.Value -}}
+{{end}}
+
+{{define "POST /list/{id}/todos"}}
+  {{- template "require-list" .}}
+  {{- $list := .Vars.Get "list"}}
+  {{- /* mutate using $list */}}
+{{end}}
+```
+
+Because `.Vars` is a map, Sprig dict helpers (`set`, `index`, `hasKey`, `range`) also work. Prefer the method API in app code. **Caveat:** Sprig `get` returns `""` on missing keys; `.Vars.Get` returns `nil`.
+
+Full API: [DotVars](https://pkg.go.dev/github.com/infogulch/xtemplate#DotVars).
 
 ### Response control in `.Resp`
 
