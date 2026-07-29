@@ -94,16 +94,29 @@ A path template is associated with a `GET` route derived from its file path (ext
 An early return stops template execution successfully (not as an error). Triggers include:
 
 - the `return` function: `{{return}}`
-- response helpers such as `.Resp.ReturnStatus`
+- response helpers such as `.Resp.ReturnStatus` (keeps the template buffer as the body)
+- `.Resp.RespondWith` (replaces the buffer with an explicit status and body)
 - some `.Flush` helper execution paths when the request or server context is cancelled (`Sleep`, `WaitForServerStop`) so streams can stop cleanly
 
-Handlers treat the internal sentinel as normal completion (not a failure). Use `failf` when you want a real failure:
+Handlers treat the internal sentinel as normal completion (not a failure). Use `failf` when you want a real failure (discard buffer → generic 500):
 
 ```html
 {{if eq (.Req.FormValue "name") ""}}{{failf "name is required"}}{{end}}
 ```
 
+Contrast:
+
+| Helper | Buffer | Typical use |
+|---|---|---|
+| `ReturnStatus` | kept | status after normal render |
+| `RespondWith` | replaced | 404 page, 400 text, empty 303 |
+| `ServeContent` | replaced | file-like payload |
+| `failf` | discarded | real failures → 500 |
+
+See [Dot context - RespondWith](dot-context.md#replace-the-response-with-respondwith) for body types, Content-Type defaults, and headers.
+
 ## Related
 
 - [Instance loading](instance-loading.md)
-- [Glossary](glossary.md) - path template, define template, early return
+- [Dot context](dot-context.md) - `.Resp.RespondWith`
+- [Glossary](glossary.md) - path template, define template, early return, response replace

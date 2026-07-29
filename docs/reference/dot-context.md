@@ -49,12 +49,38 @@ Call `.Req.ParseForm` before relying on `.Req.Form` / `.Req.PostForm` if you are
 
 Available on buffered template handlers (normal `GET`/`POST`/… routes). Output is buffered so status and headers can be set during execution; on error the buffer is discarded.
 
-Common methods: `AddHeader`, `SetHeader`, `DelHeader`, `SetStatus`, `ReturnStatus` (status + early return), `ServeContent`. Full API: [DotResp](https://pkg.go.dev/github.com/infogulch/xtemplate#DotResp).
+Common methods: `AddHeader`, `SetHeader`, `DelHeader`, `SetStatus`, `ReturnStatus` (status + early return, **keeps** buffer), `RespondWith` (status + body, **replaces** buffer), `ServeContent` (file-like payload, replaces buffer). Full API: [DotResp](https://pkg.go.dev/github.com/infogulch/xtemplate#DotResp).
 
 ```html
 {{.Resp.AddHeader "Location" "/"}}
 {{.Resp.ReturnStatus 303}}
 ```
+
+#### Replace the response with `RespondWith`
+
+Use when discovery mid-handler shows the client should not see partial template output: 404 pages, plain-text 400s, empty-body redirects.
+
+```html
+{{.Resp.AddHeader "Location" "/"}}
+{{.Resp.RespondWith 303 ""}}
+
+{{.Resp.RespondWith 400 "name is required"}}
+
+{{.Resp.RespondWith 404 (.X.Template "/shared/.404.html" .)}}
+```
+
+| Exit | Buffer | Body |
+|---|---|---|
+| Success / `return` / `ReturnStatus` | **kept** | whatever the template wrote |
+| **`RespondWith`** | **replaced** | explicit body (`""` when empty) |
+| `ServeContent` | replaced | file-like content |
+| `failf` | discarded | generic 500 |
+
+- Body is required; pass `""` for empty. Supported types: `string`, `template.HTML`, `[]byte`.
+- Headers set on `.Resp` before `RespondWith` are kept.
+- Prefer `.X.Template` for HTML pages (private buffer → `template.HTML`), then install with `RespondWith`. Do not `{{template "404" .}}` then `ReturnStatus` for the replace case — that appends into the request buffer.
+- If body is `template.HTML`, non-empty, and `Content-Type` is unset, it defaults to `text/html; charset=utf-8`. Empty bodies do not force a `Content-Type`.
+- `RespondWith` is buffered-only (field is `.Resp`); not available on `.Flush` / SSE.
 
 ### Streaming control in `.Flush`
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"log/slog"
 	"maps"
@@ -13,9 +14,11 @@ import (
 	"time"
 )
 
-// errResponseServed is returned from [dotRespProvider.Finalize] when
-// [DotResp.ServeContent] already wrote the full response. Buffered handlers
-// treat it as success and must not write the template buffer or call http.Error.
+// errResponseServed is returned from [dotRespProvider.Finalize] when the
+// response was fully decided outside the main template buffer — either by
+// [DotResp.ServeContent] (eager write) or [DotResp.RespondWith] (deferred
+// write in Finalize). Buffered handlers treat it as success and must not
+// write the template buffer or call http.Error.
 var errResponseServed = errors.New("response already served")
 
 type dotRespProvider struct{}
@@ -36,9 +39,24 @@ func (dotRespProvider) Value(w http.ResponseWriter, r *http.Request) (any, error
 func (dotRespProvider) Finalize(v any, err error) error {
 	d := v.(DotResp)
 	if d.served {
-		// The response was already fully written by ServeContent (which calls
-		// WriteHeader itself); writing headers or status again here would cause
-		// a superfluous WriteHeader call. Signal the handler to skip the buffer.
+		// ServeContent already wrote the full response (including WriteHeader).
+		// Do not write headers or status again.
+		return errResponseServed
+	}
+	if d.replace {
+		if err != nil {
+			return err
+		}
+		maps.Copy(d.w.Header(), d.Header)
+		// Default Content-Type only for non-empty HTML bodies when unset.
+		// Empty bodies (redirects, 204) must not force a Content-Type.
+		if d.replaceHTML && len(d.replaceBody) > 0 && d.w.Header().Get("Content-Type") == "" {
+			d.w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		}
+		d.w.WriteHeader(d.status)
+		if len(d.replaceBody) > 0 {
+			_, _ = d.w.Write(d.replaceBody)
+		}
 		return errResponseServed
 	}
 	var errSt ErrorStatus
@@ -59,10 +77,16 @@ var _ Finalizer = dotRespProvider{}
 type DotResp struct {
 	http.Header
 	status int
+	// served is true when ServeContent already wrote the full response to w.
 	served bool
-	w      http.ResponseWriter
-	r      *http.Request
-	log    *slog.Logger
+	// replace is true when RespondWith should commit status+body in Finalize
+	// and skip the main template buffer.
+	replace     bool
+	replaceBody []byte
+	replaceHTML bool
+	w           http.ResponseWriter
+	r           *http.Request
+	log         *slog.Logger
 }
 
 // ServeContent aborts execution of the template and instead responds to the
@@ -87,6 +111,40 @@ func (d *DotResp) ServeContent(path_ string, modtime time.Time, content any) (st
 	maps.Copy(d.w.Header(), d.Header)
 	http.ServeContent(d.w, d.r, path_, modtime, reader)
 	d.served = true
+	return "", ReturnError{}
+}
+
+// RespondWith discards any template output buffered so far and finishes the
+// request with the given HTTP status and body. Unlike [DotResp.ReturnStatus],
+// the template buffer is not sent. body is required (pass "" for an empty
+// body). Supported types: string, template.HTML, []byte.
+//
+// Headers set on .Resp before RespondWith (Location, Content-Type, etc.) are
+// kept. If body is template.HTML, non-empty, and Content-Type is unset, it
+// defaults to text/html; charset=utf-8. Empty bodies do not force a
+// Content-Type.
+func (d *DotResp) RespondWith(status int, body any) (string, error) {
+	var b []byte
+	var isHTML bool
+	switch c := body.(type) {
+	case nil:
+		return "", fmt.Errorf("RespondWith: body is nil")
+	case string:
+		b = []byte(c)
+	case template.HTML:
+		b = []byte(c)
+		isHTML = true
+	case []byte:
+		// Copy so later mutation of the caller's slice cannot affect the response.
+		b = bytes.Clone(c)
+	default:
+		return "", fmt.Errorf("RespondWith: unsupported body type %T (want string, template.HTML, or []byte)", body)
+	}
+	d.status = status
+	d.replace = true
+	d.replaceBody = b
+	d.replaceHTML = isHTML
+	d.log.Debug("respond-with replacement response", slog.Int("status", status), slog.Int("body_len", len(b)))
 	return "", ReturnError{}
 }
 
@@ -119,7 +177,8 @@ func (h *DotResp) SetStatus(status int) string {
 }
 
 // ReturnStatus sets the HTTP response status and exits template rendering
-// immediately.
+// immediately. Unlike [DotResp.RespondWith], the template buffer is kept and
+// written as the response body.
 func (h *DotResp) ReturnStatus(status int) (string, error) {
 	h.status = status
 	return "", ReturnError{}
