@@ -18,7 +18,7 @@ Templates are the central primitive and drive the request–response lifecycle. 
 
 ### Dot context
 
-The dot context is the sole channel through which templates reach request data, response control, and backing data sources. It is a struct assembled per request from builtin providers (`.X`, `.Req`, and `.Resp` or `.Flush` by handler kind) plus any configured core or custom dot providers. This is what makes templates expressive enough to act as handlers directly.
+The dot context is the sole channel through which templates reach request data, response control, and backing data sources. It is a struct assembled per request from builtin providers (`.X`, `.Req`, `.Vars`, and `.Resp` or `.Flush` by handler kind) plus any configured core or custom dot providers. This is what makes templates expressive enough to act as handlers directly.
 
 See [Dot context](../reference/dot-context.md), [ADR 0005 - Buffered vs flushing handlers](../adr/0005-buffered-vs-flushing-handlers.md), and [ADR 0006 - Reflection-assembled dot context](../adr/0006-reflection-assembled-dot-context.md).
 

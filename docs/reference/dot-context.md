@@ -10,8 +10,11 @@ It is the sole channel for request data, response control, and backing data sour
 |---|---|---|
 | `.X` | all requests | [DotX](https://pkg.go.dev/github.com/infogulch/xtemplate#DotX) |
 | `.Req` | all requests | [DotReq](https://pkg.go.dev/github.com/infogulch/xtemplate#DotReq) |
+| `.Vars` | all requests | [DotVars](https://pkg.go.dev/github.com/infogulch/xtemplate#DotVars) |
 | `.Resp` | buffered handlers | [DotResp](https://pkg.go.dev/github.com/infogulch/xtemplate#DotResp) |
 | `.Flush` | flushing / SSE handlers | [DotFlush](https://pkg.go.dev/github.com/infogulch/xtemplate#DotFlush) |
+
+Field assembly order is `{X, Req, Vars}` + configured providers + `{Resp | Flush}`. The names `X`, `Req`, `Vars`, `Resp`, and `Flush` are reserved.
 
 ### Instance data in `.X`
 
@@ -45,16 +48,77 @@ Call `.Req.ParseForm` before relying on `.Req.Form` / `.Req.PostForm` if you are
 <p>Name: {{.Req.FormValue "name"}}</p>
 ```
 
+### Request scratch in `.Vars`
+
+Per-request `map[string]any` for light composition: define-templates can act as shallow subroutines with out-params. A **non-nil empty map** is created every request; maps are not shared across requests and are not a session or flash store.
+
+Primary API:
+
+| Method | Role |
+|---|---|
+| `Set key value` | Store a value; returns `""` |
+| `Get key` | Value or **nil** if missing |
+| `Has key` | Whether the key is present |
+| `Delete key` | Remove a key; returns `""` |
+
+Keys must be non-empty strings. Prefer short noun keys (`list`, `todo`, `owner`) and set-then-get in the same handler tree. If a helper needs more than a few keys or real domain logic, use a custom provider or FuncMap instead.
+
+```html
+{{define "require-list"}}
+  {{- $r := try .DB "QueryRow" `SELECT id, name FROM lists WHERE id=?` (.Req.PathValue "id")}}
+  {{- if not $r.OK}}
+    {{.Resp.RespondWith 404 (.X.Template "/shared/.404.html" .)}}
+  {{- end}}
+  {{- .Vars.Set "list" $r.Value -}}
+{{end}}
+
+{{define "POST /list/{id}/todos"}}
+  {{- template "require-list" .}}
+  {{- $list := .Vars.Get "list"}}
+  {{- /* mutate using $list */}}
+{{end}}
+```
+
+Because `.Vars` is a map, Sprig dict helpers (`set`, `index`, `hasKey`, `range`) also work. Prefer the method API in app code. **Caveat:** Sprig `get` returns `""` on missing keys; `.Vars.Get` returns `nil`.
+
+Full API: [DotVars](https://pkg.go.dev/github.com/infogulch/xtemplate#DotVars).
+
 ### Response control in `.Resp`
 
 Available on buffered template handlers (normal `GET`/`POST`/… routes). Output is buffered so status and headers can be set during execution; on error the buffer is discarded.
 
-Common methods: `AddHeader`, `SetHeader`, `DelHeader`, `SetStatus`, `ReturnStatus` (status + early return), `ServeContent`. Full API: [DotResp](https://pkg.go.dev/github.com/infogulch/xtemplate#DotResp).
+Common methods: `AddHeader`, `SetHeader`, `DelHeader`, `SetStatus`, `ReturnStatus` (status + early return, **keeps** buffer), `RespondWith` (status + body, **replaces** buffer), `ServeContent` (file-like payload, replaces buffer). Full API: [DotResp](https://pkg.go.dev/github.com/infogulch/xtemplate#DotResp).
 
 ```html
 {{.Resp.AddHeader "Location" "/"}}
 {{.Resp.ReturnStatus 303}}
 ```
+
+#### Replace the response with `RespondWith`
+
+Use when discovery mid-handler shows the client should not see partial template output: 404 pages, plain-text 400s, empty-body redirects.
+
+```html
+{{.Resp.AddHeader "Location" "/"}}
+{{.Resp.RespondWith 303 ""}}
+
+{{.Resp.RespondWith 400 "name is required"}}
+
+{{.Resp.RespondWith 404 (.X.Template "/shared/.404.html" .)}}
+```
+
+| Exit | Buffer | Body |
+|---|---|---|
+| Success / `return` / `ReturnStatus` | **kept** | whatever the template wrote |
+| **`RespondWith`** | **replaced** | explicit body (`""` when empty) |
+| `ServeContent` | replaced | file-like content |
+| `failf` | discarded | generic 500 |
+
+- Body is required; pass `""` for empty. Supported types: `string`, `template.HTML`, `[]byte`.
+- Headers set on `.Resp` before `RespondWith` are kept.
+- Prefer `.X.Template` for HTML pages (private buffer → `template.HTML`), then install with `RespondWith`. Do not `{{template "404" .}}` then `ReturnStatus` for the replace case — that appends into the request buffer.
+- If body is `template.HTML`, non-empty, and `Content-Type` is unset, it defaults to `text/html; charset=utf-8`. Empty bodies do not force a `Content-Type`.
+- `RespondWith` is buffered-only (field is `.Resp`); not available on `.Flush` / SSE.
 
 ### Streaming control in `.Flush`
 

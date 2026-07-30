@@ -94,16 +94,50 @@ A path template is associated with a `GET` route derived from its file path (ext
 An early return stops template execution successfully (not as an error). Triggers include:
 
 - the `return` function: `{{return}}`
-- response helpers such as `.Resp.ReturnStatus`
+- response helpers such as `.Resp.ReturnStatus` (keeps the template buffer as the body)
+- `.Resp.RespondWith` (replaces the buffer with an explicit status and body)
 - some `.Flush` helper execution paths when the request or server context is cancelled (`Sleep`, `WaitForServerStop`) so streams can stop cleanly
 
-Handlers treat the internal sentinel as normal completion (not a failure). Use `failf` when you want a real failure:
+Handlers treat the internal sentinel as normal completion (not a failure). Use `failf` when you want a real failure (discard buffer → generic 500):
 
 ```html
 {{if eq (.Req.FormValue "name") ""}}{{failf "name is required"}}{{end}}
 ```
 
+### Load a resource or respond 404
+
+Define-templates cannot return values to the caller. Use request-scoped [`.Vars`](dot-context.md#request-scratch-in-vars) as out-params and [`.Resp.RespondWith`](dot-context.md#replace-the-response-with-respondwith) when the resource is missing so partial output is not sent:
+
+```html
+{{define "require-list"}}
+  {{- $id := .Req.PathValue "id"}}
+  {{- $r := try .DB "QueryRow" `SELECT id, name FROM lists WHERE id=?` $id}}
+  {{- if not $r.OK}}
+    {{.Resp.RespondWith 404 (.X.Template "/shared/.404.html" .)}}
+  {{- end}}
+  {{- .Vars.Set "list" $r.Value -}}
+{{end}}
+
+{{define "GET /list/{id}"}}
+  {{- template "require-list" .}}
+  {{- $list := .Vars.Get "list"}}
+  <h1>{{index $list "name"}}</h1>
+{{end}}
+```
+
+Load defines should avoid writing output; they set vars or call `RespondWith`. Prefer `.Vars.Get` / `.Vars.Has` over Sprig `get` (which returns `""` on missing keys).
+
+Contrast:
+
+| Helper | Buffer | Typical use |
+|---|---|---|
+| `ReturnStatus` | kept | status after normal render |
+| `RespondWith` | replaced | 404 page, 400 text, empty 303 |
+| `ServeContent` | replaced | file-like payload |
+| `failf` | discarded | real failures → 500 |
+
 ## Related
 
 - [Instance loading](instance-loading.md)
-- [Glossary](glossary.md) - path template, define template, early return
+- [Dot context](dot-context.md) - `.Vars`, `.Resp.RespondWith`
+- [Glossary](glossary.md) - path template, define template, early return, response replace

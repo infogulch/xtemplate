@@ -45,7 +45,8 @@ func bufferingTemplateHandler(server *Instance, tmpl *template.Template) http.Ha
 
 		if err = server.bufferDot.cleanup(dot, err); err != nil {
 			if errors.Is(err, errResponseServed) {
-				// ServeContent already wrote the full response; do not append buffer.
+				// ServeContent or RespondWith already decided the full response;
+				// do not append the main template buffer.
 				return
 			}
 			var es ErrorStatus

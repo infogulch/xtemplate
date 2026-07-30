@@ -32,7 +32,9 @@ Domain terms for xtemplate. Behavior and APIs live in the rest of the [docs](../
 
 **Template function**: Stateless FuncMap entry (`{{myFunc x}}`). Defaults: Go builtins, Sprig, xtemplate additions. Not request-scoped (contrast: providers).
 
-**Early return**: Deliberate successful halt mid-template (`return`, `.Resp.ReturnStatus`, some `.Flush` helpers). Not an error. _Avoid_: abort, halt, ReturnError (as the user-facing name)
+**Early return**: Deliberate successful halt mid-template (`return`, `.Resp.ReturnStatus`, `.Resp.RespondWith`, some `.Flush` helpers). Not an error. _Avoid_: abort, halt, ReturnError (as the user-facing name)
+
+**Response replace**: Client-facing outcome that discards the main template buffer and commits an explicit status and body (`.Resp.RespondWith`, `.Resp.ServeContent`). Contrast with keep-buffer early return (`.Resp.ReturnStatus` / `return`), which still sends whatever the template wrote.
 
 ## Routing
 
@@ -50,7 +52,9 @@ Domain terms for xtemplate. Behavior and APIs live in the rest of the [docs](../
 
 **Provider type**: Registry key / JSON `"type"` that selects the constructor.
 
-**Builtin provider**: Supplied by xtemplate: `.X` and `.Req` always; `.Resp` on buffered handlers; `.Flush` on flushing handlers.
+**Builtin provider**: Supplied by xtemplate: `.X`, `.Req`, and `.Vars` always; `.Resp` on buffered handlers; `.Flush` on flushing handlers.
+
+**Request vars** (`.Vars`): Per-request scratch `map[string]any` for out-params between define-templates. Not a session or flash store.
 
 **Core provider**: Package under `xtemplate/providers` (`sql`, `fs`, `flags`, `bus`, `nats`, `smtp`).
 

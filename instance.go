@@ -211,6 +211,7 @@ func (config *Config) buildInstance() (_ *Instance, err error) {
 
 	dcInstance := dotXProvider{build.Instance}
 	dcReq := dotReqProvider{}
+	dcVars := dotVarsProvider{}
 	dcResp := dotRespProvider{}
 	dcFlush := &dotFlushProvider{}
 
@@ -239,7 +240,7 @@ func (config *Config) buildInstance() (_ *Instance, err error) {
 		}
 
 		// Process all providers for initialization and closing
-		for _, d := range slices.Concat([]Provider{dcInstance, dcReq, dcResp, dcFlush}, dot) {
+		for _, d := range slices.Concat([]Provider{dcInstance, dcReq, dcVars, dcResp, dcFlush}, dot) {
 			if di, ok := d.(Initializer); ok {
 				start := time.Now()
 				err := di.Init(build.config.Ctx)
@@ -271,10 +272,11 @@ func (config *Config) buildInstance() (_ *Instance, err error) {
 		return nil
 	})
 
-	if build.bufferDot, err = makeDot(slices.Concat([]Provider{dcInstance, dcReq}, dot, []Provider{dcResp})); err != nil {
+	// Builtin order: {X, Req, Vars} + configured providers + {Resp | Flush}.
+	if build.bufferDot, err = makeDot(slices.Concat([]Provider{dcInstance, dcReq, dcVars}, dot, []Provider{dcResp})); err != nil {
 		return nil, fmt.Errorf("failed to build buffer dot: %w", err)
 	}
-	if build.flusherDot, err = makeDot(slices.Concat([]Provider{dcInstance, dcReq}, dot, []Provider{dcFlush})); err != nil {
+	if build.flusherDot, err = makeDot(slices.Concat([]Provider{dcInstance, dcReq, dcVars}, dot, []Provider{dcFlush})); err != nil {
 		return nil, fmt.Errorf("failed to build flusher dot: %w", err)
 	}
 
