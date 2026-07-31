@@ -177,9 +177,25 @@ Package: [`providers/dotbus`](https://pkg.go.dev/github.com/infogulch/xtemplate/
 
 Typical field name: `.Bus`. Optional `buffer` is the per-subscriber channel capacity (default 16). Publish is best-effort: if a subscriber's buffer is full, that message is dropped for that subscriber (never blocks the publisher). Prefer `nats` when you need multi-process delivery, request/reply, or durable streams.
 
+Payloads are **any** in-memory value (string, `template.HTML`, map, struct, …) — not serialized. That is the point of a single-process bus versus `nats`. Treat non-string values as immutable after publish: maps, slices, and pointers are shared with subscribers by reference. `.Flush.SendSSE` still takes strings at the wire; branch or project fields in the subscribe template first.
+
 ```html
 {{define "SSE /events"}}{{range .Bus.Subscribe "messages"}}{{$.Flush.SendSSE "" .}}{{end}}{{end}}
 {{define "POST /messages"}}{{.Req.ParseForm}}{{.Bus.Publish "messages" (.Req.FormValue "msg")}}ok{{end}}
+```
+
+Structured messages (control vs data on one topic):
+
+```html
+{{.Bus.Publish "todos" (dict "event" "list-deleted")}}
+{{.Bus.Publish "todos" (dict "data" (.X.Template "todo-sync-partials" .))}}
+
+{{define "SSE /events"}}
+{{range .Bus.Subscribe "todos"}}
+  {{if .event}}{{$.Flush.SendSSE .event "1"}}{{return}}
+  {{else}}{{$.Flush.SendSSE "" (printf "%s" .data)}}{{end}}
+{{end}}
+{{end}}
 ```
 
 JSON:

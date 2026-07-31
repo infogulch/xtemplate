@@ -12,14 +12,18 @@ var errClosed = fmt.Errorf("bus closed")
 
 // Bus is a process-local multi-producer multi-consumer topic fan-out.
 //
+// Payloads are any in-memory value (not serialized). Treat published values as
+// immutable after Publish: maps, slices, and pointers are shared with
+// subscribers by reference.
+//
 // Publish is best-effort: if a subscriber's buffer is full, that message is
 // dropped for that subscriber (never blocks the publisher). Suitable for SSE
 // and other live UI fan-out; not a durable queue.
 type Bus struct {
 	mu      sync.Mutex
 	buffer  int
-	topics  map[string]map[chan string]struct{}
-	reverse map[chan string]map[string]struct{}
+	topics  map[string]map[chan any]struct{}
+	reverse map[chan any]map[string]struct{}
 	closed  bool
 }
 
@@ -31,15 +35,15 @@ func New(buffer int) *Bus {
 	}
 	return &Bus{
 		buffer:  buffer,
-		topics:  make(map[string]map[chan string]struct{}),
-		reverse: make(map[chan string]map[string]struct{}),
+		topics:  make(map[string]map[chan any]struct{}),
+		reverse: make(map[chan any]map[string]struct{}),
 	}
 }
 
 // Publish sends msg to all current subscribers of topic. Slow subscribers
 // (full buffer) skip the message. Returns an error if the bus is shut down or
-// topic is empty.
-func (b *Bus) Publish(topic, msg string) error {
+// topic is empty. msg may be any value, including nil.
+func (b *Bus) Publish(topic string, msg any) error {
 	if topic == "" {
 		return fmt.Errorf("bus: topic is required")
 	}
@@ -61,7 +65,7 @@ func (b *Bus) Publish(topic, msg string) error {
 // Subscribe registers a new subscriber on topic and returns its receive
 // channel. The channel is closed when Unsubscribe is called or the bus is shut
 // down. topic must be non-empty.
-func (b *Bus) Subscribe(topic string) (<-chan string, error) {
+func (b *Bus) Subscribe(topic string) (<-chan any, error) {
 	if topic == "" {
 		return nil, fmt.Errorf("bus: topic is required")
 	}
@@ -70,9 +74,9 @@ func (b *Bus) Subscribe(topic string) (<-chan string, error) {
 	if b.closed {
 		return nil, errClosed
 	}
-	ch := make(chan string, b.buffer)
+	ch := make(chan any, b.buffer)
 	if b.topics[topic] == nil {
-		b.topics[topic] = make(map[chan string]struct{})
+		b.topics[topic] = make(map[chan any]struct{})
 	}
 	b.topics[topic][ch] = struct{}{}
 	if b.reverse[ch] == nil {
@@ -84,15 +88,15 @@ func (b *Bus) Subscribe(topic string) (<-chan string, error) {
 
 // Unsubscribe removes ch from all topics and closes it. Safe to call more than
 // once or after Shutdown; subsequent calls are no-ops.
-func (b *Bus) Unsubscribe(ch <-chan string) {
+func (b *Bus) Unsubscribe(ch <-chan any) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.removeLocked(ch)
 }
 
-func (b *Bus) removeLocked(ch <-chan string) {
+func (b *Bus) removeLocked(ch <-chan any) {
 	for c, topics := range b.reverse {
-		if (<-chan string)(c) != ch {
+		if (<-chan any)(c) != ch {
 			continue
 		}
 		for t := range topics {
@@ -136,6 +140,6 @@ func (b *Bus) closeSubscribersLocked() {
 	for c := range b.reverse {
 		close(c)
 	}
-	b.topics = make(map[string]map[chan string]struct{})
-	b.reverse = make(map[chan string]map[string]struct{})
+	b.topics = make(map[string]map[chan any]struct{})
+	b.reverse = make(map[chan any]map[string]struct{})
 }

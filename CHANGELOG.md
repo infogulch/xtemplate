@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `dotbus`: message payloads are `any` instead of `string`. Template usage is
+  unchanged for string messages; structured values (`dict`/maps,
+  `template.HTML`, structs) can also be published without encoding. Treat
+  non-string messages as immutable after publish (shared by reference).
+
 ## [v0.11.0] - 2026-07-28
 
 ### Added

@@ -27,6 +27,32 @@ func TestPublishSubscribe(t *testing.T) {
 	}
 }
 
+func TestPublishAny(t *testing.T) {
+	b := New(4)
+	defer b.Shutdown()
+
+	ch, err := b.Subscribe("events")
+	if err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+	msg := map[string]any{"event": "list-deleted", "id": 42}
+	if err := b.Publish("events", msg); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	select {
+	case got := <-ch:
+		m, ok := got.(map[string]any)
+		if !ok {
+			t.Fatalf("got %T %v, want map[string]any", got, got)
+		}
+		if m["event"] != "list-deleted" || m["id"] != 42 {
+			t.Fatalf("got %#v", m)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for message")
+	}
+}
+
 func TestMPMCFanout(t *testing.T) {
 	b := New(64)
 	defer b.Shutdown()
@@ -44,7 +70,7 @@ func TestMPMCFanout(t *testing.T) {
 			t.Fatalf("Subscribe: %v", err)
 		}
 		readerWG.Add(1)
-		go func(idx int, ch <-chan string) {
+		go func(idx int, ch <-chan any) {
 			defer readerWG.Done()
 			for range ch {
 				counts[idx]++

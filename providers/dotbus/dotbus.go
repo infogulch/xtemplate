@@ -1,9 +1,9 @@
 // Package dotbus implements the bus core dot provider: a process-local
 // multi-producer multi-consumer topic fan-out for templates.
 //
-// Use it for single-process SSE and live UI messaging. Prefer the nats
-// provider when you need multi-process delivery, request/reply, persistence,
-// or JetStream.
+// Payloads are any in-memory value (not serialized). Use it for single-process
+// SSE and live UI messaging. Prefer the nats provider when you need
+// multi-process delivery, request/reply, persistence, or JetStream.
 package dotbus
 
 import (
@@ -86,16 +86,19 @@ type DotBus struct {
 	ctx context.Context
 }
 
-// Publish sends message to all current subscribers of topic. Slow subscribers
-// may drop the message; Publish never blocks on them.
-func (d *DotBus) Publish(topic, message string) error {
+// Publish sends message to all current subscribers of topic. message may be
+// any value (string, template.HTML, map, struct, …). Treat non-string values as
+// immutable after Publish: maps, slices, and pointers are shared by reference.
+// Slow subscribers may drop the message; Publish never blocks on them.
+func (d *DotBus) Publish(topic string, message any) error {
 	return d.bus.Publish(topic, message)
 }
 
-// Subscribe returns a channel of messages on topic. The channel is closed when
-// the request context is cancelled or the bus shuts down, so
+// Subscribe returns a channel of messages on topic. Values have dynamic type
+// matching what was published (often string). The channel is closed when the
+// request context is cancelled or the bus shuts down, so
 // {{range .Bus.Subscribe "topic"}} ends cleanly for SSE handlers.
-func (d *DotBus) Subscribe(topic string) (<-chan string, error) {
+func (d *DotBus) Subscribe(topic string) (<-chan any, error) {
 	ch, err := d.bus.Subscribe(topic)
 	if err != nil {
 		return nil, err

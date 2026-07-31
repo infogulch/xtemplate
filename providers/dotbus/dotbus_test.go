@@ -236,6 +236,56 @@ func TestDotBus_ReloadIsolatesInstances(t *testing.T) {
 	publishOK("after reload 2")
 }
 
+func TestDotBus_PublishSubscribeAnyTemplate(t *testing.T) {
+	inst := buildInstance(t,
+		map[string]string{
+			"pub.html": `{{.Bus.Publish "messages" (dict "data" "hi")}}ok`,
+			"index.html": `{{define "SSE /events"}}` +
+				`{{range .Bus.Subscribe "messages"}}{{$.Flush.SendSSE "" .data}}{{end}}{{end}}`,
+		},
+		dotbus.WithBus("Bus", 8),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	w := newSSERecorder()
+	r := httptest.NewRequest(http.MethodGet, "/events", nil).WithContext(ctx)
+	r.Header.Set("Accept", "text/event-stream")
+
+	done := make(chan struct{})
+	go func() {
+		inst.ServeHTTP(w, r)
+		close(done)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	pw := httptest.NewRecorder()
+	inst.ServeHTTP(pw, httptest.NewRequest(http.MethodGet, "/pub", nil))
+	if pw.Code != http.StatusOK {
+		cancel()
+		<-done
+		t.Fatalf("publish status = %d body %q", pw.Code, pw.Body.String())
+	}
+
+	select {
+	case <-w.saw:
+	case <-time.After(2 * time.Second):
+		cancel()
+		<-done
+		t.Fatalf("sse body = %q, want data: hi", w.BodyString())
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("SSE handler did not return after cancel")
+	}
+	if !strings.Contains(w.BodyString(), "data: hi") {
+		t.Fatalf("sse body = %q, want data: hi", w.BodyString())
+	}
+}
+
 func TestDotBus_RequestCancelUnsubscribes(t *testing.T) {
 	cfg := &dotbus.DotBusConfig{Name: "Bus", Buffer: 4}
 	if err := cfg.Init(context.Background()); err != nil {
