@@ -361,6 +361,100 @@ func TestServeHTTP_SSE_StopsWhenClientDisconnects(t *testing.T) {
 	}
 }
 
+// flushErrorWriter mimics Caddy v2.11.7's middleware recorder: it is an
+// http.ResponseWriter with FlushError and Unwrap, and it does not implement
+// http.Flusher. A direct w.(http.Flusher) assertion fails.
+type flushErrorWriter struct {
+	http.ResponseWriter
+	flushErrCalled bool
+}
+
+func (w *flushErrorWriter) FlushError() error {
+	w.flushErrCalled = true
+	return http.NewResponseController(w.ResponseWriter).Flush()
+}
+
+func (w *flushErrorWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+// unwrapOnlyWriter does not implement Flusher or FlushError. Flush support
+// comes from the unwrapped writer.
+type unwrapOnlyWriter struct {
+	http.ResponseWriter
+	inner http.ResponseWriter
+}
+
+func (w *unwrapOnlyWriter) Unwrap() http.ResponseWriter { return w.inner }
+
+func TestFlushingWriter_CaddyFlushError(t *testing.T) {
+	rec := httptest.NewRecorder()
+	w := &flushErrorWriter{ResponseWriter: rec}
+	if _, ok := any(w).(http.Flusher); ok {
+		t.Fatal("test writer implements http.Flusher; it must not, or it no longer models Caddy's recorder")
+	}
+
+	f, ok := flushingWriter(w)
+	if !ok {
+		t.Fatal("flushingWriter rejected a FlushError writer")
+	}
+	f.Flush()
+	if !w.flushErrCalled {
+		t.Error("Flush did not call FlushError")
+	}
+	if !rec.Flushed {
+		t.Error("FlushError did not flush the underlying recorder")
+	}
+}
+
+func TestFlushingWriter_UnwrapOnly(t *testing.T) {
+	rec := httptest.NewRecorder()
+	w := &unwrapOnlyWriter{ResponseWriter: rec, inner: rec}
+	if _, ok := any(w).(http.Flusher); ok {
+		t.Fatal("unwrap-only writer implements http.Flusher")
+	}
+	f, ok := flushingWriter(w)
+	if !ok {
+		t.Fatal("flushingWriter rejected an Unwrap-only writer")
+	}
+	_, _ = f.Write([]byte("data: hi\n\n"))
+	f.Flush()
+	if !rec.Flushed {
+		t.Error("underlying recorder was not flushed")
+	}
+	if rec.Body.String() != "data: hi\n\n" {
+		t.Errorf("body = %q", rec.Body.String())
+	}
+}
+
+func TestFlushingWriter_RejectsNonFlusher(t *testing.T) {
+	// Embedding the interface does not promote the concrete Flusher method.
+	w := struct{ http.ResponseWriter }{httptest.NewRecorder()}
+	if _, ok := flushingWriter(w); ok {
+		t.Fatal("flushingWriter accepted a writer with no flush support")
+	}
+}
+
+func TestServeHTTP_SSE_FlushesThroughFlushErrorWriter(t *testing.T) {
+	inst := buildInstance(t, map[string]string{
+		"feed.html": `{{define "SSE /events"}}{{.Flush.SendSSE "ping" "hello"}}{{end}}`,
+	})
+
+	rec := httptest.NewRecorder()
+	w := &flushErrorWriter{ResponseWriter: rec}
+	r := httptest.NewRequest(http.MethodGet, "/events", nil)
+	r.Header.Set("Accept", "text/event-stream")
+	inst.ServeHTTP(w, r)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %q", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if !w.flushErrCalled || !rec.Flushed {
+		t.Fatalf("flushErrCalled=%v rec.Flushed=%v; SSE did not flush through FlushError", w.flushErrCalled, rec.Flushed)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "event: ping") || !strings.Contains(body, "data: hello") {
+		t.Errorf("body = %q, want SSE event", body)
+	}
+}
+
 // waitForCondition polls cond until it is true or the timeout elapses.
 func waitForCondition(t *testing.T, timeout time.Duration, cond func() bool) {
 	t.Helper()

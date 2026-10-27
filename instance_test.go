@@ -76,9 +76,10 @@ func TestServeHTTP_DirIndexRoute(t *testing.T) {
 	}
 
 	// ServeMux auto-redirects the slashless form to the canonical URL.
+	// Go 1.26 uses 307 Temporary Redirect (previously 301).
 	w = doRequest(inst, http.MethodGet, "/dir")
-	if w.Code != http.StatusMovedPermanently {
-		t.Fatalf("GET /dir status = %d, want %d", w.Code, http.StatusMovedPermanently)
+	if w.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("GET /dir status = %d, want %d", w.Code, http.StatusTemporaryRedirect)
 	}
 	if loc := w.Header().Get("Location"); loc != "/dir/" {
 		t.Errorf("GET /dir Location = %q, want %q", loc, "/dir/")

@@ -16,7 +16,7 @@ By the end you will have:
 You need one of:
 
 - A pre-built `xtemplate` binary from the [releases page](https://github.com/infogulch/xtemplate/releases)
-- Go 1.25+ (to build from controller)
+- Go 1.26+ (to build from controller)
 
 ## 1. Create your project
 

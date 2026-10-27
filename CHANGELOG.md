@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `maxBytes` to override it. Bodies over the limit fail with HTTP 413 via
   `ErrorStatus`. A successful read is repeatable in the same request.
 
+### Changed
+
+- Go toolchain is 1.26, matching current Caddy. Module dependencies are updated,
+  including `github.com/caddyserver/caddy/v2` v2.11.7 and `github.com/ncruces/go-sqlite3`
+  v0.35.6. The temporary xcaddy pins from the previous toolchain (Caddy v2.11.4
+  and go-sqlite3 v0.35.0) are removed.
+- Directory index routes: a missing trailing slash is redirected with **307**
+  Temporary Redirect. Go 1.26's `http.ServeMux` replaced the previous 301.
+- SSE flushing uses `http.ResponseController`, so `.Flush` works with Caddy
+  v2.11.7 middleware writers that implement `FlushError` instead of `http.Flusher`.
+
 ## [v0.11.0] - 2026-07-28
 
 ### Added

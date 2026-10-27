@@ -25,11 +25,56 @@ func (p *dotFlushProvider) Init(ctx context.Context) error {
 }
 
 func (p *dotFlushProvider) Value(w http.ResponseWriter, r *http.Request) (any, error) {
-	f, ok := w.(flusher)
+	f, ok := flushingWriter(w)
 	if !ok {
 		return &DotFlush{}, fmt.Errorf("response writer could not cast to http.Flusher")
 	}
 	return &DotFlush{flusher: f, serverCtx: p.serverCtx, requestCtx: r.Context()}, nil
+}
+
+// flushingWriter returns a writer that can push buffered bytes to the client.
+// A direct http.Flusher is used as-is. Caddy v2.11.7's middleware recorder
+// implements FlushError and Unwrap instead of http.Flusher, so a type assertion
+// fails; http.ResponseController walks that chain.
+func flushingWriter(w http.ResponseWriter) (flusher, bool) {
+	if f, ok := w.(flusher); ok {
+		return f, true
+	}
+	if !canFlush(w) {
+		return nil, false
+	}
+	return responseControllerFlusher{ResponseWriter: w}, true
+}
+
+// canFlush reports whether http.ResponseController can flush w, without flushing.
+// The walk matches ResponseController.Flush: FlushError, then http.Flusher, then
+// Unwrap.
+func canFlush(w http.ResponseWriter) bool {
+	for i := 0; i < 16 && w != nil; i++ {
+		switch t := w.(type) {
+		case interface{ FlushError() error }:
+			return true
+		case http.Flusher:
+			return true
+		case interface{ Unwrap() http.ResponseWriter }:
+			w = t.Unwrap()
+		default:
+			return false
+		}
+	}
+	return false
+}
+
+// responseControllerFlusher flushes through http.ResponseController so writers
+// that only expose FlushError or Unwrap still stream. Flush's signature has no
+// error; a failure here is the same as a no-op Flush on a writer that cannot
+// push bytes.
+type responseControllerFlusher struct {
+	http.ResponseWriter
+}
+
+func (f responseControllerFlusher) Flush() {
+	_ = http.NewResponseController(f.ResponseWriter).Flush()
 }
 
 func (dotFlushProvider) Finalize(v any, err error) error {
