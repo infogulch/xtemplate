@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `DotReq.ReadBody` reads the raw request body in templates (JSON, webhooks).
+  The default limit is 1 MiB (`DefaultMaxBodyBytes`); pass a positive
+  `maxBytes` to override it. Bodies over the limit fail with HTTP 413 via
+  `ErrorStatus`. A successful read is repeatable in the same request.
+
 ## [v0.11.0] - 2026-07-28
 
 ### Added

@@ -16,7 +16,8 @@ let outcome = (try {
     let tok = ($"lp-(random uuid)" | to json) # JSON string, safe to embed in JS
     # After "connected", POST tok; wait-script succeeds when it reappears over SSE.
     let js = ('const t=' + $tok + ';setInterval(()=>{if(window.__p)return;if(![...document.querySelectorAll("#feed li")].some(e=>e.textContent.includes("connected")))return;window.__p=1;fetch("/messages",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({msg:t})})},50)')
-    let wait = ('document.body.innerText.includes(' + $tok + ')')
+    # body is null until the document is parsed; a throw aborts the wait instead of retrying.
+    let wait = ('document.body?.innerText?.includes(' + $tok + ')')
     let r = (^lightpanda fetch --inject-script $js --wait-script $wait --wait-ms 5000 --terminate-ms 6000 $"http://localhost:($port)/" | complete)
     if $r.exit_code != 0 {
         error make --unspanned { msg: $"lightpanda failed \(($r.exit_code)\): ($r.stderr)\n($r.stdout)" }

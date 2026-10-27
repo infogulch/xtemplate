@@ -67,3 +67,7 @@ Domain terms for xtemplate. Behavior and APIs live in the rest of the [docs](../
 **Provider config**: Type, field name, and type-specific settings (JSON via the registry, or produced by a factory / package helper).
 
 **Caddyfile provider**: Caddy module `xtemplate.providers.*` that parses `provider <type> <field> { }` into config JSON.
+
+## Builds and CI
+
+Tooling and tasks are managed with [mise](https://mise.jdx.dev/) in [`.config/mise/config.toml`](../../.config/mise/config.toml). Tasks are standalone Nushell scripts under [`.config/mise/tasks/`](../../.config/mise/tasks/). Agents and developers should run `mise trust && mise install`, then `mise run test` or `mise run ci`. See [Contributing](../contributing.md) for the task list and what CI runs.
