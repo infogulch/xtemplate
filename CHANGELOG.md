@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SSE flushing uses `http.ResponseController`, so `.Flush` works with Caddy
   v2.11.7 middleware writers that implement `FlushError` instead of `http.Flusher`.
 - Replace Sprig (`github.com/Masterminds/sprig/v3`) with Sprout (`github.com/go-sprout/sprout` v1.1.2) via the `sprigin` compatibility layer. Existing Sprig function names and argument orders keep working, and Sprout's canonical names are available too. See [Template functions](docs/reference/functions.md). (#59)
+- Pinned golangci-lint to v2.15.0
 
 ## [v0.11.0] - 2026-07-28
 

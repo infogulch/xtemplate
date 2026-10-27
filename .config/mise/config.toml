@@ -9,7 +9,7 @@
 go = "1.26"
 hurl = "latest"
 "aqua:nushell/nushell" = "latest"
-golangci-lint = "latest"
+golangci-lint = "v2.15.0"
 "go:github.com/caddyserver/xcaddy/cmd/xcaddy" = "latest"
 # Pin a release tag. `nightly` is re-uploaded in place; mise 2026.10 verifies
 # the digest from mise-versions, which stays stale, and the install fails.
