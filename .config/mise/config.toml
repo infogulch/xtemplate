@@ -11,7 +11,12 @@ hurl = "latest"
 "aqua:nushell/nushell" = "latest"
 golangci-lint = "latest"
 "go:github.com/caddyserver/xcaddy/cmd/xcaddy" = "latest"
-"github:lightpanda-io/browser" = "nightly"
+# Pin a release tag. `nightly` is re-uploaded in place; mise 2026.10 verifies
+# the digest from mise-versions, which stays stale, and the install fails.
+# Tags are published as `1.0.2`, not `v1.0.2`.
+[tools."github:lightpanda-io/browser"]
+version = "1.0.2"
+version_prefix = ""
 
 # Align Go module/build paths on local dev and CI.
 [env]

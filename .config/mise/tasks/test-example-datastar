@@ -16,7 +16,33 @@ let outcome = (try {
     run-example $port $work
     # Wait for #count, then briefly for /stream to subscribe before clicking
     # (paint is stream-only; a click before subscribe would leave the DOM stale).
-    let js = 'setInterval(()=>{if(window.__p)return;if(!document.getElementById("count"))return;if(!window.__t){window.__t=Date.now();return}if(Date.now()-window.__t<500)return;const b=[...document.querySelectorAll("button")].find(e=>e.textContent.includes("+1"));if(!b)return;window.__p=1;b.click()},50)'
+    # Lightpanda has no MathMLElement; datastar.js throws on `instanceof MathMLElement`
+    # while morphing. Its fetch() also does not resolve an SSE response until the
+    # socket closes, so Datastar never reads /stream. EventSource does (see sse-chat).
+    # --inject-script runs before page scripts: polyfill the global, and turn GET
+    # event-stream fetches into an EventSource-backed ReadableStream.
+    let js = '
+if(typeof MathMLElement==="undefined"){globalThis.MathMLElement=function MathMLElement(){}}
+const __fetch=window.fetch;
+window.fetch=function(input,init){
+  const method=((init&&init.method)||"GET").toUpperCase();
+  let accept="";
+  try{accept=new Headers(init&&init.headers).get("Accept")||""}catch(e){}
+  if(method==="GET"&&accept.includes("text/event-stream")){
+    const url=String((input&&input.url)||input);
+    let controller;
+    const enc=new TextEncoder();
+    const es=new EventSource(url);
+    const stream=new ReadableStream({start(c){controller=c},cancel(){es.close()}});
+    const push=(name,data)=>{const lines=String(data).split("\n").map((l)=>"data: "+l).join("\n");controller.enqueue(enc.encode("event: "+name+"\n"+lines+"\n\n"))};
+    es.addEventListener("datastar-patch-elements",(e)=>push("datastar-patch-elements",e.data));
+    es.addEventListener("datastar-patch-signals",(e)=>push("datastar-patch-signals",e.data));
+    if(init&&init.signal){init.signal.addEventListener("abort",()=>{es.close();try{controller.close()}catch(e){}})}
+    return Promise.resolve(new Response(stream,{status:200,headers:{"Content-Type":"text/event-stream"}}));
+  }
+  return __fetch.apply(this,arguments);
+};
+setInterval(()=>{if(window.__p)return;if(!document.getElementById("count"))return;if(!window.__t){window.__t=Date.now();return}if(Date.now()-window.__t<500)return;const b=[...document.querySelectorAll("button")].find((e)=>e.textContent.includes("+1"));if(!b)return;window.__p=1;b.click()},50)'
     let wait = 'document.getElementById("count")?.textContent?.trim()==="1"'
     let r = (^lightpanda fetch --inject-script $js --wait-script $wait --wait-ms 10000 --terminate-ms 12000 $"http://localhost:($port)/" | complete)
     if $r.exit_code != 0 {
