@@ -21,8 +21,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Masterminds/sprig/v3"
 	"github.com/felixge/httpsnoop"
+	"github.com/go-sprout/sprout/sprigin"
 	"github.com/spf13/afero"
 
 	"github.com/google/uuid"
@@ -148,7 +148,12 @@ func (config *Config) buildInstance() (_ *Instance, err error) {
 	{
 		inst.funcs = template.FuncMap{}
 		maps.Copy(inst.funcs, xtemplateFuncs)
-		maps.Copy(inst.funcs, sprig.HtmlFuncMap())
+		// Sprout, via the sprigin compatibility layer: Sprig names and call
+		// order (upper, atoi, list, dict, toJson, fromJson, unset, slice, …)
+		// keep working, and Sprout's canonical names are registered too.
+		// Deprecation warnings for legacy names and argument order go to the
+		// instance logger.
+		maps.Copy(inst.funcs, sprigin.HtmlFuncMapWith(sprigin.WithLogger(inst.config.Logger)))
 		for _, extra := range inst.config.FuncMaps {
 			maps.Copy(inst.funcs, extra)
 		}

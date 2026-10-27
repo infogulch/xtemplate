@@ -30,7 +30,7 @@ Domain terms for xtemplate. Behavior and APIs live in the rest of the [docs](../
 
 **Dot context** (dot): Per-request value of `.`, assembled from dot providers. Sole channel for request data, response control, and data sources.
 
-**Template function**: Stateless FuncMap entry (`{{myFunc x}}`). Defaults: Go builtins, Sprig, xtemplate additions. Not request-scoped (contrast: providers).
+**Template function**: Stateless FuncMap entry (`{{myFunc x}}`). Defaults: Go builtins, Sprout (Sprig-compatible names), xtemplate additions. Not request-scoped (contrast: providers).
 
 **Early return**: Deliberate successful halt mid-template (`return`, `.Resp.ReturnStatus`, `.Resp.RespondWith`, some `.Flush` helpers). Not an error. _Avoid_: abort, halt, ReturnError (as the user-facing name)
 
