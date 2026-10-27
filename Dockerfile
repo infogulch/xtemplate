@@ -1,9 +1,8 @@
 # Pin the Go minor version to match the toolchain pinned in go.mod and
 # .config/mise/config.toml. Floating to a newer Go (via golang:1-alpine) can
-# change net/http behavior; e.g. Go 1.26 changed ServeMux's trailing-slash
-# redirect status from 301 to 307, which diverges from the other build targets
-# and breaks the hurl integration tests.
-FROM golang:1.25-alpine AS build
+# change net/http behavior across build targets; Go 1.26's ServeMux, for
+# example, answers a missing trailing slash with 307 instead of 301.
+FROM golang:1.26-alpine AS build
 
 RUN apk add --no-cache build-base
 

@@ -10,7 +10,7 @@ body contains "multi-user realtime chat"
 
 # the bare path redirects to the trailing-slash canonical path
 GET http://localhost:8080/nats
-HTTP 301
+HTTP 307
 [Asserts]
 header "Location" == "/nats/"
 

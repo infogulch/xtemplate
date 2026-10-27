@@ -6,7 +6,7 @@
 # `mise run <task>` to execute one, and `mise run ci` for the full pipeline.
 
 [tools]
-go = "1.25"
+go = "1.26"
 hurl = "latest"
 "aqua:nushell/nushell" = "latest"
 golangci-lint = "latest"

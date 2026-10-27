@@ -207,16 +207,14 @@ export def xt-prebuild-hash []: nothing -> string {
 # xcaddy build cache by calling it directly.
 export def xt-build-caddy [...extra: string] {
     cd $env.ROOT
-    # Pin the Caddy and sqlite releases from go.mod, and stay on the mise Go
-    # toolchain. Unpinned modules pull caddy v2.11.7 and go-sqlite3 v0.35.6,
-    # both of which require Go 1.26. That toolchain's ServeMux answers a missing
-    # trailing slash with 307 (the hurl suite expects 301), and caddy v2.11.7's
-    # response writer no longer satisfies http.Flusher, so SSE handlers panic.
+    # Stay on the mise Go toolchain. xcaddy otherwise downloads whatever
+    # toolchain the upstream Caddy module asks for, which can diverge from the
+    # Go used for the CLI and Docker image.
     with-env { GOTOOLCHAIN: "local" } {
-        (^xcaddy build v2.11.4
+        (^xcaddy build
             --with github.com/infogulch/xtemplate=.
             --with github.com/infogulch/xtemplate/caddy/standard=./caddy/standard
-            --with github.com/ncruces/go-sqlite3/driver@v0.35.0
+            --with github.com/ncruces/go-sqlite3/driver
             --output ($env.DIST_DIR | path join caddy)
             ...$extra) e> ($env.DIST_DIR | path join caddy.build.log)
     }

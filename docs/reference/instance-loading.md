@@ -65,7 +65,7 @@ Routes are registered on an `http.ServeMux` using Go 1.22+ patterns.
 For a path template (the whole file is the template named by its path):
 
 1. Extension is stripped (`TemplateExtension`).
-2. Files named `index` or `index{$}` handle the directory (canonical trailing slash URL).
+2. Files named `index` or `index{$}` handle the directory (canonical trailing slash URL). A request for the slashless path is redirected there with 307 Temporary Redirect (`http.ServeMux` since Go 1.26).
 3. Hidden basenames (leading `.`) get no route.
 4. Pattern is `GET` + cleaned path.
 
