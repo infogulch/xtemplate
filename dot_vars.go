@@ -10,8 +10,8 @@ type dotVarsProvider struct{}
 func (dotVarsProvider) FieldName() string { return "Vars" }
 func (dotVarsProvider) Prototype() any    { return DotVars{} }
 func (dotVarsProvider) Value(http.ResponseWriter, *http.Request) (any, error) {
-	// Non-nil empty map every request. A nil map panics under Sprig set and
-	// assignment; concurrent requests must not share a map.
+	// Non-nil empty map every request. A nil map panics under Sprout/Sprig set
+	// and assignment; concurrent requests must not share a map.
 	return make(DotVars), nil
 }
 

@@ -3,13 +3,13 @@ module github.com/infogulch/xtemplate
 go 1.26.0
 
 require (
-	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/alecthomas/chroma/v2 v2.27.0
 	github.com/alexflint/go-arg v1.6.1
 	github.com/andybalholm/brotli v1.2.7
 	github.com/caddyserver/caddy/v2 v2.11.7
 	github.com/dustin/go-humanize v1.1.0
 	github.com/felixge/httpsnoop v1.1.0
+	github.com/go-sprout/sprout v1.1.2
 	github.com/google/uuid v1.6.0
 	github.com/infogulch/watch v0.2.0
 	github.com/klauspost/compress v1.20.3
@@ -41,6 +41,7 @@ require (
 	github.com/KimMachineGun/automemlimit v1.0.1 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
+	github.com/Masterminds/sprig/v3 v3.3.0 // indirect
 	github.com/alexflint/go-scalar v1.2.0 // indirect
 	github.com/antithesishq/antithesis-sdk-go v0.8.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect

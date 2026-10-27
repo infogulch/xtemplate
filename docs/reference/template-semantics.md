@@ -125,7 +125,7 @@ Define-templates cannot return values to the caller. Use request-scoped [`.Vars`
 {{end}}
 ```
 
-Load defines should avoid writing output; they set vars or call `RespondWith`. Prefer `.Vars.Get` / `.Vars.Has` over Sprig `get` (which returns `""` on missing keys).
+Load defines should avoid writing output; they set vars or call `RespondWith`. Prefer `.Vars.Get` / `.Vars.Has` over Sprout/Sprig `get` (which returns `""` on missing keys).
 
 Contrast:
 

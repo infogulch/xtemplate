@@ -87,7 +87,7 @@ Keys must be non-empty strings. Prefer short noun keys (`list`, `todo`, `owner`)
 {{end}}
 ```
 
-Because `.Vars` is a map, Sprig dict helpers (`set`, `index`, `hasKey`, `range`) also work. Prefer the method API in app code. **Caveat:** Sprig `get` returns `""` on missing keys; `.Vars.Get` returns `nil`.
+Because `.Vars` is a map, Sprout dict helpers (`set`, `index`, `hasKey`, `range`, including the Sprig names) also work. Prefer the method API in app code. **Caveat:** Sprout/Sprig `get` returns `""` on missing keys; `.Vars.Get` returns `nil`.
 
 Full API: [DotVars](https://pkg.go.dev/github.com/infogulch/xtemplate#DotVars).
 

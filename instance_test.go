@@ -3,8 +3,10 @@ package xtemplate
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/afero"
 )
@@ -203,12 +205,12 @@ func TestInstance_SkipsHiddenDirs(t *testing.T) {
 // normal directory are not registered as public static routes.
 func TestInstance_SkipsHiddenStaticBasenames(t *testing.T) {
 	inst := buildInstance(t, map[string]string{
-		"index.html":          "ok",
-		".env":                "SECRET=1",
-		"config/.htpasswd":    "user:hash",
-		"assets/app.css":      "body{}",
-		"shared/.head.html":   `{{define "head"}}H{{end}}`,
-		"use-head.html":       `{{template "head" .}}`,
+		"index.html":        "ok",
+		".env":              "SECRET=1",
+		"config/.htpasswd":  "user:hash",
+		"assets/app.css":    "body{}",
+		"shared/.head.html": `{{define "head"}}H{{end}}`,
+		"use-head.html":     `{{template "head" .}}`,
 	})
 
 	for _, target := range []string{"/.env", "/config/.htpasswd"} {
@@ -301,4 +303,104 @@ func TestServer_HandlerAfterStop(t *testing.T) {
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusServiceUnavailable)
 	}
+}
+
+// Sprout is registered through sprigin so Sprig names and argument order keep
+// working next to Sprout's canonical names.
+func TestSproutSprigCompatibleFuncs(t *testing.T) {
+	year := strconv.Itoa(time.Now().Year())
+	inst := buildInstance(t, map[string]string{
+		"index.html": `
+NAME={{.Req.FormValue "name" | default "World" | upper}}
+LIST={{list "a" "b" | join ","}}
+JSON={{dict "k" "v" | toJson}}
+ROUND={{` + "`" + `{"n":1}` + "`" + ` | fromJson | toJson}}
+YEAR={{now | date "2006"}}
+PORT={{splitList ":" "h:80" | last | default "80" | atoi}}
+{{- $d := dict "a" "1" "b" "2" -}}
+{{- $d = unset $d "a" -}}
+HAS_A={{if hasKey $d "a"}}yes{{else}}no{{end}}
+B={{index $d "b"}}
+{{- $l := list "a" "b" "c" -}}
+SLICE={{slice $l 1 | join ","}}
+PIPE={{$l | slice 1 | join ","}}
+UP={{toUpper "hello_world"}}
+MISSING=[{{get (dict "a" "1") "missing"}}]
+MD={{(markdown "hi **there**").Body}}
+`,
+	})
+	w := doRequest(inst, http.MethodGet, "/")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body %q", w.Code, http.StatusOK, w.Body.String())
+	}
+	body := w.Body.String()
+	for _, want := range []string{
+		"NAME=WORLD",
+		"LIST=a,b",
+		"YEAR=" + year,
+		"PORT=80",
+		"HAS_A=no",
+		"B=2",
+		"SLICE=b,c",
+		"PIPE=b,c",
+		"UP=HELLO_WORLD",
+		"MISSING=[]",
+		"<strong>there</strong>",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body = %q, want it to contain %q", body, want)
+		}
+	}
+	// JSON is HTML-escaped by html/template.
+	if !strings.Contains(body, "JSON=") || !strings.Contains(body, "k") || !strings.Contains(body, "ROUND=") || !strings.Contains(body, "n") {
+		t.Errorf("body = %q, want JSON keys from toJson and fromJson", body)
+	}
+}
+
+func TestSproutMustFuncsAbort(t *testing.T) {
+	t.Run("mustFromJson aborts on invalid JSON", func(t *testing.T) {
+		inst := buildInstance(t, map[string]string{
+			"index.html": `{{mustFromJson "not-json"}}`,
+		})
+		w := doRequest(inst, http.MethodGet, "/")
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want %d; body %q", w.Code, http.StatusInternalServerError, w.Body.String())
+		}
+	})
+
+	t.Run("fromJson does not abort on invalid JSON", func(t *testing.T) {
+		inst := buildInstance(t, map[string]string{
+			"index.html": `{{fromJson "not-json"}}OK`,
+		})
+		w := doRequest(inst, http.MethodGet, "/")
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d; body %q", w.Code, http.StatusOK, w.Body.String())
+		}
+		if !strings.Contains(w.Body.String(), "OK") {
+			t.Errorf("body = %q, want OK after swallowed fromJson error", w.Body.String())
+		}
+	})
+
+	t.Run("sprig fail does not abort", func(t *testing.T) {
+		inst := buildInstance(t, map[string]string{
+			"index.html": `{{fail "boom"}}OK`,
+		})
+		w := doRequest(inst, http.MethodGet, "/")
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d; body %q", w.Code, http.StatusOK, w.Body.String())
+		}
+		if !strings.Contains(w.Body.String(), "OK") {
+			t.Errorf("body = %q, want OK after swallowed fail", w.Body.String())
+		}
+	})
+
+	t.Run("failf aborts", func(t *testing.T) {
+		inst := buildInstance(t, map[string]string{
+			"index.html": `{{failf "boom"}}`,
+		})
+		w := doRequest(inst, http.MethodGet, "/")
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want %d; body %q", w.Code, http.StatusInternalServerError, w.Body.String())
+		}
+	})
 }
