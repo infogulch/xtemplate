@@ -32,7 +32,7 @@ xtemplate is a Go server that treats templates as handlers: file-based routing, 
 {{end}}
 ```
 
-No route table, no handler functions. One file for the index. One file for the form and the update. Path parameters, form values, and SQL all hang off the [dot context](docs/reference/dot-context.md).
+No route table, no handler functions. One file for the index. One file for the form and the update. Path parameters, form values, raw request bodies, and SQL all hang off the [dot context](docs/reference/dot-context.md).
 
 ## Philosophy
 

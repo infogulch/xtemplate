@@ -47,7 +47,7 @@ Register extra BlueMonday policies or Goldmark configs globally with `AddBlueMon
 
 ## Sprig functions
 
-[Sprig](https://masterminds.github.io/sprig/) supplies string, math, date, list, dict, encoding, and path helpers. Examples: `upper`, `default`, `dict`, `list`, `date`, `toJson`. Full catalog: [Sprig Function Documentation](https://masterminds.github.io/sprig/).
+[Sprig](https://masterminds.github.io/sprig/) supplies string, math, date, list, dict, encoding, and path helpers. Examples: `upper`, `default`, `dict`, `list`, `date`, `toJson`, `fromJson` (decode a raw body from [`.Req.ReadBody`](dot-context.md#request-details-in-req)). Full catalog: [Sprig Function Documentation](https://masterminds.github.io/sprig/).
 
 ```html
 {{.Req.FormValue "name" | default "World" | upper}}

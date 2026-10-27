@@ -38,14 +38,22 @@ When the query string carries the content hash, xtemplate can emit long-lived `C
 
 ### Request details in `.Req`
 
-Embeds `*http.Request`. Use standard fields and methods: `Method`, `URL`, `Header`, `PathValue`, `FormValue`, `Cookie`, and so on.
+Embeds `*http.Request`. Use standard fields and methods: `Method`, `URL`, `Header`, `PathValue`, `FormValue`, `Cookie`, and [`ReadBody`](https://pkg.go.dev/github.com/infogulch/xtemplate#DotReq.ReadBody).
 
 Call `.Req.ParseForm` before relying on `.Req.Form` / `.Req.PostForm` if you are not using `FormValue` (which parses as needed).
+
+`.Req.ReadBody` returns the raw body as a string, for JSON or webhook payloads. With no argument the limit is 1 MiB (`DefaultMaxBodyBytes`); pass one positive byte count to override it (`{{.Req.ReadBody 4096}}`). Zero, negative, or extra arguments are a template error. A body over the limit fails the request with HTTP 413. A successful read restores the body, so a second `ReadBody` in the same template returns the same bytes when its limit is at least the body size, and `FormValue` / `ParseForm` still see the payload when `ReadBody` runs first.
 
 ```html
 <p>Path: {{.Req.URL.Path}}</p>
 <p>Id: {{.Req.PathValue "id"}}</p>
 <p>Name: {{.Req.FormValue "name"}}</p>
+```
+
+```html
+{{define "POST /hooks/example"}}
+  {{with .Req.ReadBody | fromJson}}{{.event}}{{end}}
+{{end}}
 ```
 
 ### Request scratch in `.Vars`
