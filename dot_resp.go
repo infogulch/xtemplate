@@ -2,6 +2,7 @@ package xtemplate
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"html/template"
@@ -13,6 +14,9 @@ import (
 	"strings"
 	"time"
 )
+
+// htmlUTF8ContentType is the default media type for rendered HTML pages.
+const htmlUTF8ContentType = "text/html; charset=utf-8"
 
 // errResponseServed is returned from [dotRespProvider.Finalize] when the
 // response was fully decided outside the main template buffer — either by
@@ -48,10 +52,10 @@ func (dotRespProvider) Finalize(v any, err error) error {
 			return err
 		}
 		maps.Copy(d.w.Header(), d.Header)
-		// Default Content-Type only for non-empty HTML bodies when unset.
-		// Empty bodies (redirects, 204) must not force a Content-Type.
-		if d.replaceHTML && len(d.replaceBody) > 0 && d.w.Header().Get("Content-Type") == "" {
-			d.w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		// Plain string and []byte replacements do not become HTML. template.HTML
+		// uses the same default as a normal page render.
+		if d.replaceHTML {
+			setDefaultHTMLContentType(d.w.Header(), d.status, len(d.replaceBody))
 		}
 		d.w.WriteHeader(d.status)
 		if len(d.replaceBody) > 0 {
@@ -62,18 +66,77 @@ func (dotRespProvider) Finalize(v any, err error) error {
 	var errSt ErrorStatus
 	if errors.As(err, &errSt) {
 		// Apply intended client status; handler must not overwrite with 500.
+		// The template buffer is discarded, so do not invent a Content-Type.
 		maps.Copy(d.w.Header(), d.Header)
 		d.w.WriteHeader(int(errSt))
 	} else if err == nil {
+		// WriteHeader commits the header map before the handler writes the
+		// buffer. A Content-Type set afterwards is invisible to httptest's
+		// snapshot, and browsers render a missing type as plain text when
+		// X-Content-Type-Options: nosniff is set. Choose the default now.
 		maps.Copy(d.w.Header(), d.Header)
+		setDefaultHTMLContentType(d.w.Header(), d.status, renderBufLen(d.r))
 		d.w.WriteHeader(d.status)
 	}
 	return err
 }
 
+// renderBufKey carries the handler's render buffer on the request DotResp
+// already stores. Finalize has to read that buffer before WriteHeader, and the
+// dot value is a reflect struct copied by value, so the buffer is not a field
+// the handler can set without reflecting into .Resp.
+type renderBufKey struct{}
+
+func requestWithRenderBuf(r *http.Request, buf *bytes.Buffer) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), renderBufKey{}, buf))
+}
+
+// renderBufLen is the trimmed size of the buffered page. Whitespace-only
+// output counts as empty: action-only templates emit newlines between actions
+// but have no representation. Missing buffer (direct Finalize, INIT) is empty.
+func renderBufLen(r *http.Request) int {
+	if r == nil {
+		return 0
+	}
+	buf, ok := r.Context().Value(renderBufKey{}).(*bytes.Buffer)
+	if !ok || buf == nil {
+		return 0
+	}
+	return len(bytes.TrimSpace(buf.Bytes()))
+}
+
+// statusAllowsBody reports whether status may include a message body.
+// 1xx, 204, and 304 must not, matching net/http's bodyAllowedForStatus.
+func statusAllowsBody(status int) bool {
+	switch {
+	case status >= 100 && status <= 199:
+		return false
+	case status == http.StatusNoContent, status == http.StatusNotModified:
+		return false
+	default:
+		return true
+	}
+}
+
+// setDefaultHTMLContentType sets text/html; charset=utf-8 when a non-empty
+// body will be written, the status allows a body, and Content-Type is unset
+// on h (template headers already copied, or a value present from middleware).
+func setDefaultHTMLContentType(h http.Header, status, bodyLen int) {
+	if bodyLen == 0 || !statusAllowsBody(status) || h.Get("Content-Type") != "" {
+		return
+	}
+	h.Set("Content-Type", htmlUTF8ContentType)
+}
+
 var _ Finalizer = dotRespProvider{}
 
 // DotResp is used as the .Resp field in buffered template invocations.
+//
+// A successful render defaults Content-Type to text/html; charset=utf-8 when
+// the body has non-whitespace content and neither the template nor the
+// response writer already set it. Empty and whitespace-only bodies, and
+// statuses that must not include a body (1xx, 204, 304), do not get that
+// default.
 type DotResp struct {
 	http.Header
 	status int
