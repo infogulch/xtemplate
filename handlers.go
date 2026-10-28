@@ -42,6 +42,10 @@ func bufferingTemplateHandler(server *Instance, tmpl *template.Template) http.Ha
 		defer bufPool.Put(buf)
 
 		err = tmpl.Execute(buf, *dot)
+		// Finalize calls WriteHeader before this handler writes buf. Record the
+		// body size first so a missing Content-Type can be defaulted while
+		// headers are still mutable.
+		noteBufferedBody(dot, buf.Bytes())
 
 		if err = server.bufferDot.cleanup(dot, err); err != nil {
 			if errors.Is(err, errResponseServed) {

@@ -95,6 +95,8 @@ Full API: [DotVars](https://pkg.go.dev/github.com/infogulch/xtemplate#DotVars).
 
 Available on buffered template handlers (normal `GET`/`POST`/… routes). Output is buffered so status and headers can be set during execution; on error the buffer is discarded.
 
+A buffered page sends `Content-Type: text/html; charset=utf-8` when the rendered body contains non-whitespace content and neither the template nor the response already set `Content-Type`. Empty and whitespace-only bodies, and statuses that must not include a body (`1xx`, `204`, `304`), do not get that default. Action-only redirects whose only output is the newlines between actions stay unset. An explicit `SetHeader` or `AddHeader` value is left as written.
+
 Common methods: `AddHeader`, `SetHeader`, `DelHeader`, `SetStatus`, `ReturnStatus` (status + early return, **keeps** buffer), `RespondWith` (status + body, **replaces** buffer), `ServeContent` (file-like payload, replaces buffer). Full API: [DotResp](https://pkg.go.dev/github.com/infogulch/xtemplate#DotResp).
 
 ```html

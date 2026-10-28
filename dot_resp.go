@@ -10,9 +10,13 @@ import (
 	"maps"
 	"net/http"
 	"path"
+	"reflect"
 	"strings"
 	"time"
 )
+
+// htmlUTF8ContentType is the default media type for rendered HTML pages.
+const htmlUTF8ContentType = "text/html; charset=utf-8"
 
 // errResponseServed is returned from [dotRespProvider.Finalize] when the
 // response was fully decided outside the main template buffer — either by
@@ -51,7 +55,7 @@ func (dotRespProvider) Finalize(v any, err error) error {
 		// Default Content-Type only for non-empty HTML bodies when unset.
 		// Empty bodies (redirects, 204) must not force a Content-Type.
 		if d.replaceHTML && len(d.replaceBody) > 0 && d.w.Header().Get("Content-Type") == "" {
-			d.w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			d.w.Header().Set("Content-Type", htmlUTF8ContentType)
 		}
 		d.w.WriteHeader(d.status)
 		if len(d.replaceBody) > 0 {
@@ -62,18 +66,69 @@ func (dotRespProvider) Finalize(v any, err error) error {
 	var errSt ErrorStatus
 	if errors.As(err, &errSt) {
 		// Apply intended client status; handler must not overwrite with 500.
+		// The template buffer is discarded, so do not invent a Content-Type.
 		maps.Copy(d.w.Header(), d.Header)
 		d.w.WriteHeader(int(errSt))
 	} else if err == nil {
+		// WriteHeader commits the header map before the handler writes the
+		// buffer. A Content-Type set afterwards is invisible to httptest's
+		// snapshot, and browsers render a missing type as plain text when
+		// X-Content-Type-Options: nosniff is set. Choose the default now.
 		maps.Copy(d.w.Header(), d.Header)
+		setDefaultHTMLContentType(d.w.Header(), d.status, d.bodyLen)
 		d.w.WriteHeader(d.status)
 	}
 	return err
 }
 
+// noteBufferedBody records the rendered template buffer on .Resp before
+// Finalize commits headers. Whitespace-only output counts as empty: action-only
+// templates (redirects, 204s) emit newlines between actions but have no
+// representation. No-op when the dot has no .Resp.
+func noteBufferedBody(dot *reflect.Value, body []byte) {
+	f := dot.FieldByName("Resp")
+	if !f.IsValid() || !f.CanAddr() {
+		return
+	}
+	resp, ok := f.Addr().Interface().(*DotResp)
+	if !ok {
+		return
+	}
+	resp.bodyLen = len(bytes.TrimSpace(body))
+}
+
+// statusAllowsBody reports whether status may include a message body.
+// 1xx, 204, and 304 must not, matching net/http's bodyAllowedForStatus.
+func statusAllowsBody(status int) bool {
+	switch {
+	case status >= 100 && status <= 199:
+		return false
+	case status == http.StatusNoContent, status == http.StatusNotModified:
+		return false
+	default:
+		return true
+	}
+}
+
+// setDefaultHTMLContentType sets text/html; charset=utf-8 when a non-empty
+// body will be written, the status allows a body, and Content-Type is unset
+// on h (template headers already copied, or a value present from middleware).
+func setDefaultHTMLContentType(h http.Header, status, bodyLen int) {
+	if bodyLen == 0 || !statusAllowsBody(status) || h.Get("Content-Type") != "" {
+		return
+	}
+	h.Set("Content-Type", htmlUTF8ContentType)
+}
+
 var _ Finalizer = dotRespProvider{}
 
 // DotResp is used as the .Resp field in buffered template invocations.
+//
+// A successful render defaults Content-Type to text/html; charset=utf-8 when
+// the body has non-whitespace content and neither the template nor the
+// response writer already set it. Empty and whitespace-only bodies, and
+// statuses that must not include a body (1xx, 204, 304), do not get that
+// default.
 type DotResp struct {
 	http.Header
 	status int
@@ -84,9 +139,13 @@ type DotResp struct {
 	replace     bool
 	replaceBody []byte
 	replaceHTML bool
-	w           http.ResponseWriter
-	r           *http.Request
-	log         *slog.Logger
+	// bodyLen is the trimmed length of the main template buffer. The buffering
+	// handler sets it before Finalize so the success path can default
+	// Content-Type before WriteHeader. Zero means empty or whitespace-only.
+	bodyLen int
+	w       http.ResponseWriter
+	r       *http.Request
+	log     *slog.Logger
 }
 
 // ServeContent aborts execution of the template and instead responds to the

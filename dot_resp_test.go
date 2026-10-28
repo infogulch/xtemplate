@@ -71,6 +71,11 @@ func TestDotResp_ServeContent_NoTrailingBuffer(t *testing.T) {
 	if body != "hello world" {
 		t.Errorf("body = %q, want exactly %q (no BEFORE/AFTER buffer)", body, "hello world")
 	}
+	// The discarded template buffer must not force the page default. ServeContent
+	// types the body from the filename (test.txt → text/plain).
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
+		t.Errorf("Content-Type = %q, want text/plain from ServeContent", ct)
+	}
 }
 
 func TestDotResp_ServeContent_Bytes(t *testing.T) {
@@ -123,7 +128,7 @@ func TestDotResp_ServeContent_UnsupportedType(t *testing.T) {
 // intentional ErrorStatus (e.g. 400 from uploads) with http.Error(500).
 func TestErrorStatus_PreservesClientStatus(t *testing.T) {
 	inst := buildInstance(t, map[string]string{
-		"bad.html": `{{errorstatus 400}}`,
+		"bad.html": `partial{{errorstatus 400}}`,
 	}, WithFuncMaps(map[string]any{
 		// Last return must be error for template execution to abort.
 		"errorstatus": func(code int) (string, error) {
@@ -138,6 +143,11 @@ func TestErrorStatus_PreservesClientStatus(t *testing.T) {
 	// Must not be the generic 500 body from http.Error.
 	if strings.Contains(strings.ToLower(w.Body.String()), "internal server error") {
 		t.Errorf("body = %q, must not be internal server error", w.Body.String())
+	}
+	// The discarded buffer is not a rendered page, so it must not gain the
+	// HTML default.
+	if ct := w.Header().Get("Content-Type"); ct != "" {
+		t.Errorf("Content-Type = %q, want unset for ErrorStatus with no body", ct)
 	}
 }
 
@@ -154,6 +164,10 @@ func TestDotResp_RespondWith_NoTrailingBuffer(t *testing.T) {
 	}
 	if body := w.Body.String(); body != "not found" {
 		t.Errorf("body = %q, want exactly %q (no BEFORE/AFTER buffer)", body, "not found")
+	}
+	// Preceding template output must not make a string replacement look like HTML.
+	if ct := w.Header().Get("Content-Type"); strings.HasPrefix(ct, "text/html") {
+		t.Errorf("Content-Type = %q, string RespondWith must not default to text/html", ct)
 	}
 }
 
@@ -314,5 +328,188 @@ func TestDotResp_RespondWith_EmptyHTMLNoForcedContentType(t *testing.T) {
 	}
 	if ct := w.Header().Get("Content-Type"); ct != "" {
 		t.Errorf("Content-Type = %q, want unset for empty body", ct)
+	}
+}
+
+func TestBufferedTemplate_ContentType(t *testing.T) {
+	const htmlCT = "text/html; charset=utf-8"
+
+	tests := []struct {
+		name     string
+		files    map[string]string
+		opts     []Option
+		method   string
+		target   string
+		presetCT string
+		wantCode int
+		wantCT   string
+		wantLoc  string
+		wantBody string
+	}{
+		{
+			name:     "file route defaults to html",
+			files:    map[string]string{"page.html": "<h1>Hi</h1>"},
+			target:   "/page",
+			wantCode: http.StatusOK,
+			wantCT:   htmlCT,
+			wantBody: "<h1>Hi</h1>",
+		},
+		{
+			name: "define route defaults to html",
+			files: map[string]string{
+				"routes.html": `{{define "GET /hello"}}<p>hello</p>{{end}}`,
+			},
+			target:   "/hello",
+			wantCode: http.StatusOK,
+			wantCT:   htmlCT,
+			wantBody: "<p>hello</p>",
+		},
+		{
+			name: "template content type wins",
+			files: map[string]string{
+				"data.html": `{{.Resp.SetHeader "Content-Type" "text/plain; charset=utf-8"}}hello`,
+			},
+			target:   "/data",
+			wantCode: http.StatusOK,
+			wantCT:   "text/plain; charset=utf-8",
+			wantBody: "hello",
+		},
+		{
+			name: "add header content type wins",
+			files: map[string]string{
+				"data.html": `{{.Resp.AddHeader "Content-Type" "application/json"}}{"ok":true}`,
+			},
+			target:   "/data",
+			wantCode: http.StatusOK,
+			wantCT:   "application/json",
+		},
+		{
+			name:     "preset response content type wins",
+			files:    map[string]string{"page.html": "<h1>Hi</h1>"},
+			target:   "/page",
+			presetCT: "application/xhtml+xml",
+			wantCode: http.StatusOK,
+			wantCT:   "application/xhtml+xml",
+		},
+		{
+			name:     "deleted content type falls back to default",
+			files:    map[string]string{"page.html": `{{.Resp.SetHeader "Content-Type" "text/plain"}}{{.Resp.DelHeader "Content-Type"}}<h1>Hi</h1>`},
+			target:   "/page",
+			wantCode: http.StatusOK,
+			wantCT:   htmlCT,
+		},
+		{
+			name:     "empty body does not force content type",
+			files:    map[string]string{"empty.html": ""},
+			target:   "/empty",
+			wantCode: http.StatusOK,
+			wantCT:   "",
+		},
+		{
+			name:     "whitespace-only body does not force content type",
+			files:    map[string]string{"blank.html": "\n\n"},
+			target:   "/blank",
+			wantCode: http.StatusOK,
+			wantCT:   "",
+		},
+		{
+			name: "action-only redirect does not force content type",
+			files: map[string]string{
+				"routes.html": `{{define "GET /go"}}
+{{.Resp.AddHeader "Location" "/"}}
+{{.Resp.ReturnStatus 303}}
+{{end}}`,
+			},
+			target:   "/go",
+			wantCode: http.StatusSeeOther,
+			wantCT:   "",
+			wantLoc:  "/",
+		},
+		{
+			name: "redirect without minify does not force content type",
+			files: map[string]string{
+				"routes.html": `{{define "GET /go"}}
+{{.Resp.AddHeader "Location" "/"}}
+{{.Resp.ReturnStatus 303}}
+{{end}}`,
+			},
+			opts:     []Option{WithMinify(false)},
+			target:   "/go",
+			wantCode: http.StatusSeeOther,
+			wantCT:   "",
+			wantLoc:  "/",
+		},
+		{
+			name: "redirect with an html body defaults to html",
+			files: map[string]string{
+				"routes.html": `{{define "GET /old"}}{{.Resp.AddHeader "Location" "/"}}<p>moved</p>{{.Resp.SetStatus 302}}{{end}}`,
+			},
+			target:   "/old",
+			wantCode: http.StatusFound,
+			wantCT:   htmlCT,
+			wantLoc:  "/",
+		},
+		{
+			name: "204 does not force content type",
+			files: map[string]string{
+				"routes.html": `{{define "DELETE /item"}}
+gone{{.Resp.SetStatus 204}}
+{{end}}`,
+			},
+			method:   http.MethodDelete,
+			target:   "/item",
+			wantCode: http.StatusNoContent,
+			wantCT:   "",
+		},
+		{
+			name: "304 does not force content type",
+			files: map[string]string{
+				"routes.html": `{{define "GET /cached"}}stale{{.Resp.SetStatus 304}}{{end}}`,
+			},
+			target:   "/cached",
+			wantCode: http.StatusNotModified,
+			wantCT:   "",
+		},
+		{
+			name: "404 page with a body defaults to html",
+			files: map[string]string{
+				"missing.html": "<h1>Missing</h1>{{.Resp.ReturnStatus 404}}",
+			},
+			target:   "/missing",
+			wantCode: http.StatusNotFound,
+			wantCT:   htmlCT,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inst := buildInstance(t, tt.files, tt.opts...)
+			t.Cleanup(func() { _ = inst.Close() })
+
+			w := httptest.NewRecorder()
+			if tt.presetCT != "" {
+				w.Header().Set("Content-Type", tt.presetCT)
+			}
+			method := tt.method
+			if method == "" {
+				method = http.MethodGet
+			}
+			inst.ServeHTTP(w, httptest.NewRequest(method, tt.target, nil))
+
+			if w.Code != tt.wantCode {
+				t.Fatalf("status = %d, want %d (body %q)", w.Code, tt.wantCode, w.Body.String())
+			}
+			if ct := w.Header().Get("Content-Type"); ct != tt.wantCT {
+				t.Errorf("Content-Type = %q, want %q (body %q)", ct, tt.wantCT, w.Body.String())
+			}
+			if tt.wantLoc != "" {
+				if loc := w.Header().Get("Location"); loc != tt.wantLoc {
+					t.Errorf("Location = %q, want %q", loc, tt.wantLoc)
+				}
+			}
+			if tt.wantBody != "" && w.Body.String() != tt.wantBody {
+				t.Errorf("body = %q, want %q", w.Body.String(), tt.wantBody)
+			}
+		})
 	}
 }

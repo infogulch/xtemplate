@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Buffered page templates default `Content-Type` to `text/html; charset=utf-8` when the rendered body has non-whitespace content and the header was not already set by the template or the response. Empty or whitespace-only bodies and no-body statuses (`1xx`, `204`, `304`) stay unset, so action-only redirects and `204`s do not gain a `Content-Type`. An explicit `Content-Type` is preserved. `RespondWith` is unchanged: it still defaults only for non-empty `template.HTML`.
+
 ## [v0.12.0] - 2026-10-27
 
 ### Added
