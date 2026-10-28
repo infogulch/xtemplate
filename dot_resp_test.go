@@ -329,6 +329,26 @@ func TestDotResp_RespondWith_EmptyHTMLNoForcedContentType(t *testing.T) {
 	if ct := w.Header().Get("Content-Type"); ct != "" {
 		t.Errorf("Content-Type = %q, want unset for empty body", ct)
 	}
+
+	// Non-empty HTML on a no-body status also skips the default. 204 must not
+	// carry Content-Type; setDefaultHTMLContentType applies that to RespondWith.
+	w = httptest.NewRecorder()
+	d = DotResp{
+		Header: make(http.Header),
+		status: http.StatusOK,
+		w:      w,
+		r:      r,
+		log:    GetLogger(r.Context()),
+	}
+	if _, err := d.RespondWith(http.StatusNoContent, template.HTML("<p>gone</p>")); err == nil {
+		t.Fatal("expected ReturnError")
+	}
+	if err := (dotRespProvider{}).Finalize(d, nil); err != errResponseServed {
+		t.Fatalf("Finalize err = %v", err)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "" {
+		t.Errorf("Content-Type = %q, want unset for 204", ct)
+	}
 }
 
 func TestBufferedTemplate_ContentType(t *testing.T) {

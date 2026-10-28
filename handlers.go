@@ -30,6 +30,13 @@ func bufferingTemplateHandler(server *Instance, tmpl *template.Template) http.Ha
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := GetLogger(r.Context())
 
+		buf := bufPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bufPool.Put(buf)
+		// Finalize calls WriteHeader before buf is written. Attach buf to the
+		// request first so that commit can see the bytes while headers are mutable.
+		r = requestWithRenderBuf(r, buf)
+
 		dot, err := server.bufferDot.value(w, r)
 		if err != nil {
 			log.Error("failed to initialize dot value", slog.Any("error", err))
@@ -37,15 +44,7 @@ func bufferingTemplateHandler(server *Instance, tmpl *template.Template) http.Ha
 			return
 		}
 
-		buf := bufPool.Get().(*bytes.Buffer)
-		buf.Reset()
-		defer bufPool.Put(buf)
-
 		err = tmpl.Execute(buf, *dot)
-		// Finalize calls WriteHeader before this handler writes buf. Record the
-		// body size first so a missing Content-Type can be defaulted while
-		// headers are still mutable.
-		noteBufferedBody(dot, buf.Bytes())
 
 		if err = server.bufferDot.cleanup(dot, err); err != nil {
 			if errors.Is(err, errResponseServed) {

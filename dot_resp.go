@@ -2,6 +2,7 @@ package xtemplate
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"html/template"
@@ -10,7 +11,6 @@ import (
 	"maps"
 	"net/http"
 	"path"
-	"reflect"
 	"strings"
 	"time"
 )
@@ -52,10 +52,10 @@ func (dotRespProvider) Finalize(v any, err error) error {
 			return err
 		}
 		maps.Copy(d.w.Header(), d.Header)
-		// Default Content-Type only for non-empty HTML bodies when unset.
-		// Empty bodies (redirects, 204) must not force a Content-Type.
-		if d.replaceHTML && len(d.replaceBody) > 0 && d.w.Header().Get("Content-Type") == "" {
-			d.w.Header().Set("Content-Type", htmlUTF8ContentType)
+		// Plain string and []byte replacements do not become HTML. template.HTML
+		// uses the same default as a normal page render.
+		if d.replaceHTML {
+			setDefaultHTMLContentType(d.w.Header(), d.status, len(d.replaceBody))
 		}
 		d.w.WriteHeader(d.status)
 		if len(d.replaceBody) > 0 {
@@ -75,26 +75,34 @@ func (dotRespProvider) Finalize(v any, err error) error {
 		// snapshot, and browsers render a missing type as plain text when
 		// X-Content-Type-Options: nosniff is set. Choose the default now.
 		maps.Copy(d.w.Header(), d.Header)
-		setDefaultHTMLContentType(d.w.Header(), d.status, d.bodyLen)
+		setDefaultHTMLContentType(d.w.Header(), d.status, renderBufLen(d.r))
 		d.w.WriteHeader(d.status)
 	}
 	return err
 }
 
-// noteBufferedBody records the rendered template buffer on .Resp before
-// Finalize commits headers. Whitespace-only output counts as empty: action-only
-// templates (redirects, 204s) emit newlines between actions but have no
-// representation. No-op when the dot has no .Resp.
-func noteBufferedBody(dot *reflect.Value, body []byte) {
-	f := dot.FieldByName("Resp")
-	if !f.IsValid() || !f.CanAddr() {
-		return
+// renderBufKey carries the handler's render buffer on the request DotResp
+// already stores. Finalize has to read that buffer before WriteHeader, and the
+// dot value is a reflect struct copied by value, so the buffer is not a field
+// the handler can set without reflecting into .Resp.
+type renderBufKey struct{}
+
+func requestWithRenderBuf(r *http.Request, buf *bytes.Buffer) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), renderBufKey{}, buf))
+}
+
+// renderBufLen is the trimmed size of the buffered page. Whitespace-only
+// output counts as empty: action-only templates emit newlines between actions
+// but have no representation. Missing buffer (direct Finalize, INIT) is empty.
+func renderBufLen(r *http.Request) int {
+	if r == nil {
+		return 0
 	}
-	resp, ok := f.Addr().Interface().(*DotResp)
-	if !ok {
-		return
+	buf, ok := r.Context().Value(renderBufKey{}).(*bytes.Buffer)
+	if !ok || buf == nil {
+		return 0
 	}
-	resp.bodyLen = len(bytes.TrimSpace(body))
+	return len(bytes.TrimSpace(buf.Bytes()))
 }
 
 // statusAllowsBody reports whether status may include a message body.
@@ -139,13 +147,9 @@ type DotResp struct {
 	replace     bool
 	replaceBody []byte
 	replaceHTML bool
-	// bodyLen is the trimmed length of the main template buffer. The buffering
-	// handler sets it before Finalize so the success path can default
-	// Content-Type before WriteHeader. Zero means empty or whitespace-only.
-	bodyLen int
-	w       http.ResponseWriter
-	r       *http.Request
-	log     *slog.Logger
+	w           http.ResponseWriter
+	r           *http.Request
+	log         *slog.Logger
 }
 
 // ServeContent aborts execution of the template and instead responds to the
